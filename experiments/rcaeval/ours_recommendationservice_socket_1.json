@@ -1,66 +1,67 @@
 {
   "system": "ours",
   "benchmark": "rcaeval-re2-ob",
-  "case": "checkoutservice_cpu_1",
-  "gt_service": "checkoutservice",
-  "gt_fault": "cpu",
-  "elapsed_seconds": 52.73,
+  "case": "recommendationservice_socket_1",
+  "gt_service": "recommendationservice",
+  "gt_fault": "socket",
+  "elapsed_seconds": 49.52,
   "evaluation": {
     "ac_at_1": false,
     "ac_at_3": false,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.48,
-    "verdict": "weak-evidence",
-    "ground_truth_root_cause": "checkoutservice",
+    "top_confidence": 0.8,
+    "verdict": "accepted",
+    "ground_truth_root_cause": "recommendationservice",
     "predicted_top_cause_service": "redis",
     "predicted_top_cause_excerpt": "redis",
     "predicted_path": [
       "redis",
-      "cartservice",
+      "recommendationservice",
       "frontend"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 52.73,
-    "gt_fault": "cpu"
+    "elapsed_seconds": 49.52,
+    "gt_fault": "socket"
   },
   "result": {
-    "incident_id": "INC-CHECKOUTSERVICE_CPU_1",
+    "incident_id": "INC-RECOMMENDATIONSERVICE_SOCKET_1",
     "incident_summary": {
       "service": "frontend",
-      "symptom": "Service checkoutservice experiencing cpu fault",
+      "symptom": "Service recommendationservice experiencing socket fault",
       "time_range": {
-        "start": "2024-01-15T21:26:06.000Z",
-        "end": "2024-01-15T21:36:36.000Z"
+        "start": "2024-01-16T09:34:02.000Z",
+        "end": "2024-01-16T09:44:32.000Z"
       }
     },
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Redis cache layer issue causing increased cache misses/latencies propagating to dependent services, leading to elevated activity and CPU strain in frontend-related paths without explicit error logs in those services.",
-        "confidence": 0.48,
+        "cause": "Redis saturation/slowdown causing downstream services to backpressure, leading to degraded responses or timeouts that manifest as a socket fault on the frontend path.",
+        "confidence": 0.8,
         "evidence_refs": [
-          "log-agent:confirmed"
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
         ],
         "cause_service": "redis",
-        "reasoning": "All sources collectively point toward Redis as a plausible upstream disruption: Log Agent highlights a dramatic drop in Redis activity (negative volume_delta) with broad but shallow frontend-related log activity, while frontend and downstream services show elevated activity without errors. Topology suggests a plausible propagation path via frontend dependencies but does not explicitly model Redis as a downstream dependency, limiting structural support. TCB-RCA identifies frontend as the symptom with no deeper root cause detected, providing weak support for other root causes. Given the strong unilateral signal around Redis in the logs and the unobserved nature of Redis (unobserved root-cause detection), Redis is considered the most credible unobserved root cause to explain the observed pattern, even though the topology model does not encode Redis as a direct downstream in the given graph.",
+        "reasoning": "All sources broadly align on Redis being a central shared resource whose degradation can cascade to multiple downstream services and eventually affect the frontend. The Log Agent highlights a pronounced Redis anomaly (large negative volume_delta) with no errors yet a system-wide log volume drop, supporting a deep-root cause hypothesis. The Topology Agent’s propagation model accepts Redis as a plausible upstream trigger affecting frontend through any dependency path. The TCB-RCA baseline only identifies frontend as the initial observed anomaly with no deeper timing evidence; given the cross-source signals pointing at Redis and the absence of Redis logs doesn’t negate Redis as the upstream root cause, we override the TCB-RCA baseline per the rules.",
         "supporting_evidence": {
           "log_agent_agrees": true,
-          "topology_agent_agrees": false,
+          "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "Redis cache layer issue causing increased cache misses/latencies propagating to dependent services, leading to elevated activity and CPU strain in frontend-related paths without explicit error logs in those services.",
-      "confidence": 0.48,
-      "explanation": "Candidate 'redis' has 1 LLM source agreement but supported by keyword matching (log + topology).",
+      "cause": "Redis saturation/slowdown causing downstream services to backpressure, leading to degraded responses or timeouts that manifest as a socket fault on the frontend path.",
+      "confidence": 0.8,
+      "explanation": "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
       "cause_service": "redis"
     },
     "impact_analysis": {
       "affected_services": [
         "redis",
-        "cartservice",
+        "recommendationservice",
         "frontend"
       ],
       "related_services": [
@@ -74,7 +75,7 @@
       ],
       "propagation_path": [
         "redis",
-        "cartservice",
+        "recommendationservice",
         "frontend"
       ],
       "blast_radius": [
@@ -82,19 +83,19 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.48,
+      "verdict": "accepted",
+      "final_confidence": 0.8,
       "notes": [
-        "Candidate 'redis' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "Candidate 'redis' confirmed by 2/3 sources (log, topology)."
       ]
     },
     "evidence_summary": {
       "log_evidence": [
-        "request started [path: /product/9SIQT8TOJO]",
-        "serving product page [path: /product/9SIQT8TOJO]",
-        "request started [path: /setCurrency]",
-        "setting currency [path: /setCurrency]",
-        "request complete [path: /setCurrency]"
+        "request started [path: /product/LS4PSXUNUM]",
+        "serving product page [path: /product/LS4PSXUNUM]",
+        "Getting supported currencies...",
+        "GetCartAsync called with userId=b0b48993-0682-485d-829d-66a4f8382239",
+        "conversion request successful"
       ],
       "topology_evidence": [
         "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible."
@@ -103,14 +104,14 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service checkoutservice experiencing cpu fault'. No error logs found. LLM hypothesis: A Redis cache layer issue (downstream dependency of frontend and other services) likely caused cache misses or latencies that propagated elevated activity to dependent services, resulting in a broad but shallow increase in log volume across frontend and its downstreams while Redis itself shows a dramatic drop in observed activity.",
-        "confidence": 0.55,
+        "summary": "Incident at frontend: 'Service recommendationservice experiencing socket fault'. No error logs found. LLM hypothesis: Redis saturation/slowdown caused downstream services to operate under backpressure, leading to reduced log volume across many services and a socket fault observed for recommendationservice on the frontend path.",
+        "confidence": 0.45,
         "evidence": [
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "request started [path: /product/9SIQT8TOJO]",
-            "timestamp": "2024-01-15T21:26:06.012Z",
+            "content": "request started [path: /product/LS4PSXUNUM]",
+            "timestamp": "2024-01-16T09:34:02.039Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -124,8 +125,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "serving product page [path: /product/9SIQT8TOJO]",
-            "timestamp": "2024-01-15T21:26:06.012Z",
+            "content": "serving product page [path: /product/LS4PSXUNUM]",
+            "timestamp": "2024-01-16T09:34:02.039Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -139,12 +140,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "request started [path: /setCurrency]",
-            "timestamp": "2024-01-15T21:26:06.021Z",
-            "level": "DEBUG",
+            "content": "Getting supported currencies...",
+            "timestamp": "2024-01-16T09:34:02.044Z",
+            "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "frontend",
+              "service": "currencyservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -154,12 +155,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "setting currency [path: /setCurrency]",
-            "timestamp": "2024-01-15T21:26:06.022Z",
-            "level": "DEBUG",
+            "content": "GetCartAsync called with userId=b0b48993-0682-485d-829d-66a4f8382239",
+            "timestamp": "2024-01-16T09:34:02.048Z",
+            "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "frontend",
+              "service": "cartservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -169,8 +170,53 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "request complete [path: /setCurrency]",
-            "timestamp": "2024-01-15T21:26:06.022Z",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-16T09:34:02.052Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', '2ZYFJ3GM2N', '9SIQT8TOJO', 'OLJCESPC7Z', 'L9ECAV7KIM']",
+            "timestamp": "2024-01-16T09:34:02.060Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[kitchen])",
+            "timestamp": "2024-01-16T09:34:02.074Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/LS4PSXUNUM]",
+            "timestamp": "2024-01-16T09:34:02.076Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -185,7 +231,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "request started [path: /]",
-            "timestamp": "2024-01-15T21:26:06.026Z",
+            "timestamp": "2024-01-16T09:34:02.140Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -200,7 +246,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "home [path: /]",
-            "timestamp": "2024-01-15T21:26:06.026Z",
+            "timestamp": "2024-01-16T09:34:02.140Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -214,8 +260,38 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "Getting supported currencies...",
+            "timestamp": "2024-01-16T09:34:02.142Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=5e7c1495-dde7-48ff-8d5c-71315f3f2538",
+            "timestamp": "2024-01-16T09:34:02.148Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "conversion request successful",
-            "timestamp": "2024-01-15T21:26:06.066Z",
+            "timestamp": "2024-01-16T09:34:02.153Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -229,8 +305,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Getting supported currencies...",
-            "timestamp": "2024-01-15T21:26:06.066Z",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-16T09:34:02.158Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -244,8 +320,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Getting supported currencies...",
-            "timestamp": "2024-01-15T21:26:06.066Z",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-16T09:34:02.162Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -259,8 +335,53 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=e6020cfe-1408-4cea-81dc-f53ea29878b1",
-            "timestamp": "2024-01-15T21:26:06.070Z",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-16T09:34:02.166Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /product/1YMWWN1N4O]",
+            "timestamp": "2024-01-16T09:34:02.176Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "serving product page [path: /product/1YMWWN1N4O]",
+            "timestamp": "2024-01-16T09:34:02.176Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=63a8127d-960f-487b-b2c4-c426a2ea2ced",
+            "timestamp": "2024-01-16T09:34:02.185Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -275,7 +396,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "received ad request (context_words=[])",
-            "timestamp": "2024-01-15T21:26:06.073Z",
+            "timestamp": "2024-01-16T09:34:02.193Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -289,8 +410,38 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=a88103f6-3480-4c23-a6ff-ca65f45c4989",
-            "timestamp": "2024-01-15T21:26:06.074Z",
+            "content": "[Recv ListRecommendations] product_ids=['6E92ZMYYFZ', 'L9ECAV7KIM', '2ZYFJ3GM2N', 'OLJCESPC7Z', '0PUK6V6EV0']",
+            "timestamp": "2024-01-16T09:34:02.270Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[accessories])",
+            "timestamp": "2024-01-16T09:34:02.284Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=26a9e401-ca58-488f-a2c9-f3bd31687a17",
+            "timestamp": "2024-01-16T09:34:02.358Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -304,12 +455,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-15T21:26:06.075Z",
+            "content": "received ad request (context_words=[])",
+            "timestamp": "2024-01-16T09:34:02.473Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "currencyservice",
+              "service": "adservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -319,12 +470,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-15T21:26:06.165Z",
+            "content": "GetCartAsync called with userId=09f47360-9ff4-4991-bd7c-470b90c0b1d6",
+            "timestamp": "2024-01-16T09:34:02.517Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "currencyservice",
+              "service": "cartservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -334,12 +485,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-15T21:26:06.165Z",
+            "content": "[Recv ListRecommendations] product_ids=['OLJCESPC7Z', '6E92ZMYYFZ', '1YMWWN1N4O', '66VCHSJNUP', 'L9ECAV7KIM']",
+            "timestamp": "2024-01-16T09:34:02.529Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "currencyservice",
+              "service": "recommendationservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -349,12 +500,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-15T21:26:06.169Z",
+            "content": "received ad request (context_words=[hair, beauty])",
+            "timestamp": "2024-01-16T09:34:02.543Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "currencyservice",
+              "service": "adservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -364,8 +515,68 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', '66VCHSJNUP', '0PUK6V6EV0', '6E92ZMYYFZ', 'LS4PSXUNUM']",
-            "timestamp": "2024-01-15T21:26:06.172Z",
+            "content": "GetCartAsync called with userId=966de50f-3e62-46d9-88d1-b3f546474a16",
+            "timestamp": "2024-01-16T09:34:02.565Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['LS4PSXUNUM', '9SIQT8TOJO', '1YMWWN1N4O', '2ZYFJ3GM2N', '6E92ZMYYFZ']",
+            "timestamp": "2024-01-16T09:34:02.581Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[clothing, tops])",
+            "timestamp": "2024-01-16T09:34:02.595Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=7766f600-a07a-4b6f-b943-fbce317e15d2",
+            "timestamp": "2024-01-16T09:34:02.857Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['LS4PSXUNUM', '66VCHSJNUP', '1YMWWN1N4O', '0PUK6V6EV0', 'OLJCESPC7Z']",
+            "timestamp": "2024-01-16T09:34:02.871Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -380,7 +591,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "received ad request (context_words=[kitchen])",
-            "timestamp": "2024-01-15T21:26:06.185Z",
+            "timestamp": "2024-01-16T09:34:02.886Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -394,53 +605,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=af9d88f1-fe2e-470e-97ab-9ad9ecfc479e",
-            "timestamp": "2024-01-15T21:26:06.271Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=f1e8598c-1238-49ca-9934-128fbb2a848a",
-            "timestamp": "2024-01-15T21:26:06.274Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=02fb6ed1-5054-4af2-a1d7-0fdd387b89a1",
-            "timestamp": "2024-01-15T21:26:06.370Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['LS4PSXUNUM', '6E92ZMYYFZ', '9SIQT8TOJO', '2ZYFJ3GM2N', '1YMWWN1N4O']",
-            "timestamp": "2024-01-15T21:26:06.374Z",
+            "content": "[Recv ListRecommendations] product_ids=['66VCHSJNUP', '1YMWWN1N4O', '9SIQT8TOJO', '6E92ZMYYFZ', '0PUK6V6EV0']",
+            "timestamp": "2024-01-16T09:34:02.907Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -454,27 +620,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', 'OLJCESPC7Z', 'L9ECAV7KIM', '6E92ZMYYFZ', '9SIQT8TOJO']",
-            "timestamp": "2024-01-15T21:26:06.379Z",
+            "content": "[Recv ListRecommendations] product_ids=['LS4PSXUNUM', '1YMWWN1N4O', '6E92ZMYYFZ', 'L9ECAV7KIM', '2ZYFJ3GM2N']",
+            "timestamp": "2024-01-16T09:34:03.078Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[decor, home])",
-            "timestamp": "2024-01-15T21:26:06.395Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -485,7 +636,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-15T21:26:06.401Z",
+            "timestamp": "2024-01-16T09:34:03.349Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -500,7 +651,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] completed request",
-            "timestamp": "2024-01-15T21:26:06.401Z",
+            "timestamp": "2024-01-16T09:34:03.350Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -514,158 +665,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=75e3ad26-3744-4164-9801-c3d03786a2ce",
-            "timestamp": "2024-01-15T21:26:06.472Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[])",
-            "timestamp": "2024-01-15T21:26:06.473Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', 'LS4PSXUNUM', '66VCHSJNUP', 'OLJCESPC7Z', '2ZYFJ3GM2N']",
-            "timestamp": "2024-01-15T21:26:06.573Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[footwear])",
-            "timestamp": "2024-01-15T21:26:06.586Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[])",
-            "timestamp": "2024-01-15T21:26:06.676Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=1b6fc159-26ee-41d2-8f5b-209d0649cfab",
-            "timestamp": "2024-01-15T21:26:06.768Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['2ZYFJ3GM2N', '0PUK6V6EV0', 'OLJCESPC7Z', '9SIQT8TOJO', 'L9ECAV7KIM']",
-            "timestamp": "2024-01-15T21:26:06.881Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[kitchen])",
-            "timestamp": "2024-01-15T21:26:06.894Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['L9ECAV7KIM', '66VCHSJNUP', '6E92ZMYYFZ', '0PUK6V6EV0', 'LS4PSXUNUM']",
-            "timestamp": "2024-01-15T21:26:07.074Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['L9ECAV7KIM', '2ZYFJ3GM2N', 'LS4PSXUNUM', '1YMWWN1N4O', '6E92ZMYYFZ']",
-            "timestamp": "2024-01-15T21:26:07.379Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-15T21:26:07.391Z",
+            "timestamp": "2024-01-16T09:34:03.484Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -680,7 +681,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] completed request",
-            "timestamp": "2024-01-15T21:26:07.391Z",
+            "timestamp": "2024-01-16T09:34:03.484Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -695,7 +696,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-15T21:26:07.594Z",
+            "timestamp": "2024-01-16T09:34:03.805Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -710,7 +711,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] completed request",
-            "timestamp": "2024-01-15T21:26:07.594Z",
+            "timestamp": "2024-01-16T09:34:03.805Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -725,7 +726,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-15T21:26:07.796Z",
+            "timestamp": "2024-01-16T09:34:03.805Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -739,8 +740,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[PlaceOrder] user_id=\"8604bde5-1768-44a7-b9c8-d6e1621d6c27\" user_currency=\"EUR\"",
-            "timestamp": "2024-01-15T21:26:07.881Z",
+            "content": "[PlaceOrder] user_id=\"09f47360-9ff4-4991-bd7c-470b90c0b1d6\" user_currency=\"EUR\"",
+            "timestamp": "2024-01-16T09:34:06.892Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -754,8 +755,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"EUR\",\"units\":\"282\",\"nanos\":423706333},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-15T21:26:08.372Z",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"EUR\",\"units\":\"917\",\"nanos\":89783287},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-16T09:34:06.989Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -769,8 +770,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: EUR282.423706333",
-            "timestamp": "2024-01-15T21:26:08.372Z",
+            "content": "Transaction processed: visa ending 0454     Amount: EUR917.89783287",
+            "timestamp": "2024-01-16T09:34:06.989Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -784,8 +785,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "payment went through (transaction_id: f44ed579-545c-43af-aea5-2d16d866e7ed)",
-            "timestamp": "2024-01-15T21:26:08.373Z",
+            "content": "payment went through (transaction_id: 3b01e9f4-bbca-4844-a582-8551ebd5f1d1)",
+            "timestamp": "2024-01-16T09:34:06.991Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -800,7 +801,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:08.383Z",
+            "timestamp": "2024-01-16T09:34:07.001Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -815,7 +816,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "order confirmation email sent to \"someone@example.com\"",
-            "timestamp": "2024-01-15T21:26:08.384Z",
+            "timestamp": "2024-01-16T09:34:07.003Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -829,8 +830,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[PlaceOrder] user_id=\"58259794-78f7-4ccd-a8c0-61771fdf8ecb\" user_currency=\"CAD\"",
-            "timestamp": "2024-01-15T21:26:08.678Z",
+            "content": "[PlaceOrder] user_id=\"1cb4333d-cf4e-4bf9-a1ee-f31228c06cb5\" user_currency=\"JPY\"",
+            "timestamp": "2024-01-16T09:34:07.674Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -844,23 +845,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[PlaceOrder] user_id=\"841640f8-d256-44e4-80b1-14a374daa342\" user_currency=\"USD\"",
-            "timestamp": "2024-01-15T21:26:09.072Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "checkoutservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"USD\",\"units\":\"193\",\"nanos\":890000000},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-15T21:26:09.470Z",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"12400\",\"nanos\":728881202},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-16T09:34:07.778Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -874,8 +860,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: USD193.890000000",
-            "timestamp": "2024-01-15T21:26:09.470Z",
+            "content": "Transaction processed: visa ending 0454     Amount: JPY12400.728881202",
+            "timestamp": "2024-01-16T09:34:07.778Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -889,8 +875,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "payment went through (transaction_id: d31c5d98-4a48-4d2f-ab2c-ad248fd17ab5)",
-            "timestamp": "2024-01-15T21:26:09.472Z",
+            "content": "payment went through (transaction_id: d40ce419-8109-46ad-993e-2aa610de6ab1)",
+            "timestamp": "2024-01-16T09:34:07.781Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -905,7 +891,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:09.482Z",
+            "timestamp": "2024-01-16T09:34:07.791Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -920,7 +906,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "order confirmation email sent to \"someone@example.com\"",
-            "timestamp": "2024-01-15T21:26:09.484Z",
+            "timestamp": "2024-01-16T09:34:07.793Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -934,8 +920,23 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"563\",\"nanos\":864251211},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-15T21:26:09.673Z",
+            "content": "[PlaceOrder] user_id=\"6f0b3819-b447-4b41-b098-4ce52aceecdf\" user_currency=\"JPY\"",
+            "timestamp": "2024-01-16T09:34:10.083Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"21678\",\"nanos\":634233240},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-16T09:34:10.178Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -949,38 +950,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: CAD563.864251211",
-            "timestamp": "2024-01-15T21:26:09.674Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "paymentservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:09.685Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "emailservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"EUR\",\"units\":\"127\",\"nanos\":315347193},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-15T21:26:10.371Z",
+            "content": "Transaction processed: visa ending 0454     Amount: JPY21678.634233240",
+            "timestamp": "2024-01-16T09:34:10.178Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -995,7 +966,37 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:10.383Z",
+            "timestamp": "2024-01-16T09:34:10.194Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"325\",\"nanos\":710322867},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-16T09:34:10.483Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "A request to send order confirmation email to someone@example.com has been received.",
+            "timestamp": "2024-01-16T09:34:10.495Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1010,7 +1011,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:11.487Z",
+            "timestamp": "2024-01-16T09:34:13.092Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1025,7 +1026,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:11.680Z",
+            "timestamp": "2024-01-16T09:34:16.986Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1040,7 +1041,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T21:26:12.986Z",
+            "timestamp": "2024-01-16T09:34:17.083Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1054,8 +1055,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 21:28:47.013 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T21:28:47.013Z",
+            "content": "1:M 16 Jan 2024 09:36:31.075 * 100 changes in 300 seconds. Saving...",
+            "timestamp": "2024-01-16T09:36:31.075Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1069,8 +1070,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 21:28:47.014 * Background saving started by pid 47",
-            "timestamp": "2024-01-15T21:28:47.014Z",
+            "content": "1:M 16 Jan 2024 09:36:31.076 * Background saving started by pid 34",
+            "timestamp": "2024-01-16T09:36:31.076Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1084,8 +1085,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "47:C 15 Jan 2024 21:28:47.040 * DB saved on disk",
-            "timestamp": "2024-01-15T21:28:47.040Z",
+            "content": "34:C 16 Jan 2024 09:36:31.082 * DB saved on disk",
+            "timestamp": "2024-01-16T09:36:31.082Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1099,8 +1100,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "47:C 15 Jan 2024 21:28:47.040 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB",
-            "timestamp": "2024-01-15T21:28:47.040Z",
+            "content": "34:C 16 Jan 2024 09:36:31.082 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB",
+            "timestamp": "2024-01-16T09:36:31.082Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1114,8 +1115,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 21:28:47.115 * Background saving terminated with success",
-            "timestamp": "2024-01-15T21:28:47.115Z",
+            "content": "1:M 16 Jan 2024 09:36:31.176 * Background saving terminated with success",
+            "timestamp": "2024-01-16T09:36:31.177Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1129,8 +1130,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 21:33:48.002 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T21:33:48.002Z",
+            "content": "1:M 16 Jan 2024 09:41:32.061 * 100 changes in 300 seconds. Saving...",
+            "timestamp": "2024-01-16T09:41:32.061Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1144,8 +1145,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 21:33:48.003 * Background saving started by pid 48",
-            "timestamp": "2024-01-15T21:33:48.003Z",
+            "content": "1:M 16 Jan 2024 09:41:32.061 * Background saving started by pid 35",
+            "timestamp": "2024-01-16T09:41:32.061Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -1158,28 +1159,28 @@
           }
         ],
         "metadata": {
-          "hypothesis": "A Redis cache layer issue (downstream dependency of frontend and other services) likely caused cache misses or latencies that propagated elevated activity to dependent services, resulting in a broad but shallow increase in log volume across frontend and its downstreams while Redis itself shows a dramatic drop in observed activity.",
+          "hypothesis": "Redis saturation/slowdown caused downstream services to operate under backpressure, leading to reduced log volume across many services and a socket fault observed for recommendationservice on the frontend path.",
           "suspected_downstream": "redis",
           "anomalous_services": [
+            "redis",
+            "frontend",
             "checkoutservice",
             "paymentservice",
             "emailservice",
             "adservice",
-            "shippingservice",
-            "frontend",
             "recommendationservice",
-            "currencyservice",
             "cartservice",
-            "redis"
+            "shippingservice",
+            "currencyservice"
           ],
-          "llm_reasoning": " Redis shows an extreme negative volume_delta (-1.00) while all dependent services show elevated log activity (positive Δvol) without error signs. This pattern suggests Redis as a possible root cause (unobserved or overwhelmed cache) propagating effects to frontend and related services. The absence of error-level logs across services indicates transient or latency-related issues rather than outright failures, consistent with a cache-layer disruption rather than a hard service crash. The topology constraint supports Redis being upstream to multiple services used by frontend.",
+          "llm_reasoning": "The most pronounced signal is a large negative volume_delta for redis (-1.00) during the incident window, with no error logs but a significant drop in activity. Since frontend depends on multiple downstream services including recommendationservice, a root cause in a shared datastore/cache like Redis could propagate through the call graph, causing upstream/remote calls to stall or time out (socket faults) for the recommendationservice path. Other services show modest changes or increased log activity, consistent with a system under backpressure. Lack of error-level logs across services reduces confidence, but the depth of Redis anomaly and its role as a central dependency supports it as the deepest root candidate.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.65).",
-        "confidence": 0.775,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.70).",
+        "confidence": 0.79,
         "evidence": [
           {
             "type": "topology",
@@ -1191,7 +1192,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom is frontend. If the suspected_downstream is redis, a plausible propagation is that redis faults impact one or more of the frontend's dependencies (e.g., cartservice or productcatalogservice), which then cause frontend to exhibit the symptom. The topology shows frontend depends on several services, any of which could be affected by downstream Redis, creating a plausible path redis -> (dependency service) -> frontend. However, the explicit topology does not model Redis as a downstream dependency of those services; only the direct calls from frontend to its dependencies are defined. Therefore, while a Redis-root cause is structurally plausible via dependency services, the topology does not formally encode Redis as downstream, so the hypothesis is not strictly supported by the given topology alone."
+              "llm_reasoning": "Symptom frontend depends on multiple services; a downstream fault in a service that uses Redis could propagate to frontend via any of its direct dependencies. Since Redis is a common cache/store for downstream services, a failure in Redis could cause one of the dependent services to degrade or fail, which would in turn impact frontend. The topology shows frontend's direct call graph, and Redis is not explicit in the topology but is a plausible downstream resource for several dependencies. Therefore, a propagation path such as redis -> any_of([cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice]) -> frontend is structurally plausible. Alternative paths exist for each dependency channel, and the blast radius includes all listed services, which are the most critical to monitor given their central role in user-facing functionality."
             }
           }
         ],
@@ -1308,7 +1309,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom is frontend. If the suspected_downstream is redis, a plausible propagation is that redis faults impact one or more of the frontend's dependencies (e.g., cartservice or productcatalogservice), which then cause frontend to exhibit the symptom. The topology shows frontend depends on several services, any of which could be affected by downstream Redis, creating a plausible path redis -> (dependency service) -> frontend. However, the explicit topology does not model Redis as a downstream dependency of those services; only the direct calls from frontend to its dependencies are defined. Therefore, while a Redis-root cause is structurally plausible via dependency services, the topology does not formally encode Redis as downstream, so the hypothesis is not strictly supported by the given topology alone.",
+          "llm_reasoning": "Symptom frontend depends on multiple services; a downstream fault in a service that uses Redis could propagate to frontend via any of its direct dependencies. Since Redis is a common cache/store for downstream services, a failure in Redis could cause one of the dependent services to degrade or fail, which would in turn impact frontend. The topology shows frontend's direct call graph, and Redis is not explicit in the topology but is a plausible downstream resource for several dependencies. Therefore, a propagation path such as redis -> any_of([cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice]) -> frontend is structurally plausible. Alternative paths exist for each dependency channel, and the blast radius includes all listed services, which are the most critical to monitor given their central role in user-facing functionality.",
           "path_assessment": "plausible",
           "alternative_paths": [
             [
@@ -1320,20 +1321,49 @@
               "redis",
               "productcatalogservice",
               "frontend"
+            ],
+            [
+              "redis",
+              "currencyservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "recommendationservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "checkoutservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "adservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "shippingservice",
+              "frontend"
             ]
           ],
           "critical_services_in_blast": [
             "frontend",
             "cartservice",
             "productcatalogservice",
-            "checkoutservice"
+            "currencyservice",
+            "recommendationservice",
+            "checkoutservice",
+            "adservice",
+            "shippingservice"
           ],
-          "topology_supports_hypothesis": false
+          "topology_supports_hypothesis": true
         }
       }
     ],
-    "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest cross-source signal is the log-based pattern indicating Redis as an upstream disruption with a dramatic activity drop and broad, shallow impact on frontend-related services. Topology provides a plausible propagation route through frontend dependencies but does not formalize Redis as a downstream/ upstream in the graph, weakening structural corroboration. The TCB-RCA output assigns zero progression beyond frontend, offering no additional root-cause support. Given the unobserved nature of Redis and the absence of explicit error logs, treating Redis as an unobserved root cause aligns with the observed log pattern and the guidance for unobserved roots, though confidence remains moderate due to incomplete topology modeling and lack of direct logs from Redis itself.",
+    "evidence_convergence": "strong_agreement",
+    "synthesis_reasoning": "The Log Agent identifies Redis as the central anomaly with a large drop in activity and suggests a backpressure cascade impacting downstream services, including the recommendation path to the frontend. The Topology Agent confirms a structurally plausible propagation route from a Redis-related degradation to frontend via downstream services, though Redis is not a defined node in the topology, it is a shared resource for several critical services that frontend depends on. The TCB-RCA results do not pinpoint Redis and instead place frontend as the sole observed anomaly with zero temporal gap, indicating a weaker timing-based signal for a deeper root cause. Given the strong agreement between log-based anomaly in Redis and structural propagation plausibility, Redis saturation/slowdown is the most credible root cause. The UNOBSERVED root cause principle supports this interpretation: Redis shows upstream impact without direct error logs, implying Redis is the deeper cause even if not emitting log entries in the observed window. Therefore, Redis is ranked as the primary root-cause candidate with a propagation path Redis -> RecommendationService (or other downstreams) -> Frontend.",
     "tcb_rca_reference": {
       "candidates": [
         {

@@ -1,50 +1,49 @@
 {
   "system": "ours",
   "benchmark": "rcaeval-re2-ob",
-  "case": "currencyservice_cpu_1",
-  "gt_service": "currencyservice",
-  "gt_fault": "cpu",
-  "elapsed_seconds": 55.95,
+  "case": "emailservice_mem_1",
+  "gt_service": "emailservice",
+  "gt_fault": "mem",
+  "elapsed_seconds": 58.01,
   "evaluation": {
     "ac_at_1": false,
-    "ac_at_3": true,
+    "ac_at_3": false,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.66,
-    "verdict": "revised",
-    "ground_truth_root_cause": "currencyservice",
+    "top_confidence": 0.48,
+    "verdict": "weak-evidence",
+    "ground_truth_root_cause": "emailservice",
     "predicted_top_cause_service": "frontend",
     "predicted_top_cause_excerpt": "frontend",
     "predicted_path": [
-      "currencyservice",
       "frontend"
     ],
-    "predicted_path_length": 2,
-    "elapsed_seconds": 55.95,
-    "gt_fault": "cpu"
+    "predicted_path_length": 1,
+    "elapsed_seconds": 58.01,
+    "gt_fault": "mem"
   },
   "result": {
-    "incident_id": "INC-CURRENCYSERVICE_CPU_1",
+    "incident_id": "INC-EMAILSERVICE_MEM_1",
     "incident_summary": {
       "service": "frontend",
-      "symptom": "Service currencyservice experiencing cpu fault",
+      "symptom": "Service emailservice experiencing mem fault",
       "time_range": {
-        "start": "2024-01-19T16:36:57.000Z",
-        "end": "2024-01-19T16:47:27.000Z"
+        "start": "2024-01-17T07:01:45.000Z",
+        "end": "2024-01-17T07:12:15.000Z"
       }
     },
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Frontend itself exhibits symptom-level CPU fault or degraded performance, with no clear upstream log anomalies captured within the incident window. May represent a direct fault or upstream failure not surfaced in logs.",
-        "confidence": 0.66,
+        "cause": "Frontend service experiencing memory fault symptoms consistent with local resource pressure or memory mismanagement on the frontend node.",
+        "confidence": 0.48,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed",
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "TCB-RCA marks frontend as a propagation candidate but with no detected anomalies in logs (temporal/backtracking shows no upstream trigger within observed nodes). Topology acknowledges a plausible downstream path from frontend to shippingservice, but the symptom is frontend itself. Log Agent’s lack of significant frontend log anomalies reduces but does not negate this possibility; given the symptom and absence of a clear upstream signal, frontend remains a strong but not definitive root cause.",
+        "reasoning": "All three sources converge on the frontend as the focal point: Log Agent explicitly notes a mem fault at the frontend symptom service; Topology shows a direct dependency edge from frontend to currencyservice with plausible propagation starting at frontend; TCB-RCA ranks frontend as the first/root candidate. While the Log Agent notes no explicit upstream/downstream anomaly and suggests unobserved factors, the combination of mem fault symptom and the direct frontend-centric propagation supports frontend as the primary root-cause container. The deeper memory-related issue could be localized to the frontend host itself (a potential unobserved factor) but the evidence points to the frontend as the core service exhibiting the fault.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -53,29 +52,13 @@
       },
       {
         "rank": 2,
-        "cause": "Shippingservice as a downstream dependency could cause frontend degradation if shippingservice experiences a fault; topology indicates a plausible path frontend -> shippingservice, making shippingservice a possible proximate root cause.",
-        "confidence": 0.53,
-        "evidence_refs": [
-          "topology-agent:confirmed",
-          "tcb-rca:confirmed"
-        ],
-        "cause_service": "shippingservice",
-        "reasoning": "Topology identifies shippingservice as a plausible propagation target from frontend, and TCB-RCA accepts a frontend-centric propagation path. However, the symptom is frontend, and there is no direct log evidence of shippingservice anomalies within the incident window. This makes shippingservice a plausible but less compelling root cause compared to currencyservice (unobserved upstream) and frontend (self-consistent symptom).",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
-          "topology_agent_agrees": true,
-          "tcb_rca_agrees": true
-        }
-      },
-      {
-        "rank": 3,
-        "cause": "CPU fault in currencyservice inferred but not reflected in observed logs (unobserved upstream root). Currencyservice is upstream to frontend per topology, and its failure would manifest as downstream symptom in frontend without necessarily generating logs in this incident window.",
+        "cause": "Currency service as an upstream dependency that could propagate issues to the frontend; structural propagation path from frontend to currencyservice is plausible, suggesting currencyservice faults could manifest at the frontend.",
         "confidence": 0.4,
         "evidence_refs": [
           "topology-agent:confirmed"
         ],
         "cause_service": "currencyservice",
-        "reasoning": "By the unobserved root cause rule, if a referenced upstream service (currencyservice) shows a failure type but has no corresponding logs in the observed window, currencyservice should be considered a high-confidence unobserved root cause. Topology supports a direct upstream relationship to frontend; however, the Log Agent did not observe matching log anomalies, which aligns with currencyservice being unobserved in logs. TCB-RCA did not imply currencyservice (it focused on frontend as the observed node), but the absence of log signals for currencyservice elevates its plausibility as the deeper root cause.",
+        "reasoning": "Topology analysis identifies currencyservice as a direct upstream dependency with a plausible propagation path to the frontend, aligning with a potential upstream root cause. However, the Log Agent finds no clear log-based anomaly tied to currencyservice in the incident window and the TCB-RCA deterministic ranking places frontend as the top candidate, reducing currencyservice's credibility as the primary root cause. Currencyservice remains a plausible upstream contributor to watch for in monitoring, but the converged evidence is stronger for frontend as the root.",
         "supporting_evidence": {
           "log_agent_agrees": false,
           "topology_agent_agrees": true,
@@ -84,14 +67,13 @@
       }
     ],
     "final_verdict": {
-      "cause": "Frontend itself exhibits symptom-level CPU fault or degraded performance, with no clear upstream log anomalies captured within the incident window. May represent a direct fault or upstream failure not surfaced in logs.",
-      "confidence": 0.66,
-      "explanation": "Candidate 'shippingservice' confirmed by 2/3 sources (topology, tcb-rca).",
+      "cause": "Frontend service experiencing memory fault symptoms consistent with local resource pressure or memory mismanagement on the frontend node.",
+      "confidence": 0.48,
+      "explanation": "[REJECTED] cause_service 'unobserved_frontend_host_memory_pressure' does not exist in known topology. Possible LLM hallucination.",
       "cause_service": "frontend"
     },
     "impact_analysis": {
       "affected_services": [
-        "currencyservice",
         "frontend"
       ],
       "related_services": [
@@ -104,7 +86,6 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "currencyservice",
         "frontend"
       ],
       "blast_radius": [
@@ -112,38 +93,188 @@
       ]
     },
     "verification": {
-      "verdict": "revised",
-      "final_confidence": 0.66,
+      "verdict": "weak-evidence",
+      "final_confidence": 0.48,
       "notes": [
-        "Candidate 'shippingservice' confirmed by 2/3 sources (topology, tcb-rca).",
+        "[REJECTED] cause_service 'unobserved_frontend_host_memory_pressure' does not exist in known topology. Possible LLM hallucination.",
         "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca).",
         "Candidate 'currencyservice' supported by only 1/3 LLM sources (topology)."
       ]
     },
     "evidence_summary": {
       "log_evidence": [
-        "[GetQuote] received request",
-        "[GetQuote] completed request",
-        "conversion request successful",
-        "request started [path: /setCurrency]",
-        "setting currency [path: /setCurrency]"
+        "request started [path: /]",
+        "home [path: /]",
+        "Getting supported currencies...",
+        "GetCartAsync called with userId=f7d861e1-935c-4c74-91b1-ed8af7785217",
+        "conversion request successful"
       ],
       "topology_evidence": [
         "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
-        "propagation path: frontend -> shippingservice"
+        "propagation path: frontend -> currencyservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: No statistically significant anomalies detected in the log metrics within the incident window; the observed activity does not show elevated errors, timeouts, or retries for frontend or its direct dependencies, suggesting the CPU fault in currencyservice may not be reflected in the provided log signals or is external to the observed services.",
-        "confidence": 0.2,
+        "summary": "Incident at frontend: 'Service emailservice experiencing mem fault'. No error logs found. LLM hypothesis: No clear log-based anomalies are present in the incident window; the symptom (emailservice mem fault) cannot be tied to a downstream/service-level anomaly in the provided logs. If a root cause exists, it may lie outside observable log signals (e.g., host memory pressure or external dependency issues not captured in log volume), or in an upstream component not exhibiting log-level anomalies.",
+        "confidence": 0.25,
         "evidence": [
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "request started [path: /]",
+            "timestamp": "2024-01-17T07:01:45.056Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "home [path: /]",
+            "timestamp": "2024-01-17T07:01:45.057Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Getting supported currencies...",
+            "timestamp": "2024-01-17T07:01:45.059Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=f7d861e1-935c-4c74-91b1-ed8af7785217",
+            "timestamp": "2024-01-17T07:01:45.066Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-17T07:01:45.071Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[])",
+            "timestamp": "2024-01-17T07:01:45.132Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=995414eb-2c08-47a7-a59d-934bdb6a14c2",
+            "timestamp": "2024-01-17T07:01:45.195Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['6E92ZMYYFZ', '0PUK6V6EV0', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N']",
+            "timestamp": "2024-01-17T07:01:45.223Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[accessories])",
+            "timestamp": "2024-01-17T07:01:45.239Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['6E92ZMYYFZ', '0PUK6V6EV0', 'LS4PSXUNUM', 'OLJCESPC7Z', '2ZYFJ3GM2N']",
+            "timestamp": "2024-01-17T07:01:45.255Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-19T16:36:57.005Z",
+            "timestamp": "2024-01-17T07:01:45.287Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -158,7 +289,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] completed request",
-            "timestamp": "2024-01-19T16:36:57.005Z",
+            "timestamp": "2024-01-17T07:01:45.287Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -172,83 +303,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-19T16:36:57.008Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "request started [path: /setCurrency]",
-            "timestamp": "2024-01-19T16:36:57.011Z",
-            "level": "DEBUG",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "setting currency [path: /setCurrency]",
-            "timestamp": "2024-01-19T16:36:57.011Z",
-            "level": "DEBUG",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-19T16:36:57.015Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=e78b4251-3673-40cf-aa1f-195e16f815fb",
-            "timestamp": "2024-01-19T16:36:57.025Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[PlaceOrder] user_id=\"405173eb-7d3c-4319-8f3e-43e51e5833a4\" user_currency=\"USD\"",
-            "timestamp": "2024-01-19T16:36:57.103Z",
+            "content": "[PlaceOrder] user_id=\"995414eb-2c08-47a7-a59d-934bdb6a14c2\" user_currency=\"CAD\"",
+            "timestamp": "2024-01-17T07:01:45.436Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -262,38 +318,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=405173eb-7d3c-4319-8f3e-43e51e5833a4",
-            "timestamp": "2024-01-19T16:36:57.105Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[])",
-            "timestamp": "2024-01-19T16:36:57.195Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"USD\",\"units\":\"178\",\"nanos\":350000000},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-19T16:36:57.282Z",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"1236\",\"nanos\":722363546},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-17T07:01:45.635Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -307,8 +333,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: USD178.350000000",
-            "timestamp": "2024-01-19T16:36:57.282Z",
+            "content": "Transaction processed: visa ending 0454     Amount: CAD1236.722363546",
+            "timestamp": "2024-01-17T07:01:45.635Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -322,8 +348,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "payment went through (transaction_id: ce0d38a4-be72-47a9-9368-9492582f6697)",
-            "timestamp": "2024-01-19T16:36:57.284Z",
+            "content": "payment went through (transaction_id: 25671710-9613-4ae3-97a5-86b109578f57)",
+            "timestamp": "2024-01-17T07:01:45.638Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -338,56 +364,11 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:36:57.293Z",
+            "timestamp": "2024-01-17T07:01:45.648Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "emailservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['66VCHSJNUP', 'OLJCESPC7Z', '9SIQT8TOJO', 'LS4PSXUNUM', '6E92ZMYYFZ']",
-            "timestamp": "2024-01-19T16:36:57.303Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['6E92ZMYYFZ', '2ZYFJ3GM2N', '9SIQT8TOJO', '1YMWWN1N4O', 'LS4PSXUNUM']",
-            "timestamp": "2024-01-19T16:36:57.313Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[kitchen])",
-            "timestamp": "2024-01-19T16:36:57.564Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -398,7 +379,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:36:59.334Z",
+            "timestamp": "2024-01-17T07:01:49.242Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -412,8 +393,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 19 Jan 2024 16:38:14.077 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-19T16:38:14.078Z",
+            "content": "1:M 17 Jan 2024 07:03:50.049 * 100 changes in 300 seconds. Saving...",
+            "timestamp": "2024-01-17T07:03:50.049Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -427,8 +408,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 19 Jan 2024 16:38:14.079 * Background saving started by pid 101",
-            "timestamp": "2024-01-19T16:38:14.079Z",
+            "content": "1:M 17 Jan 2024 07:03:50.049 * Background saving started by pid 71",
+            "timestamp": "2024-01-17T07:03:50.049Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -441,16 +422,16 @@
           }
         ],
         "metadata": {
-          "hypothesis": "No statistically significant anomalies detected in the log metrics within the incident window; the observed activity does not show elevated errors, timeouts, or retries for frontend or its direct dependencies, suggesting the CPU fault in currencyservice may not be reflected in the provided log signals or is external to the observed services.",
+          "hypothesis": "No clear log-based anomalies are present in the incident window; the symptom (emailservice mem fault) cannot be tied to a downstream/service-level anomaly in the provided logs. If a root cause exists, it may lie outside observable log signals (e.g., host memory pressure or external dependency issues not captured in log volume), or in an upstream component not exhibiting log-level anomalies.",
           "suspected_downstream": null,
           "anomalous_services": [],
-          "llm_reasoning": "The Service-level Log Statistics show no elevated error_ratio, non-zero timeout/retry/reset hits, or clear large-volume deltas in any service (all Δvol are small; most are near zero; log counts remain steady). No error-level evidence is present for any service. The only notable metric is a minor negative volume_delta for redis (-1.00) and small fluctuations elsewhere, which do not meet anomaly thresholds. Therefore, there is no strong evidence pointing to a particular anomalous service or a cascading failure path, including upstream/downstream dependencies. If currencyservice experienced CPU faults, it is not clearly manifested in the logged metrics within the incident window, or it may be an external constraint not captured by these logs.",
+          "llm_reasoning": "The incident window shows no elevated error rates, timeouts, or reset/retry spikes across services. All services have minimal to no error signals (error_ratio ≈ 0) and only modest changes in log volume (Δvol generally small, none extreme). Therefore, no clear upstream/downstream failure pattern emerges, including no upstream service logging errors with an upstream field that would reveal a root cause chain. Without explicit anomalies, the root cause remains unobserved in the provided data.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to shippingservice: frontend → shippingservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
         "confidence": 0.805,
         "evidence": [
           {
@@ -463,14 +444,14 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom service frontend directly depends on shippingservice. A fault in shippingservice can propagate to frontend due to the downstream dependency link. No alternative structural paths are evident from the given topology for a path from frontend to shippingservice, and the blast radius is limited to frontend under the current model."
+              "llm_reasoning": "The topology shows frontend directly depends on currencyservice, which means a fault in currencyservice can impact frontend. The computed path frontend -> currencyservice is a valid dependency edge; an alternative propagation path currencyservice -> frontend also exists conceptually as the downstream-to-symptom direction. The blast radius is currently limited to frontend in the provided structure, but currencyservice remains a critical upstream/downstream dependency to monitor due to its direct involvement in the symptom."
             }
           }
         ],
         "metadata": {
           "propagation_path": [
             "frontend",
-            "shippingservice"
+            "currencyservice"
           ],
           "blast_radius": [
             "frontend"
@@ -583,9 +564,14 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom service frontend directly depends on shippingservice. A fault in shippingservice can propagate to frontend due to the downstream dependency link. No alternative structural paths are evident from the given topology for a path from frontend to shippingservice, and the blast radius is limited to frontend under the current model.",
+          "llm_reasoning": "The topology shows frontend directly depends on currencyservice, which means a fault in currencyservice can impact frontend. The computed path frontend -> currencyservice is a valid dependency edge; an alternative propagation path currencyservice -> frontend also exists conceptually as the downstream-to-symptom direction. The blast radius is currently limited to frontend in the provided structure, but currencyservice remains a critical upstream/downstream dependency to monitor due to its direct involvement in the symptom.",
           "path_assessment": "plausible",
-          "alternative_paths": [],
+          "alternative_paths": [
+            [
+              "currencyservice",
+              "frontend"
+            ]
+          ],
           "critical_services_in_blast": [
             "frontend"
           ],
@@ -594,7 +580,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "All three sources provide constraints that partially align but also diverge. The strongest signal comes from the unobserved upstream possibility: currencyservice is upstream to frontend and lacks corroborating logs within the incident window, triggering an unobserved root cause inference per the rule. The topology corroborates a direct upstream dependency and a plausible propagation to the symptom service, supporting currencyservice as a deep root cause candidate. The Log Agent provides no strong in-window log anomalies for frontend or its dependencies, which elevates the importance of unobserved upstream faults (currencyservice). TCB-RCA aligns with frontend as a nearby propagation node but does not supersede the unobserved upstream inference. Therefore, currencyservice is ranked highest, followed by frontend as a possible direct root, and shippingservice as a plausible downstream cause. The final propagation path reflects the most conservative, topology-consistent route from the inferred root to the symptom: currencyservice -> frontend.",
+    "synthesis_reasoning": "There is strong convergence on frontend being involved as the symptom carrier (Log Agent and TCB-RCA both center on frontend; topology supports a plausible frontend-centric propagation). However, there is no consistent clear log-based cascade pointing to a deeper upstream service; the most credible deeper root-cause candidate (currencyservice) is not strongly supported by logs or the deterministic timing model. The most defensible outcome is to treat frontend as the primary root-cause candidate, with currencyservice as a secondary upstream consideration and unobserved frontend host memory pressure as a plausible but weaker, unobserved factor. Given the guidance to respect topology but override when logs are strong, the final determination prioritizes frontend as the root cause, with measured acknowledgment of upstream and host-level possibilities. The final propagation path simplifies to the root cause flowing directly to the symptom: [frontend].",
     "tcb_rca_reference": {
       "candidates": [
         {
