@@ -21,18 +21,72 @@ def _parse_ts(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
+# =============================================================================
+# In-process log cache (perf: eliminates redundant 40MB parses per case)
+#
+# Rationale:
+#   analyze() calls load_logs/search_logs repeatedly (~18 services × ~2 calls
+#   = ~38 file scans). Re-parsing 171K JSON lines each time is the dominant
+#   cost (~1s × 38 = 38s wasted per case).
+#
+# Strategy:
+#   Cache is keyed by (resolved_path, mtime_ns). On HTTP-driven workloads
+#   where each case uses a different log_file but the agent process
+#   persists (v5+), we keep the last N files parsed. mtime_ns guards against
+#   the (rare) case where a file is overwritten in place.
+#
+# Safety:
+#   - LRU eviction keeps memory bounded (default 4 files ≈ 160MB worst case)
+#   - mtime check means stale cache is auto-invalidated
+#   - Concurrent calls to the same file race benignly (last write wins)
+# =============================================================================
+
+_LOG_CACHE_MAX_FILES = 4
+_log_cache: "OrderedDict[tuple, list]" = None  # type: ignore
+
+
+def _get_log_cache():
+    """Lazy-init the module-level OrderedDict to avoid import-time side effects."""
+    global _log_cache
+    if _log_cache is None:
+        from collections import OrderedDict
+        _log_cache = OrderedDict()
+    return _log_cache
+
+
 def load_logs(log_file: Optional[str] = None) -> List[LogRecord]:
-    results: List[LogRecord] = []
     selected = _resolve_log_file(log_file)
     if not selected.exists():
-        return results
+        return []
 
+    try:
+        mtime_ns = selected.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = 0
+    cache_key = (str(selected), mtime_ns)
+
+    cache = _get_log_cache()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        # Move to end (LRU bump) and return a *shallow* copy reference.
+        # LogRecord is a pydantic model; callers only read fields, so sharing
+        # the same list is safe across read-only consumers.
+        cache.move_to_end(cache_key)
+        return cached
+
+    # Miss: parse fresh
+    results: List[LogRecord] = []
     with selected.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             results.append(LogRecord(**json.loads(line)))
+
+    cache[cache_key] = results
+    # Evict oldest if we exceed the bound
+    while len(cache) > _LOG_CACHE_MAX_FILES:
+        cache.popitem(last=False)
     return results
 
 
