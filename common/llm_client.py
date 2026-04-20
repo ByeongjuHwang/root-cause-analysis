@@ -411,8 +411,53 @@ class LLMClient:
             candidate = raw[first_brace:last_brace + 1]
             try:
                 return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+            # 4. control-char sanitisation fallback.
+            # LLM responses frequently contain raw newlines / tabs inside
+            # string values (esp. "reasoning" fields with multi-line text).
+            # RFC 8259 forbids unescaped control chars in strings, but it's
+            # the single most common failure mode for LLM-generated JSON.
+            # Strategy: walk the string, when we're inside a JSON string
+            # (i.e. between unescaped quotes), escape any control char.
+            sanitised_chars = []
+            in_string = False
+            escaped = False
+            for ch in candidate:
+                if escaped:
+                    sanitised_chars.append(ch)
+                    escaped = False
+                    continue
+                if ch == '\\':
+                    sanitised_chars.append(ch)
+                    escaped = True
+                    continue
+                if ch == '"':
+                    in_string = not in_string
+                    sanitised_chars.append(ch)
+                    continue
+                if in_string and ord(ch) < 0x20:
+                    # Escape control characters inside strings
+                    if ch == '\n':
+                        sanitised_chars.append('\\n')
+                    elif ch == '\r':
+                        sanitised_chars.append('\\r')
+                    elif ch == '\t':
+                        sanitised_chars.append('\\t')
+                    else:
+                        sanitised_chars.append(f'\\u{ord(ch):04x}')
+                else:
+                    sanitised_chars.append(ch)
+            sanitised = ''.join(sanitised_chars)
+
+            try:
+                return json.loads(sanitised)
             except json.JSONDecodeError as e:
-                raise ValueError(f"JSON parse failed: {e}. Candidate: {candidate[:200]}")
+                raise ValueError(
+                    f"JSON parse failed (after control-char sanitisation): "
+                    f"{e}. Candidate: {candidate[:200]}"
+                )
         
         raise ValueError(f"No JSON found in response: {raw[:200]}")
     
