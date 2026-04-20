@@ -1,67 +1,82 @@
 {
   "system": "ours",
   "benchmark": "rcaeval-re2-ob",
-  "case": "recommendationservice_cpu_1",
-  "gt_service": "recommendationservice",
+  "case": "emailservice_cpu_1",
+  "gt_service": "emailservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 46.76,
+  "elapsed_seconds": 51.56,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.93,
-    "verdict": "accepted",
-    "ground_truth_root_cause": "recommendationservice",
-    "predicted_top_cause_service": "redis",
-    "predicted_top_cause_excerpt": "redis",
+    "top_confidence": 0.7,
+    "verdict": "revised",
+    "ground_truth_root_cause": "emailservice",
+    "predicted_top_cause_service": "emailservice",
+    "predicted_top_cause_excerpt": "emailservice",
     "predicted_path": [
-      "redis",
-      "recommendationservice",
+      "emailservice",
+      "checkoutservice",
       "frontend"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 46.76,
+    "elapsed_seconds": 51.56,
     "gt_fault": "cpu"
   },
   "result": {
-    "incident_id": "INC-RECOMMENDATIONSERVICE_CPU_1",
+    "incident_id": "INC-EMAILSERVICE_CPU_1",
     "incident_summary": {
       "service": "frontend",
-      "symptom": "Service recommendationservice experiencing cpu fault",
+      "symptom": "Service emailservice experiencing cpu fault",
       "time_range": {
-        "start": "2024-01-15T18:59:25.000Z",
-        "end": "2024-01-15T19:09:55.000Z"
+        "start": "2024-01-15T20:17:45.000Z",
+        "end": "2024-01-15T20:27:45.000Z"
       }
     },
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Redis cache saturation/throughput issue causing high latency/miss penalties that propagate downstream into services used by frontend (e.g., recommendationservice and other dependent services), leading to CPU faults in the downstream processing path that culminates in the frontend symptom.",
-        "confidence": 0.93,
+        "cause": "Email generation workload spike leading to CPU saturation in emailservice; no functional errors observed, suggesting resource constraint rather than failure in the service logic.",
+        "confidence": 0.7,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
-        "cause_service": "redis",
-        "reasoning": "Both the Log Agent and the Topology Agent converge on Redis as an upstream/critical component whose slowdown can cascade to multiple frontend-dependent services. The absence of explicit Redis in the frontend dependency graph is explained by unexposed internal dependencies within downstream services; this aligns with the unobserved root cause detection principle (upstream Redis could be the deeper root). The TCB-RCA, constrained to frontend as the observed fault, does not align with Redis as the root, but the topology and log signals are stronger indicators of Redis being the root cause. Therefore Redis is ranked highest as the root cause, with frontend being a downstream symptom if Redis is saturated.",
+        "cause_service": "emailservice",
+        "reasoning": "All sources converge on emailservice being involved: Log Agent highlights a +6% workload delta in emailservice with no errors, pointing to resource saturation. Topology Agent identifies a structurally plausible path from frontend through checkoutservice to emailservice, supporting emailservice as the downstream target. The TCB-RCA baseline does not place emailservice as root (it centers on frontend), indicating a disagreement; however, the timing and resource-focused signal from logs and the plausible propagation path to the symptom strongly elevate emailservice as the most credible root cause, with frontend remaining only a dependent observer in the propagation chain.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend is the observed symptom service but could be the propagation endpoint; TCB-RCA indicates frontend as the fault in its traversal, though log evidence does not show direct frontend errors and points to resource pressure in emailservice.",
+        "confidence": 0.28,
+        "evidence_refs": [
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "TCB-RCA places frontend as the primary node in its traversal, reflecting the observed symptom and timing. However, there is no log-level error evidence on frontend and the log analysis points to emailservice workload as the root cause. The topology path does not establish frontend as the root; it merely shows a plausible downstream propagation path to emailservice. Therefore, frontend as root has weak to moderate support, primarily from the deterministic TCB-RCA, and should be considered a secondary/alternative hypothesis.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": false,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "Redis cache saturation/throughput issue causing high latency/miss penalties that propagate downstream into services used by frontend (e.g., recommendationservice and other dependent services), leading to CPU faults in the downstream processing path that culminates in the frontend symptom.",
-      "confidence": 0.93,
-      "explanation": "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "redis"
+      "cause": "Email generation workload spike leading to CPU saturation in emailservice; no functional errors observed, suggesting resource constraint rather than failure in the service logic.",
+      "confidence": 0.7,
+      "explanation": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "emailservice"
     },
     "impact_analysis": {
       "affected_services": [
-        "redis",
-        "recommendationservice",
+        "emailservice",
+        "checkoutservice",
         "frontend"
       ],
       "related_services": [
@@ -74,8 +89,8 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "redis",
-        "recommendationservice",
+        "emailservice",
+        "checkoutservice",
         "frontend"
       ],
       "blast_radius": [
@@ -83,39 +98,41 @@
       ]
     },
     "verification": {
-      "verdict": "accepted",
-      "final_confidence": 0.93,
+      "verdict": "revised",
+      "final_confidence": 0.7,
       "notes": [
-        "Candidate 'redis' confirmed by 2/3 sources (log, topology)."
+        "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
       ]
     },
     "evidence_summary": {
       "log_evidence": [
-        "Getting supported currencies...",
-        "GetCartAsync called with userId=a450233d-e6c2-4a75-8067-00b43d31f85a",
+        "request started [path: /cart]",
+        "view user cart [path: /cart]",
         "conversion request successful",
-        "request started [path: /product/L9ECAV7KIM]",
-        "serving product page [path: /product/L9ECAV7KIM]"
+        "Getting supported currencies...",
+        "GetCartAsync called with userId=f1e8598c-1238-49ca-9934-128fbb2a848a"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible."
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "propagation path: frontend -> checkoutservice -> emailservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service recommendationservice experiencing cpu fault'. No error logs found. LLM hypothesis: Redis cache saturation/throughput issue degraded cache performance, propagating latency to dependent services (including recommendationservice) and contributing to CPU faults in downstream processing.",
-        "confidence": 0.25,
+        "summary": "Incident at frontend: 'Service emailservice experiencing cpu fault'. No error logs found. LLM hypothesis: Email generation workload spiked (+6% volume) during the incident window, leading to elevated CPU demand in emailservice; lack of error logs suggests the issue is resource constraint rather than functional failures.",
+        "confidence": 0.32,
         "evidence": [
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Getting supported currencies...",
-            "timestamp": "2024-01-15T18:59:25.003Z",
-            "level": "INFO",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-15T20:17:45.018Z",
+            "level": "DEBUG",
             "trace_id": null,
             "metadata": {
-              "service": "currencyservice",
+              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -125,12 +142,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=a450233d-e6c2-4a75-8067-00b43d31f85a",
-            "timestamp": "2024-01-15T18:59:25.009Z",
-            "level": "INFO",
+            "content": "view user cart [path: /cart]",
+            "timestamp": "2024-01-15T20:17:45.018Z",
+            "level": "DEBUG",
             "trace_id": null,
             "metadata": {
-              "service": "cartservice",
+              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -141,7 +158,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "conversion request successful",
-            "timestamp": "2024-01-15T18:59:25.010Z",
+            "timestamp": "2024-01-15T20:17:45.062Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -155,27 +172,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "request started [path: /product/L9ECAV7KIM]",
-            "timestamp": "2024-01-15T18:59:25.036Z",
-            "level": "DEBUG",
+            "content": "Getting supported currencies...",
+            "timestamp": "2024-01-15T20:17:45.065Z",
+            "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "serving product page [path: /product/L9ECAV7KIM]",
-            "timestamp": "2024-01-15T18:59:25.036Z",
-            "level": "DEBUG",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
+              "service": "currencyservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -186,7 +188,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "GetCartAsync called with userId=f1e8598c-1238-49ca-9934-128fbb2a848a",
-            "timestamp": "2024-01-15T18:59:25.106Z",
+            "timestamp": "2024-01-15T20:17:45.070Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -200,8 +202,38 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['6E92ZMYYFZ', 'LS4PSXUNUM', '2ZYFJ3GM2N', '9SIQT8TOJO', '1YMWWN1N4O']",
-            "timestamp": "2024-01-15T18:59:25.215Z",
+            "content": "GetCartAsync called with userId=9cb43537-877d-431b-b82a-a3a8f26c41de",
+            "timestamp": "2024-01-15T20:17:45.073Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['66VCHSJNUP', 'LS4PSXUNUM', '0PUK6V6EV0', 'OLJCESPC7Z', '9SIQT8TOJO']",
+            "timestamp": "2024-01-15T20:17:45.074Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['OLJCESPC7Z', '2ZYFJ3GM2N', 'LS4PSXUNUM', '66VCHSJNUP', '9SIQT8TOJO']",
+            "timestamp": "2024-01-15T20:17:45.079Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -216,37 +248,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "received ad request (context_words=[footwear])",
-            "timestamp": "2024-01-15T18:59:25.226Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['9SIQT8TOJO', 'LS4PSXUNUM', '1YMWWN1N4O', '0PUK6V6EV0', '66VCHSJNUP']",
-            "timestamp": "2024-01-15T18:59:25.312Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[clothing, tops])",
-            "timestamp": "2024-01-15T18:59:25.328Z",
+            "timestamp": "2024-01-15T20:17:45.089Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -261,7 +263,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-15T18:59:25.330Z",
+            "timestamp": "2024-01-15T20:17:45.093Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -276,7 +278,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] completed request",
-            "timestamp": "2024-01-15T18:59:25.330Z",
+            "timestamp": "2024-01-15T20:17:45.093Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -290,8 +292,23 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[PlaceOrder] user_id=\"af9d88f1-fe2e-470e-97ab-9ad9ecfc479e\" user_currency=\"JPY\"",
-            "timestamp": "2024-01-15T18:59:26.408Z",
+            "content": "received ad request (context_words=[kitchen])",
+            "timestamp": "2024-01-15T20:17:45.290Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"307767a1-c0f5-45fa-830a-d9c4d9753cf2\" user_currency=\"CAD\"",
+            "timestamp": "2024-01-15T20:17:45.575Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -305,8 +322,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"123983\",\"nanos\":808934470},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-15T18:59:26.513Z",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"259\",\"nanos\":457578066},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-15T20:17:45.769Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -320,8 +337,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: JPY123983.808934470",
-            "timestamp": "2024-01-15T18:59:26.513Z",
+            "content": "Transaction processed: visa ending 0454     Amount: CAD259.457578066",
+            "timestamp": "2024-01-15T20:17:45.769Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -335,8 +352,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "payment went through (transaction_id: 0d39be68-965a-42cb-9b55-362f81c95b5a)",
-            "timestamp": "2024-01-15T18:59:26.516Z",
+            "content": "payment went through (transaction_id: e5a1461e-a4f8-451b-96de-4385eec6f82c)",
+            "timestamp": "2024-01-15T20:17:45.772Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -351,7 +368,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T18:59:26.529Z",
+            "timestamp": "2024-01-15T20:17:45.780Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -366,7 +383,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T18:59:28.224Z",
+            "timestamp": "2024-01-15T20:17:46.483Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -380,8 +397,83 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:03:18.092 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T19:03:18.093Z",
+            "content": "A request to send order confirmation email to someone@example.com has been received.",
+            "timestamp": "2024-01-15T20:17:48.580Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "A request to send order confirmation email to someone@example.com has been received.",
+            "timestamp": "2024-01-15T20:17:50.089Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "A request to send order confirmation email to someone@example.com has been received.",
+            "timestamp": "2024-01-15T20:17:50.192Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "A request to send order confirmation email to someone@example.com has been received.",
+            "timestamp": "2024-01-15T20:17:54.183Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "A request to send order confirmation email to someone@example.com has been received.",
+            "timestamp": "2024-01-15T20:17:59.183Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "1:M 15 Jan 2024 20:18:33.098 * 100 changes in 300 seconds. Saving...",
+            "timestamp": "2024-01-15T20:18:33.099Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -395,83 +487,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:03:18.093 * Background saving started by pid 18",
-            "timestamp": "2024-01-15T19:03:18.093Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "18:C 15 Jan 2024 19:03:18.119 * DB saved on disk",
-            "timestamp": "2024-01-15T19:03:18.119Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "18:C 15 Jan 2024 19:03:18.119 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB",
-            "timestamp": "2024-01-15T19:03:18.119Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:03:18.194 * Background saving terminated with success",
-            "timestamp": "2024-01-15T19:03:18.194Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:08:19.000 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T19:08:19.000Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:08:19.000 * Background saving started by pid 19",
-            "timestamp": "2024-01-15T19:08:19.000Z",
+            "content": "1:M 15 Jan 2024 20:18:33.099 * Background saving started by pid 33",
+            "timestamp": "2024-01-15T20:18:33.099Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -484,19 +501,19 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Redis cache saturation/throughput issue degraded cache performance, propagating latency to dependent services (including recommendationservice) and contributing to CPU faults in downstream processing.",
-          "suspected_downstream": "redis",
+          "hypothesis": "Email generation workload spiked (+6% volume) during the incident window, leading to elevated CPU demand in emailservice; lack of error logs suggests the issue is resource constraint rather than functional failures.",
+          "suspected_downstream": "emailservice",
           "anomalous_services": [
-            "redis"
+            "emailservice"
           ],
-          "llm_reasoning": "Redis shows a clear positive volume_delta (+2.20) while other services show minor negative deltas; no error entries are present, but Redis is a critical upstream cache for multiple services. The symptom mentions recommendationservice CPU fault; if Redis is overloaded, cache misses can cascade into heavier CPU work in downstream services. Absence of upstream error logs makes Redis the plausible deepest root cause given its anomalous signal and status as an upstream dependency.",
+          "llm_reasoning": "Only emailservice shows a positive volume_delta (+0.06) with no errors across all services. Other services show minor negative volume deltas. Without error entries, the spike points to resource saturation in emailservice rather than downstream request failures. Since there are no upstream error indicators, the deepest root cause is inferred to be the emailservice workload itself.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.45).",
-        "confidence": 0.715,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.62).",
+        "confidence": 0.766,
         "evidence": [
           {
             "type": "topology",
@@ -508,12 +525,16 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom service frontend depends on multiple services, any fault in a downstream cache/store layer (e.g., redis) would propagate through those dependencies if they rely on redis. The topology shows frontend as the consumer of several services; while redis is not listed in the explicit dependency graph, it is plausible that one or more of the frontend's downstream services (cart, catalog, currency, checkout, etc.) internally use redis. Therefore a failure in redis could propagate to those services and manifest as a frontend symptom. Alternative explicit paths are not visible in the topology since internal dependencies of the downstream services are not exposed. Confidence is moderate due to lack of internal dependency details, but the structure is consistent with a redis-downstream hypothesis.\n"
+              "llm_reasoning": "Symptom service frontend depends on checkoutservice, which commonly interacts with emailservice for notifications. The computed path frontend -> checkoutservice -> emailservice is structurally plausible given typical service interactions. Without additional edge data, alternative routes from frontend to emailservice are not evident. The blast radius remains frontend under the given topology, with limited immediate propagation to related services unless checkoutservice or emailservice fail and trigger downstream effects."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [],
+          "propagation_path": [
+            "frontend",
+            "checkoutservice",
+            "emailservice"
+          ],
           "blast_radius": [
             "frontend"
           ],
@@ -625,22 +646,18 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom service frontend depends on multiple services, any fault in a downstream cache/store layer (e.g., redis) would propagate through those dependencies if they rely on redis. The topology shows frontend as the consumer of several services; while redis is not listed in the explicit dependency graph, it is plausible that one or more of the frontend's downstream services (cart, catalog, currency, checkout, etc.) internally use redis. Therefore a failure in redis could propagate to those services and manifest as a frontend symptom. Alternative explicit paths are not visible in the topology since internal dependencies of the downstream services are not exposed. Confidence is moderate due to lack of internal dependency details, but the structure is consistent with a redis-downstream hypothesis.\n",
+          "llm_reasoning": "Symptom service frontend depends on checkoutservice, which commonly interacts with emailservice for notifications. The computed path frontend -> checkoutservice -> emailservice is structurally plausible given typical service interactions. Without additional edge data, alternative routes from frontend to emailservice are not evident. The blast radius remains frontend under the given topology, with limited immediate propagation to related services unless checkoutservice or emailservice fail and trigger downstream effects.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "frontend",
-            "cartservice",
-            "productcatalogservice",
-            "currencyservice",
-            "checkoutservice"
+            "frontend"
           ],
           "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest signals come from the Log Agent (upstream Redis anomaly with causal potential) and the Topology Agent (plausible propagation through frontend via downstream dependencies, even though Redis isn't explicit in the visible graph). The TCB-RCA contradicts this by highlighting frontend as the fault with no prior anomalies, which is likely a limitation of the algorithm given its topology constraints. Given the unobserved root cause principle, Redis emerges as the deeper, more credible root cause. Therefore, the final conclusion favors Redis as the root cause, with the propagation path Redis -> recommendationservice (and other downstreams) -> frontend, explaining the observed frontend CPU fault. If further data becomes available (e.g., Redis monitoring metrics), this could further validate or adjust the path.",
+    "synthesis_reasoning": "The strongest convergence is on emailservice as the root cause, driven by the log evidence of a workload spike causing CPU saturation and a structurally plausible propagation path via checkoutservice to the frontend. The TCB-RCA framework, while helpful for timing/topology constraints, does not align with this conclusion, instead pointing to frontend as the root. Given the lack of frontend errors and the clear resource constraint signal in emailservice, the emailservice hypothesis is prioritized. The propagation path from emailservice through checkoutservice to frontend aligns with the symptom observation (frontend) and adheres to the topology constraints. Because there is some disagreement (TCB-RCA), the overall confidence is moderated (0.53) to reflect that the strongest direct evidence points to emailservice, but a deterministic timing-based method disagrees on the root, warranting caution and continued monitoring.",
     "tcb_rca_reference": {
       "candidates": [
         {

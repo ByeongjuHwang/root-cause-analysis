@@ -1,67 +1,81 @@
 {
   "system": "ours",
   "benchmark": "rcaeval-re2-ob",
-  "case": "recommendationservice_cpu_1",
-  "gt_service": "recommendationservice",
+  "case": "checkoutservice_cpu_1",
+  "gt_service": "checkoutservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 46.76,
+  "elapsed_seconds": 50.84,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.93,
-    "verdict": "accepted",
-    "ground_truth_root_cause": "recommendationservice",
-    "predicted_top_cause_service": "redis",
-    "predicted_top_cause_excerpt": "redis",
+    "top_confidence": 0.63,
+    "verdict": "revised",
+    "ground_truth_root_cause": "checkoutservice",
+    "predicted_top_cause_service": "checkoutservice",
+    "predicted_top_cause_excerpt": "checkoutservice",
     "predicted_path": [
-      "redis",
-      "recommendationservice",
+      "checkoutservice",
       "frontend"
     ],
-    "predicted_path_length": 3,
-    "elapsed_seconds": 46.76,
+    "predicted_path_length": 2,
+    "elapsed_seconds": 50.84,
     "gt_fault": "cpu"
   },
   "result": {
-    "incident_id": "INC-RECOMMENDATIONSERVICE_CPU_1",
+    "incident_id": "INC-CHECKOUTSERVICE_CPU_1",
     "incident_summary": {
       "service": "frontend",
-      "symptom": "Service recommendationservice experiencing cpu fault",
+      "symptom": "Service checkoutservice experiencing cpu fault",
       "time_range": {
-        "start": "2024-01-15T18:59:25.000Z",
-        "end": "2024-01-15T19:09:55.000Z"
+        "start": "2024-01-15T21:31:06.000Z",
+        "end": "2024-01-15T21:41:06.000Z"
       }
     },
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Redis cache saturation/throughput issue causing high latency/miss penalties that propagate downstream into services used by frontend (e.g., recommendationservice and other dependent services), leading to CPU faults in the downstream processing path that culminates in the frontend symptom.",
-        "confidence": 0.93,
+        "cause": "Checkoutservice experiencing CPU contention or load spike leading to degraded performance, acting as the upstream fault in the checkout workflow that propagates to the frontend symptom service.",
+        "confidence": 0.63,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
-        "cause_service": "redis",
-        "reasoning": "Both the Log Agent and the Topology Agent converge on Redis as an upstream/critical component whose slowdown can cascade to multiple frontend-dependent services. The absence of explicit Redis in the frontend dependency graph is explained by unexposed internal dependencies within downstream services; this aligns with the unobserved root cause detection principle (upstream Redis could be the deeper root). The TCB-RCA, constrained to frontend as the observed fault, does not align with Redis as the root, but the topology and log signals are stronger indicators of Redis being the root cause. Therefore Redis is ranked highest as the root cause, with frontend being a downstream symptom if Redis is saturated.",
+        "cause_service": "checkoutservice",
+        "reasoning": "Topology shows a direct frontend → checkoutservice dependency with checkoutservice as a plausible upstream fault. Log analysis notes no explicit error signals but observes minor volume upticks in checkoutservice, which can indicate transient CPU contention not captured as errors. The TCB-RCA baseline placed frontend as the root, but its lack of observable anomalies and the stronger structural/evidence alignment for checkoutservice as the upstream trigger makes checkoutservice the more credible root under observed signals.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend exhibiting the symptom directly could be caused by upstream faults propagating to it or by an intrinsic frontend issue; however, no concrete upstream error signals are observed.",
+        "confidence": 0.38,
+        "evidence_refs": [
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "Topology indicates frontend is the symptom service and has a direct propagation edge from checkoutservice, making a propagation path plausible if checkoutservice fails. The TCB-RCA ranked frontend as the root, reflecting a timing-based backtracking constraint. However, the lack of corroborating log anomalies in frontend lowers confidence relative to checkoutservice as the root.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "Redis cache saturation/throughput issue causing high latency/miss penalties that propagate downstream into services used by frontend (e.g., recommendationservice and other dependent services), leading to CPU faults in the downstream processing path that culminates in the frontend symptom.",
-      "confidence": 0.93,
-      "explanation": "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "redis"
+      "cause": "Checkoutservice experiencing CPU contention or load spike leading to degraded performance, acting as the upstream fault in the checkout workflow that propagates to the frontend symptom service.",
+      "confidence": 0.63,
+      "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "checkoutservice"
     },
     "impact_analysis": {
       "affected_services": [
-        "redis",
-        "recommendationservice",
+        "checkoutservice",
         "frontend"
       ],
       "related_services": [
@@ -74,8 +88,7 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "redis",
-        "recommendationservice",
+        "checkoutservice",
         "frontend"
       ],
       "blast_radius": [
@@ -83,65 +96,37 @@
       ]
     },
     "verification": {
-      "verdict": "accepted",
-      "final_confidence": 0.93,
+      "verdict": "revised",
+      "final_confidence": 0.63,
       "notes": [
-        "Candidate 'redis' confirmed by 2/3 sources (log, topology)."
+        "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
       "log_evidence": [
-        "Getting supported currencies...",
-        "GetCartAsync called with userId=a450233d-e6c2-4a75-8067-00b43d31f85a",
         "conversion request successful",
-        "request started [path: /product/L9ECAV7KIM]",
-        "serving product page [path: /product/L9ECAV7KIM]"
+        "request complete [path: /cart]",
+        "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', 'L9ECAV7KIM', 'LS4PSXUNUM', '2ZYFJ3GM2N', '66VCHSJNUP']",
+        "received ad request (context_words=[decor, home])",
+        "request complete [path: /product/0PUK6V6EV0]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible."
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "propagation path: frontend -> checkoutservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service recommendationservice experiencing cpu fault'. No error logs found. LLM hypothesis: Redis cache saturation/throughput issue degraded cache performance, propagating latency to dependent services (including recommendationservice) and contributing to CPU faults in downstream processing.",
+        "summary": "Incident at frontend: 'Service checkoutservice experiencing cpu fault'. No error logs found. LLM hypothesis: No clear error signals; minor volume upticks in checkoutservice and related services suggest a possible transient CPU contention or load spike in checkout workflow, but no logged errors to confirm root cause. Downstream/ upstream linkages are not evidenced by error logs.",
         "confidence": 0.25,
         "evidence": [
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Getting supported currencies...",
-            "timestamp": "2024-01-15T18:59:25.003Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=a450233d-e6c2-4a75-8067-00b43d31f85a",
-            "timestamp": "2024-01-15T18:59:25.009Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "conversion request successful",
-            "timestamp": "2024-01-15T18:59:25.010Z",
+            "timestamp": "2024-01-15T21:31:06.063Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -155,8 +140,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "request started [path: /product/L9ECAV7KIM]",
-            "timestamp": "2024-01-15T18:59:25.036Z",
+            "content": "request complete [path: /cart]",
+            "timestamp": "2024-01-15T21:31:06.066Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -170,8 +155,38 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "serving product page [path: /product/L9ECAV7KIM]",
-            "timestamp": "2024-01-15T18:59:25.036Z",
+            "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', 'L9ECAV7KIM', 'LS4PSXUNUM', '2ZYFJ3GM2N', '66VCHSJNUP']",
+            "timestamp": "2024-01-15T21:31:06.073Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[decor, home])",
+            "timestamp": "2024-01-15T21:31:06.087Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/0PUK6V6EV0]",
+            "timestamp": "2024-01-15T21:31:06.088Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -185,8 +200,23 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "GetCartAsync called with userId=f1e8598c-1238-49ca-9934-128fbb2a848a",
-            "timestamp": "2024-01-15T18:59:25.106Z",
+            "content": "Getting supported currencies...",
+            "timestamp": "2024-01-15T21:31:06.275Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=8604bde5-1768-44a7-b9c8-d6e1621d6c27",
+            "timestamp": "2024-01-15T21:31:06.280Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -200,8 +230,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['6E92ZMYYFZ', 'LS4PSXUNUM', '2ZYFJ3GM2N', '9SIQT8TOJO', '1YMWWN1N4O']",
-            "timestamp": "2024-01-15T18:59:25.215Z",
+            "content": "[Recv ListRecommendations] product_ids=['OLJCESPC7Z', '0PUK6V6EV0', '2ZYFJ3GM2N', '1YMWWN1N4O', 'L9ECAV7KIM']",
+            "timestamp": "2024-01-15T21:31:06.292Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -215,8 +245,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "received ad request (context_words=[footwear])",
-            "timestamp": "2024-01-15T18:59:25.226Z",
+            "content": "received ad request (context_words=[kitchen])",
+            "timestamp": "2024-01-15T21:31:06.306Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -230,27 +260,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['9SIQT8TOJO', 'LS4PSXUNUM', '1YMWWN1N4O', '0PUK6V6EV0', '66VCHSJNUP']",
-            "timestamp": "2024-01-15T18:59:25.312Z",
+            "content": "AddItemAsync called with userId=8604bde5-1768-44a7-b9c8-d6e1621d6c27, productId=LS4PSXUNUM, quantity=1",
+            "timestamp": "2024-01-15T21:31:06.317Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "received ad request (context_words=[clothing, tops])",
-            "timestamp": "2024-01-15T18:59:25.328Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "adservice",
+              "service": "cartservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -261,7 +276,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] received request",
-            "timestamp": "2024-01-15T18:59:25.330Z",
+            "timestamp": "2024-01-15T21:31:06.394Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -276,7 +291,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "[GetQuote] completed request",
-            "timestamp": "2024-01-15T18:59:25.330Z",
+            "timestamp": "2024-01-15T21:31:06.395Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -290,8 +305,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[PlaceOrder] user_id=\"af9d88f1-fe2e-470e-97ab-9ad9ecfc479e\" user_currency=\"JPY\"",
-            "timestamp": "2024-01-15T18:59:26.408Z",
+            "content": "[PlaceOrder] user_id=\"8604bde5-1768-44a7-b9c8-d6e1621d6c27\" user_currency=\"USD\"",
+            "timestamp": "2024-01-15T21:31:06.772Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -305,8 +320,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"123983\",\"nanos\":808934470},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-15T18:59:26.513Z",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"USD\",\"units\":\"103\",\"nanos\":440000000},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-15T21:31:07.071Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -320,8 +335,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: JPY123983.808934470",
-            "timestamp": "2024-01-15T18:59:26.513Z",
+            "content": "Transaction processed: visa ending 0454     Amount: USD103.440000000",
+            "timestamp": "2024-01-15T21:31:07.071Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -335,8 +350,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "payment went through (transaction_id: 0d39be68-965a-42cb-9b55-362f81c95b5a)",
-            "timestamp": "2024-01-15T18:59:26.516Z",
+            "content": "payment went through (transaction_id: c80c6d21-19cd-425b-9b19-0365720e18d1)",
+            "timestamp": "2024-01-15T21:31:07.073Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -351,11 +366,56 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T18:59:26.529Z",
+            "timestamp": "2024-01-15T21:31:07.083Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "order confirmation email sent to \"someone@example.com\"",
+            "timestamp": "2024-01-15T21:31:07.084Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"77cc67a9-3828-410c-a117-d90c9628cef1\" user_currency=\"USD\"",
+            "timestamp": "2024-01-15T21:31:07.773Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "payment went through (transaction_id: 8631925f-695a-4f4f-a441-2f950bde4e33)",
+            "timestamp": "2024-01-15T21:31:07.886Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -366,7 +426,7 @@
             "type": "log",
             "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-15T18:59:28.224Z",
+            "timestamp": "2024-01-15T21:31:07.895Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -380,8 +440,38 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:03:18.092 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T19:03:18.093Z",
+            "content": "order confirmation email sent to \"someone@example.com\"",
+            "timestamp": "2024-01-15T21:31:07.897Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"6a20787e-523c-4639-9f0f-c13d9613d73e\" user_currency=\"CAD\"",
+            "timestamp": "2024-01-15T21:31:08.980Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "1:M 15 Jan 2024 21:33:48.002 * 100 changes in 300 seconds. Saving...",
+            "timestamp": "2024-01-15T21:33:48.002Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -395,83 +485,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:03:18.093 * Background saving started by pid 18",
-            "timestamp": "2024-01-15T19:03:18.093Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "18:C 15 Jan 2024 19:03:18.119 * DB saved on disk",
-            "timestamp": "2024-01-15T19:03:18.119Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "18:C 15 Jan 2024 19:03:18.119 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB",
-            "timestamp": "2024-01-15T19:03:18.119Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:03:18.194 * Background saving terminated with success",
-            "timestamp": "2024-01-15T19:03:18.194Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:08:19.000 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T19:08:19.000Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 19:08:19.000 * Background saving started by pid 19",
-            "timestamp": "2024-01-15T19:08:19.000Z",
+            "content": "1:M 15 Jan 2024 21:33:48.003 * Background saving started by pid 48",
+            "timestamp": "2024-01-15T21:33:48.003Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -484,19 +499,17 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Redis cache saturation/throughput issue degraded cache performance, propagating latency to dependent services (including recommendationservice) and contributing to CPU faults in downstream processing.",
-          "suspected_downstream": "redis",
-          "anomalous_services": [
-            "redis"
-          ],
-          "llm_reasoning": "Redis shows a clear positive volume_delta (+2.20) while other services show minor negative deltas; no error entries are present, but Redis is a critical upstream cache for multiple services. The symptom mentions recommendationservice CPU fault; if Redis is overloaded, cache misses can cascade into heavier CPU work in downstream services. Absence of upstream error logs makes Redis the plausible deepest root cause given its anomalous signal and status as an upstream dependency.",
+          "hypothesis": "No clear error signals; minor volume upticks in checkoutservice and related services suggest a possible transient CPU contention or load spike in checkout workflow, but no logged errors to confirm root cause. Downstream/ upstream linkages are not evidenced by error logs.",
+          "suspected_downstream": "checkoutservice",
+          "anomalous_services": [],
+          "llm_reasoning": "Service-level statistics show no elevated error_ratio and only small positive volume deltas (<0.08) across services. The spotlighted service in incident symptoms is checkoutservice, but without upstream error logs, it's difficult to establish a concrete root cause. Given topology, checkoutservice is a downstream consumer of multiple services; however, no explicit upstream errors are observed to trace deeper. Thus, the deepest root cause remains unclear, with a low-confidence hypothesis focused on possible transient CPU contention in checkoutflow.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.45).",
-        "confidence": 0.715,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -508,12 +521,15 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom service frontend depends on multiple services, any fault in a downstream cache/store layer (e.g., redis) would propagate through those dependencies if they rely on redis. The topology shows frontend as the consumer of several services; while redis is not listed in the explicit dependency graph, it is plausible that one or more of the frontend's downstream services (cart, catalog, currency, checkout, etc.) internally use redis. Therefore a failure in redis could propagate to those services and manifest as a frontend symptom. Alternative explicit paths are not visible in the topology since internal dependencies of the downstream services are not exposed. Confidence is moderate due to lack of internal dependency details, but the structure is consistent with a redis-downstream hypothesis.\n"
+              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, making a fault in checkoutservice a plausible root that propagates to frontend. The topology shows no alternative direct path from other services to frontend that would match the observed symptom, and the log agent indicating downstream as checkoutservice aligns with the direct dependency edge from frontend to checkoutservice. Given the graph structure, the most plausible propagation is root (checkoutservice) affecting its consumer (frontend). The blast radius includes the symptom service and its direct dependency (checkoutservice) as critical, with potential cascading impact to other frontend-dependent or related services if the fault propagates further."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [],
+          "propagation_path": [
+            "frontend",
+            "checkoutservice"
+          ],
           "blast_radius": [
             "frontend"
           ],
@@ -625,14 +641,11 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom service frontend depends on multiple services, any fault in a downstream cache/store layer (e.g., redis) would propagate through those dependencies if they rely on redis. The topology shows frontend as the consumer of several services; while redis is not listed in the explicit dependency graph, it is plausible that one or more of the frontend's downstream services (cart, catalog, currency, checkout, etc.) internally use redis. Therefore a failure in redis could propagate to those services and manifest as a frontend symptom. Alternative explicit paths are not visible in the topology since internal dependencies of the downstream services are not exposed. Confidence is moderate due to lack of internal dependency details, but the structure is consistent with a redis-downstream hypothesis.\n",
+          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, making a fault in checkoutservice a plausible root that propagates to frontend. The topology shows no alternative direct path from other services to frontend that would match the observed symptom, and the log agent indicating downstream as checkoutservice aligns with the direct dependency edge from frontend to checkoutservice. Given the graph structure, the most plausible propagation is root (checkoutservice) affecting its consumer (frontend). The blast radius includes the symptom service and its direct dependency (checkoutservice) as critical, with potential cascading impact to other frontend-dependent or related services if the fault propagates further.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend",
-            "cartservice",
-            "productcatalogservice",
-            "currencyservice",
             "checkoutservice"
           ],
           "topology_supports_hypothesis": true
@@ -640,7 +653,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest signals come from the Log Agent (upstream Redis anomaly with causal potential) and the Topology Agent (plausible propagation through frontend via downstream dependencies, even though Redis isn't explicit in the visible graph). The TCB-RCA contradicts this by highlighting frontend as the fault with no prior anomalies, which is likely a limitation of the algorithm given its topology constraints. Given the unobserved root cause principle, Redis emerges as the deeper, more credible root cause. Therefore, the final conclusion favors Redis as the root cause, with the propagation path Redis -> recommendationservice (and other downstreams) -> frontend, explaining the observed frontend CPU fault. If further data becomes available (e.g., Redis monitoring metrics), this could further validate or adjust the path.",
+    "synthesis_reasoning": "All sources converge on checkoutservice as the more plausible root cause given the structural dependency (frontend directly depends on checkoutservice) and the log agent’s note of upticks in checkoutservice without explicit errors. The topology aligns with a straightforward propagation from checkoutservice to frontend. The TCB-RCA baseline, while pointing to frontend as a root based on temporal backtracking, lacks observable anomalous timing signals and therefore is given lower weight compared to the structural and symptom-consistent signals. There is no strong evidence for an unobserved upstream cause beyond checkoutservice, and the observed minor load signals in checkoutservice provide a coherent, if not definitive, root cause explanation. The most plausible propagation path is checkoutservice → frontend, leading to the frontend symptom.",
     "tcb_rca_reference": {
       "candidates": [
         {

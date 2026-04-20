@@ -36,6 +36,7 @@ from .tcb_rca import (
     TCBRCAOutput,
     logs_to_anomaly_data,
 )
+from .scoring_rules import apply_hard_rules, build_temporal_gaps
 from common.llm_client import get_default_client
 
 logger = logging.getLogger(__name__)
@@ -338,11 +339,21 @@ class RCAServiceLLM:
                 "reasoning": c.get("reasoning", ""),
                 "supporting_evidence": support,
             })
-        
-        # 후보 정렬
-        candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
-        for idx, c in enumerate(candidates, 1):
-            c["rank"] = idx
+
+        # === Post-hoc scoring rules (see scoring_rules.py for contract) ===
+        # Apply hard constraints the LLM cannot override:
+        #   H1 no direct evidence → conf ≤ 0.25
+        #   H2 evidence=0 cannot be Top-1 if a compliant alternative exists
+        #   H3 candidates whose first anomaly is later than symptom cannot be Top-1
+        #   H4 topology-only support → conf ≤ 0.35
+        # These correct the "unobserved root cause" over-promotion failure mode
+        # observed in v5 diagnosis.
+        temporal_gaps = build_temporal_gaps(tcb_rca_output, service)
+        candidates = apply_hard_rules(
+            candidates,
+            symptom_service=service,
+            tcb_temporal_gaps=temporal_gaps,
+        )
         
         # === Step 4: 기존 출력 스키마에 맞춘 결과 반환 ===
         
