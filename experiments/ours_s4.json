@@ -1,0 +1,492 @@
+{
+  "system": "ours",
+  "system_name": "Ours (Multi-Agent + MCP + Verifier)",
+  "scenario": "s4",
+  "scenario_description": "S4: DB Disk Full (Fan-out)",
+  "scenario_kind": "synthetic",
+  "elapsed_seconds": 27.56,
+  "evaluation": {
+    "ac_at_1": true,
+    "ac_at_3": true,
+    "path_accuracy": true,
+    "fp_handled": null,
+    "top_confidence": 0.95,
+    "verdict": "accepted",
+    "ground_truth_root_cause": "order-db",
+    "predicted_top_cause_service": "order-db",
+    "predicted_top_cause_excerpt": "order-db",
+    "predicted_path": [
+      "order-db",
+      "order-service",
+      "api-gateway"
+    ],
+    "predicted_path_length": 3,
+    "elapsed_seconds": 27.56
+  },
+  "result": {
+    "incident_id": "INC-S4-DISKFULL",
+    "incident_summary": {
+      "service": "api-gateway",
+      "symptom": "checkout requests failing with 500 errors from order-service",
+      "time_range": {
+        "start": "2026-03-24T13:02:30+09:00",
+        "end": "2026-03-24T13:03:20+09:00"
+      }
+    },
+    "root_cause_candidates": [
+      {
+        "rank": 1,
+        "cause": "Disk full on the order-db database leading to write-rejects and DB_WRITE_ERROR/DB_CONNECTION_ERROR, causing order-service to fail its DB interactions and potentially trigger a circuit breaker, with api-gateway reporting upstream failures to order-service and frontend-web observing cascading 500s.",
+        "confidence": 0.95,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "order-db",
+        "reasoning": "All three sources converge on order-db as the deepest root cause: logs show disk-full/write failures originating at order-db, downstream services report upstream errors from order-db via order-service, and the topology path api-gateway -> order-service -> order-db matches the observed propagation. The TCB-RCA also identifies order-db as the top candidate with the correct temporal ordering and depth. The unobserved but plausible propagation through order-service to api-gateway aligns with the structural constraints.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
+      }
+    ],
+    "final_verdict": {
+      "cause": "Disk full on the order-db database leading to write-rejects and DB_WRITE_ERROR/DB_CONNECTION_ERROR, causing order-service to fail its DB interactions and potentially trigger a circuit breaker, with api-gateway reporting upstream failures to order-service and frontend-web observing cascading 500s.",
+      "confidence": 0.95,
+      "explanation": "Candidate 'order-db' confirmed by 3/3 sources (log, topology, tcb-rca).",
+      "cause_service": "order-db"
+    },
+    "impact_analysis": {
+      "affected_services": [
+        "order-db",
+        "order-service",
+        "api-gateway"
+      ],
+      "related_services": [
+        "auth-service",
+        "catalog-service",
+        "order-service",
+        "frontend-web"
+      ],
+      "propagation_path": [
+        "order-db",
+        "order-service",
+        "api-gateway"
+      ],
+      "blast_radius": [
+        "api-gateway",
+        "frontend-web",
+        "message-queue",
+        "order-db",
+        "order-service",
+        "worker-service"
+      ]
+    },
+    "verification": {
+      "verdict": "accepted",
+      "final_confidence": 0.95,
+      "notes": [
+        "Candidate 'order-db' confirmed by 3/3 sources (log, topology, tcb-rca)."
+      ]
+    },
+    "evidence_summary": {
+      "log_evidence": [
+        "disk usage at 95%, approaching capacity",
+        "disk full: cannot write WAL segment",
+        "all write operations rejected: no space left on device",
+        "INSERT failed: could not extend file, disk full",
+        "failed to save order: database write error"
+      ],
+      "topology_evidence": [
+        "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+        "propagation path: api-gateway -> order-service -> order-db"
+      ]
+    },
+    "agent_results": [
+      {
+        "agent": "log_agent",
+        "summary": "Incident at api-gateway: 'checkout requests failing with 500 errors from order-service'. Errors detected in 5 service(s): frontend-web (1 errors), api-gateway (3 errors), order-service (3 errors), worker-service (2 errors), order-db (4 errors). LLM hypothesis: Order-db runs out of disk space causing disk-full/write-reject failures, which propagates to order-service (DB_WRITE_ERROR/DB_CONNECTION_ERROR) and triggers a circuit break; api-gateway then reports upstream failures to order-service, and frontend-web surfaces the cascading 500 errors.",
+        "confidence": 0.78,
+        "evidence": [
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "disk usage at 95%, approaching capacity",
+            "timestamp": "2026-03-24T13:02:30+09:00",
+            "level": "WARN",
+            "trace_id": null,
+            "metadata": {
+              "service": "order-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "DISK_WARNING"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "disk full: cannot write WAL segment",
+            "timestamp": "2026-03-24T13:02:35+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "order-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "DISK_FULL"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "all write operations rejected: no space left on device",
+            "timestamp": "2026-03-24T13:02:38+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "order-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "WRITE_REJECTED"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "INSERT failed: could not extend file, disk full",
+            "timestamp": "2026-03-24T13:02:40+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "order-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "DISK_FULL"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "failed to save order: database write error",
+            "timestamp": "2026-03-24T13:02:45+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "order-service",
+              "status_code": 500,
+              "latency_ms": 3000,
+              "upstream": "order-db",
+              "error_type": "DB_WRITE_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "order creation failed: order-db connection error",
+            "timestamp": "2026-03-24T13:02:48+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-002",
+            "metadata": {
+              "service": "order-service",
+              "status_code": 500,
+              "latency_ms": 5000,
+              "upstream": "order-db",
+              "error_type": "DB_CONNECTION_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "failed to update job status: order-db write rejected",
+            "timestamp": "2026-03-24T13:02:50+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "worker-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": "order-db",
+              "error_type": "DB_WRITE_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "batch processing halted: cannot persist results to order-db",
+            "timestamp": "2026-03-24T13:02:52+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "worker-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": "order-db",
+              "error_type": "DB_UNAVAILABLE"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "circuit breaker opened for order-db",
+            "timestamp": "2026-03-24T13:02:55+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "order-service",
+              "status_code": 503,
+              "latency_ms": null,
+              "upstream": "order-db",
+              "error_type": "CIRCUIT_OPEN"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream order-service returned 500",
+            "timestamp": "2026-03-24T13:03:00+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 500,
+              "latency_ms": 3200,
+              "upstream": "order-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream order-service returned 500",
+            "timestamp": "2026-03-24T13:03:05+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-002",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 500,
+              "latency_ms": 5100,
+              "upstream": "order-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream order-service returned 503",
+            "timestamp": "2026-03-24T13:03:08+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 503,
+              "latency_ms": 90,
+              "upstream": "order-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "checkout failed with 500 error",
+            "timestamp": "2026-03-24T13:03:12+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "frontend-web",
+              "status_code": 500,
+              "latency_ms": 3500,
+              "upstream": "api-gateway",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed",
+            "timestamp": "2026-03-24T13:03:20+09:00",
+            "level": "INFO",
+            "trace_id": "trace-010",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 200,
+              "upstream": "auth-service",
+              "error_type": null
+            }
+          }
+        ],
+        "metadata": {
+          "hypothesis": "Order-db runs out of disk space causing disk-full/write-reject failures, which propagates to order-service (DB_WRITE_ERROR/DB_CONNECTION_ERROR) and triggers a circuit break; api-gateway then reports upstream failures to order-service, and frontend-web surfaces the cascading 500 errors.",
+          "suspected_downstream": "order-db",
+          "anomalous_services": [
+            "order-db",
+            "order-service",
+            "worker-service",
+            "api-gateway",
+            "frontend-web"
+          ],
+          "llm_reasoning": "The earliest event is DISK_WARNING followed by DISK_FULL and WRITE_REJECTED in order-db. Subsequent errors in order-service reference upstream=order-db (DB_WRITE_ERROR, DB_CONNECTION_ERROR, CIRCUIT_OPEN), and worker-service also references upstream=order-db. api-gateway reports UPSTREAM_ERROR from order-service, and frontend-web reports UPSTREAM_ERROR from api-gateway. The upstream chain points to order-db as the deepest root cause with affected downstream services, aligning with the observed cascading failures across the stack.",
+          "referenced_upstreams": {
+            "order-db": [
+              "order-service",
+              "worker-service"
+            ],
+            "order-service": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "frontend-web"
+            ]
+          }
+        }
+      },
+      {
+        "agent": "topology_agent",
+        "summary": "api-gateway depends on ['auth-service', 'catalog-service', 'order-service']. Related services: ['auth-service', 'catalog-service', 'order-service', 'frontend-web']. Propagation path from api-gateway to order-db: api-gateway → order-service → order-db. Blast radius: ['api-gateway', 'frontend-web']. LLM assessment: plausible (confidence 0.85).",
+        "confidence": 0.835,
+        "evidence": [
+          {
+            "type": "topology",
+            "source": "arch://system/latest",
+            "content": "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+            "timestamp": null,
+            "level": null,
+            "trace_id": null,
+            "metadata": {
+              "service": "api-gateway",
+              "topology_file": null,
+              "llm_reasoning": "The symptom service (api-gateway) depends on order-service, which in turn is a likely owner of order-db. The computed path api-gateway → order-service → order-db matches the given dependency structure. Other direct dependencies of api-gateway (auth-service, catalog-service) do not provide a viable path to order-db in the topology, making alternative paths unlikely. The blast radius includes gateway and frontend-web as they are exposed to external clients; order-service could propagate the fault to its downstream DB, but the topology highlights the gateway-to-order-service-to-order-db chain as the primary propagation route."
+            }
+          }
+        ],
+        "metadata": {
+          "propagation_path": [
+            "api-gateway",
+            "order-service",
+            "order-db"
+          ],
+          "blast_radius": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "dependency_info": {
+            "service": "api-gateway",
+            "depends_on": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "upstream_of": [
+              "frontend-web"
+            ],
+            "criticality": "high",
+            "type": "gateway"
+          },
+          "related_services": [
+            "auth-service",
+            "catalog-service",
+            "order-service",
+            "frontend-web"
+          ],
+          "topology_graph": {
+            "frontend-web": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "auth-service": [
+              "user-db"
+            ],
+            "catalog-service": [],
+            "order-service": [
+              "message-queue",
+              "order-db"
+            ],
+            "message-queue": [
+              "worker-service"
+            ],
+            "worker-service": [
+              "order-db"
+            ],
+            "user-db": [],
+            "order-db": []
+          },
+          "service_metadata": {
+            "frontend-web": {
+              "type": "frontend",
+              "criticality": "high"
+            },
+            "api-gateway": {
+              "type": "gateway",
+              "criticality": "high"
+            },
+            "auth-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "catalog-service": {
+              "type": "backend",
+              "criticality": "medium"
+            },
+            "order-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "message-queue": {
+              "type": "queue",
+              "criticality": "high"
+            },
+            "worker-service": {
+              "type": "worker",
+              "criticality": "high"
+            },
+            "user-db": {
+              "type": "database",
+              "criticality": "high"
+            },
+            "order-db": {
+              "type": "database",
+              "criticality": "high"
+            }
+          },
+          "topology_file": null,
+          "llm_reasoning": "The symptom service (api-gateway) depends on order-service, which in turn is a likely owner of order-db. The computed path api-gateway → order-service → order-db matches the given dependency structure. Other direct dependencies of api-gateway (auth-service, catalog-service) do not provide a viable path to order-db in the topology, making alternative paths unlikely. The blast radius includes gateway and frontend-web as they are exposed to external clients; order-service could propagate the fault to its downstream DB, but the topology highlights the gateway-to-order-service-to-order-db chain as the primary propagation route.",
+          "path_assessment": "plausible",
+          "alternative_paths": [],
+          "critical_services_in_blast": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "topology_supports_hypothesis": true
+        }
+      }
+    ],
+    "evidence_convergence": "strong_agreement",
+    "synthesis_reasoning": "The root cause is strongly supported as order-db across all sources: logs indicate disk-full conditions triggering DB write errors; topology confirms a feasible propagation path from order-db through order-service to api-gateway; the TCB-RCA ranking places order-db at the top with consistent temporal gaps and topology depth. Given the unobserved nature from other components would not negate order-db as the root cause, the convergence of evidence across all three sources yields high confidence in order-db as the root cause. No alternative root cause receives comparable multi-source support, though the blast radius includes api-gateway and frontend-web as downstream observers.",
+    "tcb_rca_reference": {
+      "candidates": [
+        {
+          "rank": 1,
+          "cause_service": "order-db",
+          "confidence": 0.88,
+          "depth": 2
+        }
+      ],
+      "propagation_path": [
+        "order-db",
+        "order-service",
+        "api-gateway"
+      ]
+    },
+    "agent_errors": null
+  }
+}

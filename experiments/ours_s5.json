@@ -1,0 +1,406 @@
+{
+  "system": "ours",
+  "system_name": "Ours (Multi-Agent + MCP + Verifier)",
+  "scenario": "s5",
+  "scenario_description": "S5: GC Pause (False Positive)",
+  "scenario_kind": "synthetic",
+  "elapsed_seconds": 32.55,
+  "evaluation": {
+    "ac_at_1": false,
+    "ac_at_3": false,
+    "path_accuracy": null,
+    "fp_handled": true,
+    "top_confidence": 0.45,
+    "verdict": "weak-evidence",
+    "ground_truth_root_cause": null,
+    "predicted_top_cause_service": "auth-service",
+    "predicted_top_cause_excerpt": "auth-service",
+    "predicted_path": [
+      "auth-service",
+      "api-gateway"
+    ],
+    "predicted_path_length": 2,
+    "elapsed_seconds": 32.55
+  },
+  "result": {
+    "incident_id": "INC-S5-FALSEPOS",
+    "incident_summary": {
+      "service": "api-gateway",
+      "symptom": "brief latency spike observed on api-gateway, self-recovered",
+      "time_range": {
+        "start": "2026-03-24T13:02:30+09:00",
+        "end": "2026-03-24T13:03:20+09:00"
+      }
+    },
+    "root_cause_candidates": [
+      {
+        "rank": 1,
+        "cause": "auth-service experienced upstream slowdown or failure not directly observed in its own logs, causing downstream latency at api-gateway. No logs from auth-service were observed in the evidence set, making it an unobserved root cause per guidance.",
+        "confidence": 0.45,
+        "evidence_refs": [
+          "topology-agent:confirmed"
+        ],
+        "cause_service": "auth-service",
+        "reasoning": "Log Agent indicates the gateway latency could propagate from downstream services becoming slow, with no downstream logs to pinpoint a specific service. Topology shows api-gateway depends on auth-service, making it a structurally plausible upstream source. TCB-RCA attributes the propagation to api-gateway itself rather than its upstreams, so it does not support auth-service as the root; however, the unobserved nature of auth-service (no logs available) makes it a plausible deeper root cause under the unobserved-root rule.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": false
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "api-gateway itself experienced a latency spike and GC pause, per Log Agent. This is consistent with the symptom service latency and aligns with the TCB-RCA finding of a propagation to the gateway, but it does not explain a deeper upstream cause.",
+        "confidence": 0.4,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "api-gateway",
+        "reasoning": "Log Agent documents latency spike and GC pause at api-gateway, suggesting gateway-level stress. Topology does not support api-gateway as the root (paths start from gateway to downstream), and the TCB-RCA baseline places emphasis on the gateway as the primary anomaly node with propagation to itself. Given potential self-contained symptoms and quick self-recovery, this is a plausible, but secondary root cause if downstream remains unprobed.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": false,
+          "tcb_rca_agrees": true
+        }
+      },
+      {
+        "rank": 3,
+        "cause": "considered unlikely given evidence, as topology shows no direct or necessary path from catalog-service to api-gateway latency spike in the provided traces. No direct log or timing alignment supports catalog-service as the root cause.",
+        "confidence": 0.2,
+        "evidence_refs": [],
+        "cause_service": "catalog-service",
+        "reasoning": "Although catalog-service is listed as a downstream dependency of the gateway, there is no observed timing or log cascade linking catalog-service to the gateway latency spike. Topology does not strongly implicate it, and TCB-RCA did not highlight it as a primary candidate.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": false,
+          "tcb_rca_agrees": false
+        }
+      }
+    ],
+    "final_verdict": {
+      "cause": "auth-service experienced upstream slowdown or failure not directly observed in its own logs, causing downstream latency at api-gateway. No logs from auth-service were observed in the evidence set, making it an unobserved root cause per guidance.",
+      "confidence": 0.45,
+      "explanation": "Candidate 'auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
+      "cause_service": "auth-service"
+    },
+    "impact_analysis": {
+      "affected_services": [
+        "auth-service",
+        "api-gateway"
+      ],
+      "related_services": [
+        "auth-service",
+        "catalog-service",
+        "order-service",
+        "frontend-web"
+      ],
+      "propagation_path": [
+        "auth-service",
+        "api-gateway"
+      ],
+      "blast_radius": [
+        "api-gateway",
+        "frontend-web"
+      ]
+    },
+    "verification": {
+      "verdict": "weak-evidence",
+      "final_confidence": 0.45,
+      "notes": [
+        "Candidate 'auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
+        "Candidate 'api-gateway' confirmed by 2/3 sources (log, tcb-rca).",
+        "Candidate 'catalog-service' has no LLM source agreement."
+      ]
+    },
+    "evidence_summary": {
+      "log_evidence": [
+        "response time spike detected: 1200ms (normal: 200ms)",
+        "GC pause detected: 800ms stop-the-world",
+        "request completed normally after brief delay",
+        "request completed",
+        "request completed"
+      ],
+      "topology_evidence": [
+        "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+        "propagation path: api-gateway -> auth-service"
+      ]
+    },
+    "agent_results": [
+      {
+        "agent": "log_agent",
+        "summary": "Incident at api-gateway: 'brief latency spike observed on api-gateway, self-recovered'. Errors detected in 1 service(s): api-gateway (2 errors). LLM hypothesis: api-gateway experienced latency spike and GC pause likely caused by upstream downstream services (auth-service, catalog-service, or order-service) becoming slow or overloaded, propagating latency into the gateway.",
+        "confidence": 0.6,
+        "evidence": [
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "response time spike detected: 1200ms (normal: 200ms)",
+            "timestamp": "2026-03-24T13:02:50+09:00",
+            "level": "WARN",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 1200,
+              "upstream": null,
+              "error_type": "LATENCY_SPIKE"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GC pause detected: 800ms stop-the-world",
+            "timestamp": "2026-03-24T13:02:52+09:00",
+            "level": "WARN",
+            "trace_id": "trace-002",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 1000,
+              "upstream": null,
+              "error_type": "GC_PAUSE"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed normally after brief delay",
+            "timestamp": "2026-03-24T13:02:55+09:00",
+            "level": "INFO",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 350,
+              "upstream": "auth-service",
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed",
+            "timestamp": "2026-03-24T13:03:00+09:00",
+            "level": "INFO",
+            "trace_id": "trace-004",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 180,
+              "upstream": "catalog-service",
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed",
+            "timestamp": "2026-03-24T13:03:05+09:00",
+            "level": "INFO",
+            "trace_id": "trace-005",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 220,
+              "upstream": "order-service",
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "authentication successful",
+            "timestamp": "2026-03-24T13:03:10+09:00",
+            "level": "INFO",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "auth-service",
+              "status_code": 200,
+              "latency_ms": 80,
+              "upstream": "user-db",
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "product query completed",
+            "timestamp": "2026-03-24T13:03:15+09:00",
+            "level": "INFO",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "catalog-service",
+              "status_code": 200,
+              "latency_ms": 120,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed",
+            "timestamp": "2026-03-24T13:03:20+09:00",
+            "level": "INFO",
+            "trace_id": "trace-010",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 150,
+              "upstream": "auth-service",
+              "error_type": null
+            }
+          }
+        ],
+        "metadata": {
+          "hypothesis": "api-gateway experienced latency spike and GC pause likely caused by upstream downstream services (auth-service, catalog-service, or order-service) becoming slow or overloaded, propagating latency into the gateway.",
+          "suspected_downstream": null,
+          "anomalous_services": [
+            "api-gateway"
+          ],
+          "llm_reasoning": "Only api-gateway shows errors (LATENCY_SPIKE and GC_PAUSE) with timestamps 13:02:50 and 13:02:52. No upstream field data to pinpoint a specific downstream service. The gateway directly depends on auth-service, catalog-service, and order-service, so tail latency or GC pressure downstream could cause observed spikes. Lack of logs from downstream services prevents deeper root-cause identification; thus suspected_downstream remains unobserved.",
+          "referenced_upstreams": {}
+        }
+      },
+      {
+        "agent": "topology_agent",
+        "summary": "api-gateway depends on ['auth-service', 'catalog-service', 'order-service']. Related services: ['auth-service', 'catalog-service', 'order-service', 'frontend-web']. Propagation path from api-gateway to auth-service: api-gateway → auth-service. Blast radius: ['api-gateway', 'frontend-web']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
+        "evidence": [
+          {
+            "type": "topology",
+            "source": "arch://system/latest",
+            "content": "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+            "timestamp": null,
+            "level": null,
+            "trace_id": null,
+            "metadata": {
+              "service": "api-gateway",
+              "topology_file": null,
+              "llm_reasoning": "The symptom service api-gateway directly depends on auth-service, matching the reported downstream. No alternative paths are evident from the topology since the only immediate downstreams are auth-service, catalog-service, and order-service; the log agent's suspected_downstream aligns with the direct dependency. Blast radius per topology includes api-gateway and frontend-web; monitoring these is prudent given their roles and potential impact if the fault propagates. The top-level dependency structure supports the hypothesis that a fault in auth-service could manifest at api-gateway, but there are no explicit indirect paths to strengthen alternative routes."
+            }
+          }
+        ],
+        "metadata": {
+          "propagation_path": [
+            "api-gateway",
+            "auth-service"
+          ],
+          "blast_radius": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "dependency_info": {
+            "service": "api-gateway",
+            "depends_on": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "upstream_of": [
+              "frontend-web"
+            ],
+            "criticality": "high",
+            "type": "gateway"
+          },
+          "related_services": [
+            "auth-service",
+            "catalog-service",
+            "order-service",
+            "frontend-web"
+          ],
+          "topology_graph": {
+            "frontend-web": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "auth-service": [
+              "user-db"
+            ],
+            "catalog-service": [],
+            "order-service": [
+              "message-queue",
+              "order-db"
+            ],
+            "message-queue": [
+              "worker-service"
+            ],
+            "worker-service": [
+              "order-db"
+            ],
+            "user-db": [],
+            "order-db": []
+          },
+          "service_metadata": {
+            "frontend-web": {
+              "type": "frontend",
+              "criticality": "high"
+            },
+            "api-gateway": {
+              "type": "gateway",
+              "criticality": "high"
+            },
+            "auth-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "catalog-service": {
+              "type": "backend",
+              "criticality": "medium"
+            },
+            "order-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "message-queue": {
+              "type": "queue",
+              "criticality": "high"
+            },
+            "worker-service": {
+              "type": "worker",
+              "criticality": "high"
+            },
+            "user-db": {
+              "type": "database",
+              "criticality": "high"
+            },
+            "order-db": {
+              "type": "database",
+              "criticality": "high"
+            }
+          },
+          "topology_file": null,
+          "llm_reasoning": "The symptom service api-gateway directly depends on auth-service, matching the reported downstream. No alternative paths are evident from the topology since the only immediate downstreams are auth-service, catalog-service, and order-service; the log agent's suspected_downstream aligns with the direct dependency. Blast radius per topology includes api-gateway and frontend-web; monitoring these is prudent given their roles and potential impact if the fault propagates. The top-level dependency structure supports the hypothesis that a fault in auth-service could manifest at api-gateway, but there are no explicit indirect paths to strengthen alternative routes.",
+          "path_assessment": "plausible",
+          "alternative_paths": [],
+          "critical_services_in_blast": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "topology_supports_hypothesis": true
+        }
+      }
+    ],
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "All three sources converge that api-gateway is the symptom service. The strongest signal for a root cause comes from the potential unobserved upstream (auth-service) suggested by the log-driven propagation hypothesis and supported structurally by topology (gateway depends on auth-service). However, the TCB-RCA baseline points to the gateway itself as a primary anomaly, indicating possible gateway-side issues. Given the absence of direct logs from auth-service, auth-service remains a plausible deeper root cause (unobserved). Therefore, the top candidate is auth-service, with api-gateway as a secondary root cause candidate. The propagation path from root to symptom is auth-service -> api-gateway. If needed, collect targeted metrics/logs from auth-service to validate the unobserved root cause hypothesis.",
+    "tcb_rca_reference": {
+      "candidates": [
+        {
+          "rank": 1,
+          "cause_service": "api-gateway",
+          "confidence": 0.16,
+          "depth": 0
+        }
+      ],
+      "propagation_path": [
+        "api-gateway"
+      ]
+    },
+    "agent_errors": null
+  }
+}

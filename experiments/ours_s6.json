@@ -1,0 +1,591 @@
+{
+  "system": "ours",
+  "system_name": "Ours (Multi-Agent + MCP + Verifier)",
+  "scenario": "s6",
+  "scenario_description": "S6: Noisy DB Fault (misleading errors in unrelated services)",
+  "scenario_kind": "synthetic",
+  "elapsed_seconds": 42.67,
+  "evaluation": {
+    "ac_at_1": true,
+    "ac_at_3": true,
+    "path_accuracy": true,
+    "fp_handled": null,
+    "top_confidence": 0.95,
+    "verdict": "accepted",
+    "ground_truth_root_cause": "user-db",
+    "predicted_top_cause_service": "user-db",
+    "predicted_top_cause_excerpt": "user-db",
+    "predicted_path": [
+      "user-db",
+      "auth-service",
+      "api-gateway"
+    ],
+    "predicted_path_length": 3,
+    "elapsed_seconds": 42.67
+  },
+  "result": {
+    "incident_id": "INC-S6-NOISY",
+    "incident_summary": {
+      "service": "api-gateway",
+      "symptom": "login requests failing with 502, multiple services reporting errors simultaneously",
+      "time_range": {
+        "start": "2026-03-24T13:02:30+09:00",
+        "end": "2026-03-24T13:03:20+09:00"
+      }
+    },
+    "root_cause_candidates": [
+      {
+        "rank": 1,
+        "cause": "user-db exhaustion/unreachability causing upstream auth-service instability and gateway timeouts (api-gateway observed 502s/504s with cascading failures).",
+        "confidence": 0.95,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "user-db",
+        "reasoning": "All three sources converge on user-db as a deep root cause: Log Agent notes RESOURCE_WARNING/CONNECTION_LIMIT/QUERY_TIMEOUT in user-db preceding auth-service errors, and TCB-RCA ranks user-db as the top candidate with a plausible propagation path (user-db → auth-service → api-gateway). Topology supports a path from upstream auth-service to the gateway, and the cascade matches the observed pattern at the symptom (api-gateway). The combination of log timing, structured propagation, and deterministic backtracking makes user-db the strongest single root cause.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "order-db replication lag exceeded threshold causing order-service and downstream components to time out, propagating to api-gateway via order-service.",
+        "confidence": 0.93,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "order-db",
+        "reasoning": "Log Agent documents order-db replication lag and downstream impacts (worker-service resets, message-queue lag, order-service timeouts) that align with a second independent propagation path to the gateway. TCB-RCA places order-db as a strong candidate with significant temporal gap and correct topology (api-gateway ← order-service ← order-db). Topology confirms a plausible upstream-to-gateway path through order-service. Although competing with user-db as the primary root, order-db remains a credible, deep root cause given the observed cascade.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
+      }
+    ],
+    "final_verdict": {
+      "cause": "user-db exhaustion/unreachability causing upstream auth-service instability and gateway timeouts (api-gateway observed 502s/504s with cascading failures).",
+      "confidence": 0.95,
+      "explanation": "Candidate 'user-db' confirmed by 3/3 sources (log, topology, tcb-rca).",
+      "cause_service": "user-db"
+    },
+    "impact_analysis": {
+      "affected_services": [
+        "user-db",
+        "auth-service",
+        "api-gateway"
+      ],
+      "related_services": [
+        "auth-service",
+        "catalog-service",
+        "order-service",
+        "frontend-web"
+      ],
+      "propagation_path": [
+        "user-db",
+        "auth-service",
+        "api-gateway"
+      ],
+      "blast_radius": [
+        "api-gateway",
+        "auth-service",
+        "frontend-web",
+        "user-db"
+      ]
+    },
+    "verification": {
+      "verdict": "accepted",
+      "final_confidence": 0.95,
+      "notes": [
+        "Candidate 'user-db' confirmed by 3/3 sources (log, topology, tcb-rca).",
+        "Candidate 'order-db' confirmed by 3/3 sources (log, topology, tcb-rca)."
+      ]
+    },
+    "evidence_summary": {
+      "log_evidence": [
+        "connection pool usage at 90%",
+        "max connections reached, new connections rejected",
+        "ElasticsearchTimeoutException: search request timed out after 5000ms",
+        "product index rebuild failed: cluster health RED",
+        "query timeout after 3000ms"
+      ],
+      "topology_evidence": [
+        "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible."
+      ]
+    },
+    "agent_results": [
+      {
+        "agent": "log_agent",
+        "summary": "Incident at api-gateway: 'login requests failing with 502, multiple services reporting errors simultaneously'. Errors detected in 9 service(s): frontend-web (1 errors), api-gateway (3 errors), auth-service (2 errors), catalog-service (2 errors), order-service (1 errors), worker-service (1 errors), message-queue (1 errors), user-db (4 errors), order-db (1 errors). LLM hypothesis: Two parallel root-causes triggered cascading failures: (1) user-db resource exhaustion/unreachability causing auth-service instability, leading to gateway timeouts; (2) order-db replication lag and downstream queue/worker failures causing order-service and related components to time out upstream via message-queue and worker-service.",
+        "confidence": 0.65,
+        "evidence": [
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "connection pool usage at 90%",
+            "timestamp": "2026-03-24T13:02:40+09:00",
+            "level": "WARN",
+            "trace_id": null,
+            "metadata": {
+              "service": "user-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "RESOURCE_WARNING"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "max connections reached, new connections rejected",
+            "timestamp": "2026-03-24T13:02:45+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "user-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "CONNECTION_LIMIT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "ElasticsearchTimeoutException: search request timed out after 5000ms",
+            "timestamp": "2026-03-24T13:02:46+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-099",
+            "metadata": {
+              "service": "catalog-service",
+              "status_code": 504,
+              "latency_ms": 5000,
+              "upstream": null,
+              "error_type": "SEARCH_TIMEOUT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "product index rebuild failed: cluster health RED",
+            "timestamp": "2026-03-24T13:02:47+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-098",
+            "metadata": {
+              "service": "catalog-service",
+              "status_code": 500,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "INDEX_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "query timeout after 3000ms",
+            "timestamp": "2026-03-24T13:02:48+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "user-db",
+              "status_code": null,
+              "latency_ms": 3000,
+              "upstream": null,
+              "error_type": "QUERY_TIMEOUT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "replication lag exceeded 10s threshold",
+            "timestamp": "2026-03-24T13:02:49+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "order-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "REPLICATION_LAG"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "connection refused from auth-service",
+            "timestamp": "2026-03-24T13:02:50+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "user-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "CONNECTION_REFUSED"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "failed to process payment callback: upstream timeout",
+            "timestamp": "2026-03-24T13:02:52+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-050",
+            "metadata": {
+              "service": "order-service",
+              "status_code": 504,
+              "latency_ms": 8000,
+              "upstream": "message-queue",
+              "error_type": "TIMEOUT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "database connection pool exhausted",
+            "timestamp": "2026-03-24T13:02:55+09:00",
+            "level": "WARN",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "auth-service",
+              "status_code": 500,
+              "latency_ms": 4300,
+              "upstream": "user-db",
+              "error_type": "DB_POOL_EXHAUSTED"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "failed to authenticate user: database unreachable",
+            "timestamp": "2026-03-24T13:02:58+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "auth-service",
+              "status_code": 500,
+              "latency_ms": 5000,
+              "upstream": "user-db",
+              "error_type": "DB_UNREACHABLE"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "scheduled job failed: connection reset by peer",
+            "timestamp": "2026-03-24T13:03:00+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "worker-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": "order-db",
+              "error_type": "CONNECTION_RESET"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "consumer lag increasing: 500 messages behind",
+            "timestamp": "2026-03-24T13:03:02+09:00",
+            "level": "WARN",
+            "trace_id": null,
+            "metadata": {
+              "service": "message-queue",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": "worker-service",
+              "error_type": "CONSUMER_LAG"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream auth-service timeout",
+            "timestamp": "2026-03-24T13:03:10+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 502,
+              "latency_ms": 5100,
+              "upstream": "auth-service",
+              "error_type": "TIMEOUT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream catalog-service returned 504",
+            "timestamp": "2026-03-24T13:03:12+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-002",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 504,
+              "latency_ms": 5200,
+              "upstream": "catalog-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream order-service returned 504",
+            "timestamp": "2026-03-24T13:03:14+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 504,
+              "latency_ms": 8100,
+              "upstream": "order-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "login request failed with 502",
+            "timestamp": "2026-03-24T13:03:18+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "frontend-web",
+              "status_code": 502,
+              "latency_ms": 5500,
+              "upstream": "api-gateway",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed",
+            "timestamp": "2026-03-24T13:03:20+09:00",
+            "level": "INFO",
+            "trace_id": "trace-010",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 220,
+              "upstream": "auth-service",
+              "error_type": null
+            }
+          }
+        ],
+        "metadata": {
+          "hypothesis": "Two parallel root-causes triggered cascading failures: (1) user-db resource exhaustion/unreachability causing auth-service instability, leading to gateway timeouts; (2) order-db replication lag and downstream queue/worker failures causing order-service and related components to time out upstream via message-queue and worker-service.",
+          "suspected_downstream": "user-db and order-db",
+          "anomalous_services": [
+            "frontend-web",
+            "api-gateway",
+            "auth-service",
+            "catalog-service",
+            "order-service",
+            "worker-service",
+            "message-queue",
+            "user-db",
+            "order-db"
+          ],
+          "llm_reasoning": "Early logs show user-db symptoms (RESOURCE_WARNING, CONNECTION_LIMIT, QUERY_TIMEOUT) preceding auth-service errors with upstream=user-db, and subsequent auth-service failures propagate to api-gateway. Separately, order-db shows replication lag, then worker-service resets, followed by message-queue lag and order-service timeouts, forming a parallel failure path. The chain via upstream fields indicates two deep root-causes: user-db and order-db, both plausible primary drivers of the 502/504 patterns observed at gateway and frontend.",
+          "referenced_upstreams": {
+            "message-queue": [
+              "order-service"
+            ],
+            "user-db": [
+              "auth-service"
+            ],
+            "order-db": [
+              "worker-service"
+            ],
+            "worker-service": [
+              "message-queue"
+            ],
+            "auth-service": [
+              "api-gateway"
+            ],
+            "catalog-service": [
+              "api-gateway"
+            ],
+            "order-service": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "frontend-web"
+            ]
+          }
+        }
+      },
+      {
+        "agent": "topology_agent",
+        "summary": "api-gateway depends on ['auth-service', 'catalog-service', 'order-service']. Related services: ['auth-service', 'catalog-service', 'order-service', 'frontend-web']. Blast radius: ['api-gateway', 'frontend-web']. LLM assessment: plausible (confidence 0.65).",
+        "confidence": 0.775,
+        "evidence": [
+          {
+            "type": "topology",
+            "source": "arch://system/latest",
+            "content": "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+            "timestamp": null,
+            "level": null,
+            "trace_id": null,
+            "metadata": {
+              "service": "api-gateway",
+              "topology_file": null,
+              "llm_reasoning": "Symptom at api-gateway can plausibly propagate from any service it directly depends on (auth-service, catalog-service, order-service). The log agent's suspected downstreams (user-db and order-db) align with order-service being a potential root cause (order-db -> order-service -> api-gateway). Alternative plausible roots include auth-service or catalog-service, each of which would affect the gateway via direct dependency. The blast radius includes api-gateway and frontend-web; gateway is the entry point, and frontend-web depends on it. The topology supports the hypothesis that a fault in an upstream service (especially order-service, given its link to order-db) could lead to the observed symptom in the gateway."
+            }
+          }
+        ],
+        "metadata": {
+          "propagation_path": [],
+          "blast_radius": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "dependency_info": {
+            "service": "api-gateway",
+            "depends_on": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "upstream_of": [
+              "frontend-web"
+            ],
+            "criticality": "high",
+            "type": "gateway"
+          },
+          "related_services": [
+            "auth-service",
+            "catalog-service",
+            "order-service",
+            "frontend-web"
+          ],
+          "topology_graph": {
+            "frontend-web": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "auth-service": [
+              "user-db"
+            ],
+            "catalog-service": [],
+            "order-service": [
+              "message-queue",
+              "order-db"
+            ],
+            "message-queue": [
+              "worker-service"
+            ],
+            "worker-service": [
+              "order-db"
+            ],
+            "user-db": [],
+            "order-db": []
+          },
+          "service_metadata": {
+            "frontend-web": {
+              "type": "frontend",
+              "criticality": "high"
+            },
+            "api-gateway": {
+              "type": "gateway",
+              "criticality": "high"
+            },
+            "auth-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "catalog-service": {
+              "type": "backend",
+              "criticality": "medium"
+            },
+            "order-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "message-queue": {
+              "type": "queue",
+              "criticality": "high"
+            },
+            "worker-service": {
+              "type": "worker",
+              "criticality": "high"
+            },
+            "user-db": {
+              "type": "database",
+              "criticality": "high"
+            },
+            "order-db": {
+              "type": "database",
+              "criticality": "high"
+            }
+          },
+          "topology_file": null,
+          "llm_reasoning": "Symptom at api-gateway can plausibly propagate from any service it directly depends on (auth-service, catalog-service, order-service). The log agent's suspected downstreams (user-db and order-db) align with order-service being a potential root cause (order-db -> order-service -> api-gateway). Alternative plausible roots include auth-service or catalog-service, each of which would affect the gateway via direct dependency. The blast radius includes api-gateway and frontend-web; gateway is the entry point, and frontend-web depends on it. The topology supports the hypothesis that a fault in an upstream service (especially order-service, given its link to order-db) could lead to the observed symptom in the gateway.",
+          "path_assessment": "plausible",
+          "alternative_paths": [
+            [
+              "auth-service",
+              "api-gateway"
+            ],
+            [
+              "catalog-service",
+              "api-gateway"
+            ],
+            [
+              "order-service",
+              "api-gateway"
+            ]
+          ],
+          "critical_services_in_blast": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "topology_supports_hypothesis": true
+        }
+      }
+    ],
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "All sources agree that the api-gateway is affected and that upstream services can plausibly cause it to fail. The strongest signal is for user-db due to early resource-related symptoms and the deterministic ranking from TCB-RCA. There is a credible alternative root in order-db given parallel propagation observed in logs and supported by topology constraints and TCB-RCA rank. Catalog-service appears less compelling given current evidence, though it remains a possible secondary contributor. Because there are two plausible deep root causes with coherent propagation paths, we present two ranked candidates with corresponding propagation paths. If needed, further signals (e.g., targeted traces or metrics for user-db and order-db) should be collected to break ties.",
+    "tcb_rca_reference": {
+      "candidates": [
+        {
+          "rank": 1,
+          "cause_service": "user-db",
+          "confidence": 0.92,
+          "depth": 2
+        },
+        {
+          "rank": 2,
+          "cause_service": "catalog-service",
+          "confidence": 0.785,
+          "depth": 1
+        },
+        {
+          "rank": 3,
+          "cause_service": "order-db",
+          "confidence": 0.775,
+          "depth": 2
+        }
+      ],
+      "propagation_path": [
+        "user-db",
+        "auth-service",
+        "api-gateway"
+      ]
+    },
+    "agent_errors": null
+  }
+}

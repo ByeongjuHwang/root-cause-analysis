@@ -1,0 +1,469 @@
+#!/usr/bin/env python3
+"""
+run_rcaeval.py — RCAEval RE2-OB 공개 벤치마크 러너.
+
+experiment_core의 SYSTEMS, resolve_services, evaluate_prediction을 공유하여
+합성 시나리오/Case Study/공개 벤치마크가 동일 평가 파이프라인을 통과한다.
+
+사전 준비:
+    1. RCAEval RE2-OB 데이터셋 (90 cases)
+    2. 프로젝트 루트에 onlineboutique_topology.json
+
+사용법:
+    python run_rcaeval.py --data-dir <rcaeval_data>
+    python run_rcaeval.py --data-dir <path> --systems ours,b3
+    python run_rcaeval.py --data-dir <path> --fault-types cpu,mem
+    python run_rcaeval.py --data-dir <path> --first-only
+    python run_rcaeval.py --data-dir <path> --csv
+"""
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import argparse
+import csv
+import json
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+from experiment_core import (
+    SYSTEMS,
+    resolve_services,
+    build_env_overrides,
+    evaluate_prediction,
+    PROJECT_ROOT,
+)
+
+PYTHON = sys.executable
+STARTUP_TIMEOUT = 30.0
+ANALYZE_TIMEOUT = 120.0
+RESULTS_DIR = PROJECT_ROOT / "experiments" / "rcaeval"
+ONLINEBOUTIQUE_TOPOLOGY = PROJECT_ROOT / "onlineboutique_topology.json"
+
+
+# =============================================================================
+# Case discovery and conversion
+# =============================================================================
+
+def parse_case_name(case_name: str) -> Optional[Dict[str, Any]]:
+    """Parse 'cartservice_cpu_1' → {service, fault, instance}."""
+    parts = case_name.split("_")
+    if len(parts) < 3:
+        return None
+    try:
+        instance = int(parts[-1])
+    except ValueError:
+        return None
+    return {
+        "service": "_".join(parts[:-2]),
+        "fault": parts[-2],
+        "instance": instance,
+        "name": case_name,
+    }
+
+
+def discover_cases(data_dir: Path) -> List[Dict[str, Any]]:
+    """Discover all valid cases from the RCAEval data directory."""
+    cases = []
+    for sub in sorted(data_dir.iterdir()):
+        if not sub.is_dir() or not (sub / "logs.csv").exists():
+            continue
+        parsed = parse_case_name(sub.name)
+        if parsed is None:
+            continue
+        parsed["path"] = sub
+        cases.append(parsed)
+    return cases
+
+
+def filter_cases(
+    cases: List[Dict[str, Any]],
+    fault_types: Optional[List[str]] = None,
+    services: Optional[List[str]] = None,
+    first_only: bool = False,
+) -> List[Dict[str, Any]]:
+    if fault_types:
+        cases = [c for c in cases if c["fault"] in fault_types]
+    if services:
+        cases = [c for c in cases if c["service"] in services]
+    if first_only:
+        seen = set()
+        out = []
+        for c in sorted(cases, key=lambda x: (x["service"], x["fault"], x["instance"])):
+            key = (c["service"], c["fault"])
+            if key not in seen:
+                seen.add(key)
+                out.append(c)
+        cases = out
+    return cases
+
+
+def convert_case(case: Dict[str, Any], work_dir: Path) -> Optional[Dict[str, Any]]:
+    """Convert RCAEval case to framework input format.
+
+    Delegates to convert_rcaeval.py which reads logs.csv / inject_time.txt
+    and emits logs.jsonl + meta.json.
+    """
+    logs_path = work_dir / f"{case['name']}.jsonl"
+    completed = subprocess.run(
+        [PYTHON, str(PROJECT_ROOT / "convert_rcaeval.py"),
+         str(case["path"]), str(logs_path)],
+        capture_output=True, text=True,
+    )
+    if completed.returncode != 0:
+        print(f"  [!] convert failed for {case['name']}: {completed.stderr[:200]}",
+              file=sys.stderr)
+        return None
+
+    meta_path = logs_path.with_suffix(".meta.json")
+    if not meta_path.exists():
+        return None
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+
+    inject_iso = meta.get("inject_time_iso", "")
+    incident = {
+        "incident_id": f"INC-{case['name'].upper()}",
+        "service": "frontend",  # Online Boutique entry point
+        "time_range": {"start": inject_iso, "end": inject_iso},
+        "symptom": f"Service {case['service']} experiencing {case['fault']} fault",
+        "trace_id": None,
+        "attachments": {
+            "log_file": str(logs_path),
+            "topology_file": str(ONLINEBOUTIQUE_TOPOLOGY),
+            "diagram_uri": "arch://online-boutique/latest",
+        },
+    }
+    return {"logs_path": logs_path, "incident": incident, "meta": meta}
+
+
+# =============================================================================
+# Service lifecycle (shares resolve_services with run_experiment.py)
+# =============================================================================
+
+def _is_port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.5)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _wait_for_health(name: str, port: int, proc: subprocess.Popen) -> None:
+    deadline = time.time() + STARTUP_TIMEOUT
+    url = f"http://127.0.0.1:{port}/health"
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"{name} exited early")
+        try:
+            if httpx.get(url, timeout=1.0).status_code == 200:
+                return
+        except Exception:
+            pass
+        time.sleep(0.4)
+    raise RuntimeError(f"{name} timed out on startup")
+
+
+def _start_system(system_key: str, log_file: Path, topology_file: Path):
+    """Start all services for a system with appropriate env vars."""
+    env = os.environ.copy()
+    pypath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(PROJECT_ROOT) + (os.pathsep + pypath if pypath else "")
+    env["OBSERVABILITY_LOG_FILE"] = str(log_file)
+    env["ARCHITECTURE_TOPOLOGY_FILE"] = str(topology_file)
+    env.update(build_env_overrides(system_key))
+
+    processes = []
+    for name, module, port in resolve_services(system_key):
+        if _is_port_in_use(port):
+            raise RuntimeError(f"Port {port} in use")
+        proc = subprocess.Popen(
+            [PYTHON, "-m", module], cwd=PROJECT_ROOT,
+            env={**env, "PORT": str(port), "PYTHONUNBUFFERED": "1"},
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        _wait_for_health(name, port, proc)
+        processes.append((proc, name, port))
+    return processes
+
+
+def _stop_system(processes) -> None:
+    for proc, _, _ in processes:
+        if proc.poll() is None:
+            try:
+                proc.send_signal(signal.SIGTERM)
+            except Exception:
+                proc.terminate()
+    for proc, _, _ in processes:
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+# =============================================================================
+# Single experiment
+# =============================================================================
+
+def run_one(
+    system_key: str,
+    case: Dict[str, Any],
+    converted: Dict[str, Any],
+    results_dir: Path,
+) -> Dict[str, Any]:
+    """Run a single system × RCAEval case experiment.
+
+    Uses the SAME evaluate_prediction() as run_experiment.py and
+    run_case_study.py, ensuring consistent metrics across all experiments.
+    """
+    port_base = SYSTEMS[system_key]["port_base"]
+    start = time.time()
+    processes = []
+
+    try:
+        processes = _start_system(
+            system_key, converted["logs_path"], ONLINEBOUTIQUE_TOPOLOGY,
+        )
+
+        resp = httpx.post(
+            f"http://127.0.0.1:{port_base}/analyze",
+            json=converted["incident"],
+            timeout=ANALYZE_TIMEOUT,
+        )
+        resp.raise_for_status()
+        rca_result = resp.json()
+        elapsed = time.time() - start
+
+        # Build ground truth in the experiment_core format
+        ground_truth = {
+            "ground_truth_root_cause": case["service"],
+            "ground_truth_path": [],  # RCAEval doesn't ship path ground truth
+        }
+
+        evaluation = evaluate_prediction(
+            rca_result, ground_truth, elapsed_seconds=elapsed,
+        )
+        # Add RCAEval-specific context
+        evaluation["gt_fault"] = case["fault"]
+
+        output = {
+            "system": system_key,
+            "benchmark": "rcaeval-re2-ob",
+            "case": case["name"],
+            "gt_service": case["service"],
+            "gt_fault": case["fault"],
+            "elapsed_seconds": round(elapsed, 2),
+            "evaluation": evaluation,
+            "result": rca_result,
+        }
+
+        out_file = results_dir / f"{system_key}_{case['name']}.json"
+        out_file.write_text(
+            json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        return output
+
+    except Exception as exc:
+        return {
+            "system": system_key,
+            "benchmark": "rcaeval-re2-ob",
+            "case": case["name"],
+            "gt_service": case["service"],
+            "gt_fault": case["fault"],
+            "elapsed_seconds": round(time.time() - start, 2),
+            "error": str(exc),
+        }
+    finally:
+        _stop_system(processes)
+
+
+# =============================================================================
+# Aggregation and export
+# =============================================================================
+
+def aggregate(results: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    by_system: Dict[str, Dict[str, Any]] = {}
+    for r in results:
+        if "error" in r:
+            continue
+        sk = r["system"]
+        ev = r.get("evaluation", {})
+        s = by_system.setdefault(sk, {
+            "total": 0, "ac1": 0, "ac3": 0, "elapsed": [],
+            "by_fault": {},
+        })
+        s["total"] += 1
+        if ev.get("ac_at_1"):
+            s["ac1"] += 1
+        if ev.get("ac_at_3"):
+            s["ac3"] += 1
+        s["elapsed"].append(r.get("elapsed_seconds", 0))
+
+        fault = r.get("gt_fault", "unknown")
+        fs = s["by_fault"].setdefault(fault, {"total": 0, "ac1": 0, "ac3": 0})
+        fs["total"] += 1
+        if ev.get("ac_at_1"):
+            fs["ac1"] += 1
+        if ev.get("ac_at_3"):
+            fs["ac3"] += 1
+
+    for sk, s in by_system.items():
+        t = max(s["total"], 1)
+        s["ac1_rate"] = round(s["ac1"] / t, 3)
+        s["ac3_rate"] = round(s["ac3"] / t, 3)
+        s["avg_elapsed"] = round(sum(s["elapsed"]) / t, 2)
+        for f, fs in s["by_fault"].items():
+            fs["ac1_rate"] = round(fs["ac1"] / max(fs["total"], 1), 3)
+            fs["ac3_rate"] = round(fs["ac3"] / max(fs["total"], 1), 3)
+
+    return by_system
+
+
+def export_csv(results: List[Dict[str, Any]], path: Path) -> None:
+    """Export per-case results as CSV for downstream analysis."""
+    fields = [
+        "system", "case", "gt_service", "gt_fault",
+        "ac_at_1", "ac_at_3", "top_cause_service", "top_confidence",
+        "elapsed_seconds", "error",
+    ]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        for r in results:
+            ev = r.get("evaluation", {})
+            w.writerow({
+                "system": r.get("system"),
+                "case": r.get("case"),
+                "gt_service": r.get("gt_service"),
+                "gt_fault": r.get("gt_fault"),
+                "ac_at_1": ev.get("ac_at_1"),
+                "ac_at_3": ev.get("ac_at_3"),
+                "top_cause_service": ev.get("predicted_top_cause_service"),
+                "top_confidence": ev.get("top_confidence"),
+                "elapsed_seconds": r.get("elapsed_seconds"),
+                "error": r.get("error"),
+            })
+
+
+def print_summary(summary: Dict[str, Dict[str, Any]], n_results: int, n_errors: int) -> None:
+    print("\n" + "=" * 80)
+    print("  RCAEval RE2-OB SUMMARY")
+    print("=" * 80)
+    for sk in ("ours", "b1", "b2", "b3"):
+        s = summary.get(sk)
+        if not s:
+            continue
+        print(f"\n  {sk}: AC@1={s['ac1']}/{s['total']} ({s['ac1_rate']:.1%})  "
+              f"AC@3={s['ac3']}/{s['total']} ({s['ac3_rate']:.1%})  "
+              f"Avg={s['avg_elapsed']:.1f}s")
+        for f, fs in sorted(s["by_fault"].items()):
+            print(f"    {f:<10} AC@1={fs['ac1']:>2}/{fs['total']:<2} ({fs['ac1_rate']:.1%})  "
+                  f"AC@3={fs['ac3']:>2}/{fs['total']:<2} ({fs['ac3_rate']:.1%})")
+    if n_errors:
+        print(f"\n  ERRORS: {n_errors}/{n_results}")
+    print("=" * 80)
+
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="RCAEval RE2-OB benchmark runner")
+    parser.add_argument("--data-dir", required=True, type=Path,
+                        help="Directory containing RCAEval case folders")
+    parser.add_argument("--systems", default="ours,b1,b2,b3",
+                        help="Comma-separated system keys")
+    parser.add_argument("--fault-types", default=None,
+                        help="Comma-separated fault types (cpu,mem,delay,...)")
+    parser.add_argument("--first-only", action="store_true",
+                        help="Use only first instance per (service, fault) pair")
+    parser.add_argument("--csv", action="store_true", help="Export CSV")
+    parser.add_argument("--dry-run", action="store_true", help="Show plan only")
+    args = parser.parse_args()
+
+    systems = [s.strip() for s in args.systems.split(",")]
+    invalid = [s for s in systems if s not in SYSTEMS]
+    if invalid:
+        parser.error(f"Unknown system(s): {invalid}")
+
+    fault_types = (
+        [f.strip() for f in args.fault_types.split(",")] if args.fault_types else None
+    )
+
+    # Discover
+    cases = discover_cases(args.data_dir)
+    cases = filter_cases(cases, fault_types=fault_types, first_only=args.first_only)
+    print(f"Discovered {len(cases)} cases, {len(systems)} systems → "
+          f"{len(cases) * len(systems)} experiments")
+
+    if args.dry_run:
+        for s in systems:
+            for c in cases[:5]:
+                print(f"  {s} × {c['name']}")
+            if len(cases) > 5:
+                print(f"  ... and {len(cases) - 5} more for {s}")
+        return
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    work_dir = RESULTS_DIR / "_work"
+    work_dir.mkdir(exist_ok=True)
+
+    # Convert
+    print("\nConverting cases...")
+    converted: Dict[str, Dict[str, Any]] = {}
+    for c in cases:
+        cv = convert_case(c, work_dir)
+        if cv:
+            converted[c["name"]] = cv
+    print(f"  {len(converted)}/{len(cases)} cases converted")
+
+    # Run
+    all_results: List[Dict[str, Any]] = []
+    overall_start = time.time()
+    plan = [(sk, c) for sk in systems for c in cases if c["name"] in converted]
+    total = len(plan)
+
+    for i, (sk, c) in enumerate(plan, 1):
+        cv = converted[c["name"]]
+        print(f"  [{i}/{total}] {sk:<5} × {c['name']}...", end=" ", flush=True)
+        r = run_one(sk, c, cv, RESULTS_DIR)
+        ev = r.get("evaluation", {})
+        status = "✓" if ev.get("ac_at_1") else ("✗" if "error" not in r else "ERR")
+        print(f"{status} ({r.get('elapsed_seconds', 0):.1f}s)")
+        all_results.append(r)
+
+    total_elapsed = time.time() - overall_start
+    summary = aggregate(all_results)
+    n_errors = sum(1 for r in all_results if "error" in r)
+    print_summary(summary, len(all_results), n_errors)
+    print(f"\nTotal: {total_elapsed:.0f}s ({total_elapsed / 60:.1f} min)")
+
+    # Save
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_file = RESULTS_DIR / f"rcaeval_summary_{ts}.json"
+    summary_file.write_text(json.dumps({
+        "timestamp": datetime.now().isoformat(),
+        "benchmark": "rcaeval-re2-ob",
+        "total_elapsed_seconds": round(total_elapsed, 2),
+        "summary": summary,
+        "results": [
+            {k: v for k, v in r.items() if k != "result"} for r in all_results
+        ],
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Summary: {summary_file}")
+
+    if args.csv:
+        csv_file = RESULTS_DIR / f"rcaeval_results_{ts}.csv"
+        export_csv(all_results, csv_file)
+        print(f"CSV: {csv_file}")
+
+
+if __name__ == "__main__":
+    main()

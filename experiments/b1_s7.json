@@ -1,0 +1,116 @@
+{
+  "system": "b1",
+  "system_name": "B1 (Monolithic Single-Process)",
+  "scenario": "s7",
+  "scenario_description": "S7: Concurrent Dual Faults (user-db + worker-service)",
+  "scenario_kind": "synthetic",
+  "elapsed_seconds": 1.2,
+  "evaluation": {
+    "ac_at_1": true,
+    "ac_at_3": true,
+    "path_accuracy": true,
+    "fp_handled": null,
+    "top_confidence": 0.886,
+    "verdict": "accepted",
+    "ground_truth_root_cause": "user-db",
+    "predicted_top_cause_service": null,
+    "predicted_top_cause_excerpt": "worker-service (worker): java.lang.OutOfMemoryError: Java heap space. Fault propagation path: api-ga",
+    "predicted_path": [
+      "worker-service",
+      "message-queue",
+      "order-service",
+      "api-gateway"
+    ],
+    "predicted_path_length": 4,
+    "elapsed_seconds": 1.2
+  },
+  "result": {
+    "incident_id": "INC-S7-CONCURRENT",
+    "incident_summary": {
+      "service": "api-gateway",
+      "symptom": "multiple services failing simultaneously: auth 502, orders 500",
+      "time_range": {
+        "start": "2026-03-24T13:02:30+09:00",
+        "end": "2026-03-24T13:03:20+09:00"
+      }
+    },
+    "root_cause_candidates": [
+      {
+        "rank": 1,
+        "cause": "worker-service (worker): java.lang.OutOfMemoryError: Java heap space. Fault propagation path: api-gateway → order-service → message-queue → worker-service.",
+        "confidence": 0.886,
+        "evidence_refs": [
+          "tcb-rca:backtrack-depth-3",
+          "tcb-rca:temporal-gap-44s",
+          "evidence:api-gateway",
+          "evidence:order-service",
+          "evidence:message-queue",
+          "evidence:worker-service"
+        ]
+      },
+      {
+        "rank": 2,
+        "cause": "user-db (database): query timeout after 3000ms. Fault propagation path: api-gateway → auth-service → user-db.",
+        "confidence": 0.875,
+        "evidence_refs": [
+          "tcb-rca:backtrack-depth-2",
+          "tcb-rca:temporal-gap-45s",
+          "evidence:api-gateway",
+          "evidence:auth-service",
+          "evidence:user-db"
+        ]
+      }
+    ],
+    "final_verdict": {
+      "cause": "worker-service (worker): java.lang.OutOfMemoryError: Java heap space. Fault propagation path: api-gateway → order-service → message-queue → worker-service.",
+      "confidence": 0.886,
+      "explanation": "B1 (Monolithic): All analysis performed in single process. Top cause confidence: 0.89."
+    },
+    "impact_analysis": {
+      "affected_services": [
+        "worker-service",
+        "message-queue",
+        "order-service",
+        "api-gateway"
+      ],
+      "related_services": [
+        "auth-service",
+        "catalog-service",
+        "order-service",
+        "frontend-web"
+      ],
+      "propagation_path": [
+        "worker-service",
+        "message-queue",
+        "order-service",
+        "api-gateway"
+      ],
+      "blast_radius": [
+        "api-gateway",
+        "message-queue",
+        "order-service",
+        "worker-service"
+      ]
+    },
+    "verification": {
+      "verdict": "accepted",
+      "final_confidence": 0.886,
+      "notes": [
+        "B1 baseline: monolithic single-process analysis."
+      ]
+    },
+    "evidence_summary": {
+      "log_evidence": [
+        "upstream auth-service timeout",
+        "upstream order-service returned 500",
+        "upstream auth-service returned 503",
+        "upstream order-service returned 503"
+      ],
+      "topology_evidence": [
+        "Dependency: api-gateway -> ['auth-service', 'catalog-service', 'order-service']",
+        "Propagation: api-gateway -> auth-service"
+      ]
+    },
+    "agent_results": []
+  }
+}

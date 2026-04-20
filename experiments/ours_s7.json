@@ -1,0 +1,557 @@
+{
+  "system": "ours",
+  "system_name": "Ours (Multi-Agent + MCP + Verifier)",
+  "scenario": "s7",
+  "scenario_description": "S7: Concurrent Dual Faults (user-db + worker-service)",
+  "scenario_kind": "synthetic",
+  "elapsed_seconds": 39.3,
+  "evaluation": {
+    "ac_at_1": true,
+    "ac_at_3": true,
+    "path_accuracy": true,
+    "fp_handled": null,
+    "top_confidence": 0.93,
+    "verdict": "accepted",
+    "ground_truth_root_cause": "user-db",
+    "predicted_top_cause_service": "worker-service",
+    "predicted_top_cause_excerpt": "worker-service",
+    "predicted_path": [
+      "worker-service",
+      "message-queue",
+      "order-service",
+      "api-gateway"
+    ],
+    "predicted_path_length": 4,
+    "elapsed_seconds": 39.3
+  },
+  "result": {
+    "incident_id": "INC-S7-CONCURRENT",
+    "incident_summary": {
+      "service": "api-gateway",
+      "symptom": "multiple services failing simultaneously: auth 502, orders 500",
+      "time_range": {
+        "start": "2026-03-24T13:02:30+09:00",
+        "end": "2026-03-24T13:03:20+09:00"
+      }
+    },
+    "root_cause_candidates": [
+      {
+        "rank": 1,
+        "cause": "OutOfMemoryError (Java heap space) in worker-service causing backlog in the messaging path and downstream failures observed by queue and order-service, with api-gateway experiencing upstream errors as the path cascades.",
+        "confidence": 0.93,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "worker-service",
+        "reasoning": "All three sources converge on worker-service as the primary upstream fault: Log Agent directly cites worker-service OOM as the initiator of a cascade through message-queue to order-service and api-gateway; Topology shows a plausible path api-gateway -> order-service -> message-queue -> worker-service; TCB-RCA ranks worker-service as the top root-cause candidate with strong temporal and topology constraints. This aligns with a deep root cause (worker failures) rather than symptoms at api-gateway. The absence of logs from beyond worker-service is consistent with a deep-root cause in worker-service that propagates through the queue stack to the gateway.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Database connectivity issues: user-db hits connection limits and query timeouts causing auth-service to report DB_UNREACHABLE and CIRCUIT_OPEN, propagating timeouts to api-gateway.",
+        "confidence": 0.78,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "user-db",
+        "reasoning": "There is significant evidence from the Log Agent of DB_UNREACHABLE and timeouts associated with auth-service, supported by the Topology path api-gateway -> auth-service -> user-db and by the TCB-RCA ranking user-db second due to temporal gap and topology depth. However, this path represents a secondary, parallel failure thread compared to the deeper root in worker-service. Given the multiple threads, user-db is a credible unobserved or secondary root cause that could amplify api-gateway failures, but it is less strongly supported as the primary root compared with worker-service.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
+      }
+    ],
+    "final_verdict": {
+      "cause": "OutOfMemoryError (Java heap space) in worker-service causing backlog in the messaging path and downstream failures observed by queue and order-service, with api-gateway experiencing upstream errors as the path cascades.",
+      "confidence": 0.93,
+      "explanation": "Candidate 'worker-service' confirmed by 3/3 sources (log, topology, tcb-rca).",
+      "cause_service": "worker-service"
+    },
+    "impact_analysis": {
+      "affected_services": [
+        "worker-service",
+        "message-queue",
+        "order-service",
+        "api-gateway"
+      ],
+      "related_services": [
+        "auth-service",
+        "catalog-service",
+        "order-service",
+        "frontend-web"
+      ],
+      "propagation_path": [
+        "worker-service",
+        "message-queue",
+        "order-service",
+        "api-gateway"
+      ],
+      "blast_radius": [
+        "api-gateway",
+        "message-queue",
+        "order-service",
+        "worker-service"
+      ]
+    },
+    "verification": {
+      "verdict": "accepted",
+      "final_confidence": 0.93,
+      "notes": [
+        "Candidate 'worker-service' confirmed by 3/3 sources (log, topology, tcb-rca).",
+        "Candidate 'user-db' confirmed by 3/3 sources (log, topology, tcb-rca)."
+      ]
+    },
+    "evidence_summary": {
+      "log_evidence": [
+        "max connections reached, new connections rejected",
+        "java.lang.OutOfMemoryError: Java heap space",
+        "query timeout after 3000ms",
+        "worker process crashed, pending tasks abandoned",
+        "queue backlog threshold exceeded: 3000 messages pending"
+      ],
+      "topology_evidence": [
+        "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+        "propagation path: api-gateway -> order-service -> message-queue -> worker-service"
+      ]
+    },
+    "agent_results": [
+      {
+        "agent": "log_agent",
+        "summary": "Incident at api-gateway: 'multiple services failing simultaneously: auth 502, orders 500'. Errors detected in 7 service(s): frontend-web (1 errors), api-gateway (4 errors), auth-service (2 errors), order-service (2 errors), worker-service (2 errors), message-queue (1 errors), user-db (2 errors). LLM hypothesis: Early OOM and crash of worker-service caused backlog in the queue, triggering queue_overflow and downstream failures (order-service, api-gateway). Concurrently, user-db connection limits and query timeouts caused auth-service to become unavailable, amplifying upstream errors to api-gateway.",
+        "confidence": 0.66,
+        "evidence": [
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "max connections reached, new connections rejected",
+            "timestamp": "2026-03-24T13:02:35+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "user-db",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "CONNECTION_LIMIT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "java.lang.OutOfMemoryError: Java heap space",
+            "timestamp": "2026-03-24T13:02:36+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "worker-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "OOM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "query timeout after 3000ms",
+            "timestamp": "2026-03-24T13:02:40+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "user-db",
+              "status_code": null,
+              "latency_ms": 3000,
+              "upstream": null,
+              "error_type": "QUERY_TIMEOUT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "worker process crashed, pending tasks abandoned",
+            "timestamp": "2026-03-24T13:02:42+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "worker-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": "PROCESS_CRASH"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "queue backlog threshold exceeded: 3000 messages pending",
+            "timestamp": "2026-03-24T13:02:45+09:00",
+            "level": "ERROR",
+            "trace_id": null,
+            "metadata": {
+              "service": "message-queue",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": "worker-service",
+              "error_type": "QUEUE_OVERFLOW"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "failed to authenticate user: database unreachable",
+            "timestamp": "2026-03-24T13:02:48+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "auth-service",
+              "status_code": 500,
+              "latency_ms": 5000,
+              "upstream": "user-db",
+              "error_type": "DB_UNREACHABLE"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "order processing delayed: async task queue full",
+            "timestamp": "2026-03-24T13:02:50+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-002",
+            "metadata": {
+              "service": "order-service",
+              "status_code": 500,
+              "latency_ms": 8000,
+              "upstream": "message-queue",
+              "error_type": "QUEUE_FULL"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "circuit breaker opened for user-db connection",
+            "timestamp": "2026-03-24T13:02:55+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "auth-service",
+              "status_code": 503,
+              "latency_ms": null,
+              "upstream": "user-db",
+              "error_type": "CIRCUIT_OPEN"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "failed to enqueue order confirmation: message-queue unavailable",
+            "timestamp": "2026-03-24T13:02:58+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-004",
+            "metadata": {
+              "service": "order-service",
+              "status_code": 503,
+              "latency_ms": null,
+              "upstream": "message-queue",
+              "error_type": "QUEUE_UNAVAILABLE"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream auth-service timeout",
+            "timestamp": "2026-03-24T13:03:05+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 502,
+              "latency_ms": 5100,
+              "upstream": "auth-service",
+              "error_type": "TIMEOUT"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream order-service returned 500",
+            "timestamp": "2026-03-24T13:03:07+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-002",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 500,
+              "latency_ms": 8200,
+              "upstream": "order-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream auth-service returned 503",
+            "timestamp": "2026-03-24T13:03:10+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-003",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 503,
+              "latency_ms": 120,
+              "upstream": "auth-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "upstream order-service returned 503",
+            "timestamp": "2026-03-24T13:03:12+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-004",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 503,
+              "latency_ms": 90,
+              "upstream": "order-service",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "multiple services failing: login 502, orders 500",
+            "timestamp": "2026-03-24T13:03:15+09:00",
+            "level": "ERROR",
+            "trace_id": "trace-001",
+            "metadata": {
+              "service": "frontend-web",
+              "status_code": 502,
+              "latency_ms": 5500,
+              "upstream": "api-gateway",
+              "error_type": "UPSTREAM_ERROR"
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request completed",
+            "timestamp": "2026-03-24T13:03:20+09:00",
+            "level": "INFO",
+            "trace_id": "trace-010",
+            "metadata": {
+              "service": "api-gateway",
+              "status_code": 200,
+              "latency_ms": 180,
+              "upstream": "catalog-service",
+              "error_type": null
+            }
+          }
+        ],
+        "metadata": {
+          "hypothesis": "Early OOM and crash of worker-service caused backlog in the queue, triggering queue_overflow and downstream failures (order-service, api-gateway). Concurrently, user-db connection limits and query timeouts caused auth-service to become unavailable, amplifying upstream errors to api-gateway.",
+          "suspected_downstream": "worker-service",
+          "anomalous_services": [
+            "user-db",
+            "worker-service",
+            "message-queue",
+            "auth-service",
+            "order-service",
+            "api-gateway",
+            "frontend-web"
+          ],
+          "llm_reasoning": "Two distinct failure threads start within seconds: (1) worker-service accumulates memory pressure and crashes, leading to queue_overflow reported by message-queue and cascading to order-service and api-gateway; (2) user-db hits connection limits and query timeouts, causing auth-service to report DB_UNREACHABLE and CIRCUIT_OPEN, later causing timeouts and upstream errors in api-gateway. The upstream relationships show a deep root in worker-service for the order/queue path and in user-db for the auth path. The api-gateway experiences multiple upstream errors from both auth-service and order-service, aligning with a multi-threaded cascade originating from both worker-service and user-db.",
+          "referenced_upstreams": {
+            "worker-service": [
+              "message-queue"
+            ],
+            "user-db": [
+              "auth-service"
+            ],
+            "message-queue": [
+              "order-service"
+            ],
+            "auth-service": [
+              "api-gateway"
+            ],
+            "order-service": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "frontend-web"
+            ]
+          }
+        }
+      },
+      {
+        "agent": "topology_agent",
+        "summary": "api-gateway depends on ['auth-service', 'catalog-service', 'order-service']. Related services: ['auth-service', 'catalog-service', 'order-service', 'frontend-web']. Propagation path from api-gateway to worker-service: api-gateway → order-service → message-queue → worker-service. Blast radius: ['api-gateway', 'frontend-web']. LLM assessment: plausible (confidence 0.55).",
+        "confidence": 0.745,
+        "evidence": [
+          {
+            "type": "topology",
+            "source": "arch://system/latest",
+            "content": "Dependency map confirms api-gateway relations: {'service': 'api-gateway', 'depends_on': ['auth-service', 'catalog-service', 'order-service'], 'upstream_of': ['frontend-web'], 'criticality': 'high', 'type': 'gateway'}. Structural analysis: plausible.",
+            "timestamp": null,
+            "level": null,
+            "trace_id": null,
+            "metadata": {
+              "service": "api-gateway",
+              "topology_file": null,
+              "llm_reasoning": "The symptom service api-gateway depends on order-service, which can route work to a message-queue consumed by worker-service. The computed path api-gateway → order-service → message-queue → worker-service aligns with the downstream relation and the given blast radius. Alternative plausible paths exist if the workflow can traverse other downstream services (e.g., via auth-service or catalog-service through intermediate messaging infrastructure) to reach the worker-service, though these are less directly supported by the explicit dependency edges. The blast radius correctly highlights api-gateway and frontend-web as critical externally-facing components; if the fault propagates further into internal downstreams, order-service and auth-service would be key to monitor. The topology supports the log agent's suspected_downstream hypothesis because a path to worker-service exists via order-service and a messaging layer."
+            }
+          }
+        ],
+        "metadata": {
+          "propagation_path": [
+            "api-gateway",
+            "order-service",
+            "message-queue",
+            "worker-service"
+          ],
+          "blast_radius": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "dependency_info": {
+            "service": "api-gateway",
+            "depends_on": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "upstream_of": [
+              "frontend-web"
+            ],
+            "criticality": "high",
+            "type": "gateway"
+          },
+          "related_services": [
+            "auth-service",
+            "catalog-service",
+            "order-service",
+            "frontend-web"
+          ],
+          "topology_graph": {
+            "frontend-web": [
+              "api-gateway"
+            ],
+            "api-gateway": [
+              "auth-service",
+              "catalog-service",
+              "order-service"
+            ],
+            "auth-service": [
+              "user-db"
+            ],
+            "catalog-service": [],
+            "order-service": [
+              "message-queue",
+              "order-db"
+            ],
+            "message-queue": [
+              "worker-service"
+            ],
+            "worker-service": [
+              "order-db"
+            ],
+            "user-db": [],
+            "order-db": []
+          },
+          "service_metadata": {
+            "frontend-web": {
+              "type": "frontend",
+              "criticality": "high"
+            },
+            "api-gateway": {
+              "type": "gateway",
+              "criticality": "high"
+            },
+            "auth-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "catalog-service": {
+              "type": "backend",
+              "criticality": "medium"
+            },
+            "order-service": {
+              "type": "backend",
+              "criticality": "high"
+            },
+            "message-queue": {
+              "type": "queue",
+              "criticality": "high"
+            },
+            "worker-service": {
+              "type": "worker",
+              "criticality": "high"
+            },
+            "user-db": {
+              "type": "database",
+              "criticality": "high"
+            },
+            "order-db": {
+              "type": "database",
+              "criticality": "high"
+            }
+          },
+          "topology_file": null,
+          "llm_reasoning": "The symptom service api-gateway depends on order-service, which can route work to a message-queue consumed by worker-service. The computed path api-gateway → order-service → message-queue → worker-service aligns with the downstream relation and the given blast radius. Alternative plausible paths exist if the workflow can traverse other downstream services (e.g., via auth-service or catalog-service through intermediate messaging infrastructure) to reach the worker-service, though these are less directly supported by the explicit dependency edges. The blast radius correctly highlights api-gateway and frontend-web as critical externally-facing components; if the fault propagates further into internal downstreams, order-service and auth-service would be key to monitor. The topology supports the log agent's suspected_downstream hypothesis because a path to worker-service exists via order-service and a messaging layer.",
+          "path_assessment": "plausible",
+          "alternative_paths": [
+            [
+              "api-gateway",
+              "auth-service",
+              "event-bus",
+              "worker-service"
+            ],
+            [
+              "api-gateway",
+              "catalog-service",
+              "message-broker",
+              "worker-service"
+            ]
+          ],
+          "critical_services_in_blast": [
+            "api-gateway",
+            "frontend-web"
+          ],
+          "topology_supports_hypothesis": true
+        }
+      }
+    ],
+    "evidence_convergence": "strong_agreement",
+    "synthesis_reasoning": "All sources agree that worker-service-induced failure is the strongest root-cause candidate: Log Agent identifies worker-service OOM as the initiator, Topology validates the plausible propagation path through order-service and a messaging layer to worker-service, and TCB-RCA ranks worker-service first with the deepest topology depth and temporal gap. While user-db presents a credible secondary thread that aligns with observed auth-service failures and could aggravate api-gateway symptoms, the evidence is comparatively weaker for a single-source root cause when weighed against the primary worker-service cascade. Therefore, the final determination centers on worker-service as the primary root cause, with user-db as a secondary contributing factor in the same incident.",
+    "tcb_rca_reference": {
+      "candidates": [
+        {
+          "rank": 1,
+          "cause_service": "worker-service",
+          "confidence": 0.806,
+          "depth": 3
+        },
+        {
+          "rank": 2,
+          "cause_service": "user-db",
+          "confidence": 0.795,
+          "depth": 2
+        }
+      ],
+      "propagation_path": [
+        "worker-service",
+        "message-queue",
+        "order-service",
+        "api-gateway"
+      ]
+    },
+    "agent_errors": null
+  }
+}
