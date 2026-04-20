@@ -4,23 +4,23 @@
   "case": "productcatalogservice_cpu_1",
   "gt_service": "productcatalogservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 28.1,
+  "elapsed_seconds": 29.9,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.78,
+    "top_confidence": 0.6,
     "verdict": "revised",
     "ground_truth_root_cause": "productcatalogservice",
-    "predicted_top_cause_service": "redis",
-    "predicted_top_cause_excerpt": "redis",
+    "predicted_top_cause_service": "productcatalogservice",
+    "predicted_top_cause_excerpt": "productcatalogservice",
     "predicted_path": [
-      "redis",
+      "productcatalogservice",
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 28.1,
+    "elapsed_seconds": 29.9,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,45 +36,45 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Redis cache workload spike during the incident window likely caused latency/buffering in cache hits for frontend, producing the observed anomaly pattern without generating explicit error logs. This aligns with Log Agent finding a notable Redis delta and the absence of errors elsewhere. The unobserved root cause detection principle applies here since Redis shows upstream pressure but has no corresponding logs in the observed data.",
-        "confidence": 0.78,
+        "cause": "Productcatalogservice is experiencing a CPU fault leading to elevated latency, which cascades to frontend that consumes it.",
+        "confidence": 0.6,
         "evidence_refs": [
-          "log-agent:confirmed"
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
         ],
-        "cause_service": "redis",
-        "reasoning": "The strongest signal comes from the Log Agent: Redis shows the only notable anomaly (+0.60 workload delta) while frontend and other services remain near baseline, and there are no error logs. Topology cannot confirm a direct Redis-to-Frontend path, but the unobserved root cause detection principle elevates Redis when upstream failures are implied but not observed in logs. The deterministic TCB-RCA favors frontend as the fault, but given the absence of Redis logs and the plausible upstream spike, Redis is the deeper root cause that explains the symptom via cache-backed dependency slowdown.",
+        "cause_service": "productcatalogservice",
+        "reasoning": "Strong CPU/memory anomaly signals in productcatalogservice (cpu_z +53.3, mem_jump +0.46, p99_Δms +7.0) align with the downstream impact observed in frontend. This matches both the log pattern (upstream CPU fault causing latency) and the direct dependency path frontend → productcatalogservice. The TCB-RCA baseline did not flag productcatalogservice as the root due to its deterministic ordering, but given clear upstream CPU fault signals and tight topology alignment, productcatalogservice is the most credible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
-          "topology_agent_agrees": false,
+          "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       },
       {
         "rank": 2,
-        "cause": "Frontend shows the symptom of CPU fault and is the observed downstream service affected by dependencies. TCB-RCA places frontend as the initial/principal affected node, and the Log Agent notes the frontend as the symptom. However, the topology does not show a direct Redis-to-Frontend path and there is no explicit error in frontend logs.",
-        "confidence": 0.33,
+        "cause": "Frontend shows CPU anomaly and latency downstream from an upstream issue, but there is no direct log evidence of a root cause within frontend itself; it is likely affected rather than the root.",
+        "confidence": 0.23,
         "evidence_refs": [
-          "log-agent:confirmed",
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "Frontend is the symptom service and is consistently identified across sources as a primary affected element. The TCB-RCA result explicitly flags frontend with zero temporal gap, but the lack of a clear upstream cause in the topology makes this a less robust root cause compared to Redis. The log-based signal aligns with frontend being impacted, but without a concrete upstream propagation path from Redis in topology, the confidence remains secondary to Redis.",
+        "reasoning": "TCB-RCA places frontend as the immediate propagation end (depth=0) with zero temporal gap, indicating it as a symptomatic node rather than a deeper root. The log evidence does not identify a root cause within frontend itself, and topology does not require frontend as a root. Given the absence of internal frontend root signals and the explicit upstream CPU fault in productcatalogservice, frontend is a plausible contributor or victim rather than the primary root.",
         "supporting_evidence": {
-          "log_agent_agrees": true,
+          "log_agent_agrees": false,
           "topology_agent_agrees": false,
           "tcb_rca_agrees": true
         }
       }
     ],
     "final_verdict": {
-      "cause": "Redis cache workload spike during the incident window likely caused latency/buffering in cache hits for frontend, producing the observed anomaly pattern without generating explicit error logs. This aligns with Log Agent finding a notable Redis delta and the absence of errors elsewhere. The unobserved root cause detection principle applies here since Redis shows upstream pressure but has no corresponding logs in the observed data.",
-      "confidence": 0.78,
-      "explanation": "Candidate 'redis' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-      "cause_service": "redis"
+      "cause": "Productcatalogservice is experiencing a CPU fault leading to elevated latency, which cascades to frontend that consumes it.",
+      "confidence": 0.6,
+      "explanation": "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "productcatalogservice"
     },
     "impact_analysis": {
       "affected_services": [
-        "redis",
+        "productcatalogservice",
         "frontend"
       ],
       "related_services": [
@@ -87,7 +87,7 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "redis",
+        "productcatalogservice",
         "frontend"
       ],
       "blast_radius": [
@@ -96,10 +96,11 @@
     },
     "verification": {
       "verdict": "revised",
-      "final_confidence": 0.78,
+      "final_confidence": 0.6,
       "notes": [
-        "Candidate 'redis' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-        "Candidate 'frontend' confirmed by 2/3 sources (log, tcb-rca)."
+        "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
       ]
     },
     "evidence_summary": {
@@ -111,14 +112,15 @@
         "GetCartAsync called with userId=78311478-d7f7-4b36-af29-8574f5b709c8"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists."
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "propagation path: frontend -> productcatalogservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing cpu fault'. No error logs found. LLM hypothesis: Redis cache or backing store experienced a workload spike in the incident window, causing downstream services that rely on it (e.g., frontend via cache hits) to slow down or buffer, contributing to the observed anomaly pattern without generating error logs.",
-        "confidence": 0.55,
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing cpu fault'. No error logs found. LLM hypothesis: Productcatalogservice is experiencing a CPU fault leading to elevated latency; frontend, which depends on productcatalogservice, exhibits downstream impact with higher latency, contributing to the incident window.",
+        "confidence": 0.72,
         "evidence": [
           {
             "type": "log",
@@ -348,12 +350,87 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "order placed [path: /cart/checkout]",
+            "timestamp": "2024-01-15T17:32:22.022Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/6E92ZMYYFZ]",
+            "timestamp": "2024-01-15T17:32:22.024Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[Recv ListRecommendations] product_ids=['L9ECAV7KIM', '2ZYFJ3GM2N', '66VCHSJNUP', 'OLJCESPC7Z', '1YMWWN1N4O']",
             "timestamp": "2024-01-15T17:32:22.027Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-15T17:32:22.084Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "view user cart [path: /cart]",
+            "timestamp": "2024-01-15T17:32:22.084Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /cart/checkout]",
+            "timestamp": "2024-01-15T17:32:22.105Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -421,112 +498,61 @@
             }
           },
           {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "24:C 15 Jan 2024 17:32:38.123 * DB saved on disk",
-            "timestamp": "2024-01-15T17:32:38.124Z",
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "CPU spike z=53.3 (max=6.99); Memory jump +0.46",
+            "timestamp": "2024-01-15T17:40:22.000Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "24:C 15 Jan 2024 17:32:38.124 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB",
-            "timestamp": "2024-01-15T17:32:38.124Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 17:32:38.199 * Background saving terminated with success",
-            "timestamp": "2024-01-15T17:32:38.199Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 17:37:39.068 * 100 changes in 300 seconds. Saving...",
-            "timestamp": "2024-01-15T17:37:39.069Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "1:M 15 Jan 2024 17:37:39.069 * Background saving started by pid 25",
-            "timestamp": "2024-01-15T17:37:39.069Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "redis",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
+              "service": "productcatalogservice",
+              "cpu_spike_zscore": 53.32,
+              "cpu_max": 6.9861,
+              "mem_jump_ratio": 0.457,
+              "p95_delta_ms": 1.39,
+              "p99_delta_ms": 7.02,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 6
             }
           }
         ],
         "metadata": {
-          "hypothesis": "Redis cache or backing store experienced a workload spike in the incident window, causing downstream services that rely on it (e.g., frontend via cache hits) to slow down or buffer, contributing to the observed anomaly pattern without generating error logs.",
-          "suspected_downstream": "redis",
+          "hypothesis": "Productcatalogservice is experiencing a CPU fault leading to elevated latency; frontend, which depends on productcatalogservice, exhibits downstream impact with higher latency, contributing to the incident window.",
+          "suspected_downstream": "productcatalogservice",
           "anomalous_services": [
-            "redis"
+            "productcatalogservice",
+            "frontend"
           ],
-          "llm_reasoning": "The only service with a notable volume_delta anomaly is redis (+0.60) during the incident window, while others show minor decreases. No services show errors, timeouts, or retry spikes. Given frontend depends on redis, redis is the most plausible upstream root cause despite lacking explicit error entries. Other services remain near baseline, making redis the deepest anomalous point in the chain.",
+          "llm_reasoning": "Metric signals show a strong anomaly for productcatalogservice (cpu_z +53.3, mem_jump +0.46, p99_Δms +7.0), indicating a core resource/processing issue. Frontend also shows CPU anomaly (+7.9) and is downstream of productcatalogservice in the topology. No other services show comparable metric anomalies. Log-rate indicators are not heavily signaling errors, but the upstream metric spike in productcatalogservice provides a plausible root cause with frontend as the downstream consumer affected by the latency. This aligns with the dependency graph and the incident timing within 17:40–17:42 window.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.42).",
-        "confidence": 0.65,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.78).",
+        "confidence": 0.814,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The given topology lists frontend dependencies as specific services and does not include redis as a direct or transitive dependency. Without an explicit edge from redis to any of frontend's dependencies (or to frontend itself), a fault in redis cannot be structurally confirmed to propagate to frontend. A plausible alternative path would require redis to be a downstream dependency of one of the frontend's dependent services (which is not described in the topology). Therefore, the propagation path from redis to frontend is speculative, and the topology alone does not support the hypothesis."
+              "llm_reasoning": "The symptom service frontend directly depends on productcatalogservice, making the path frontend -> productcatalogservice a structurally valid propagation route for a fault originating in the downstream service. Given the topology, the only explicit path from the symptom to a suspected root via a single hop is through productcatalogservice. Other dependencies (cartservice, checkoutservice, currencyservice, recommendationservice, adservice, shippingservice) are separate downstream calls that could also fail and cause symptom propagation, hence they appear as plausible alternative paths to potential root causes. The blast radius remains limited to the symptom service in this topology, with frontend being the primary service to monitor for impact, but if a downstream fault propagates back or cascades through shared resources, other services could be affected. The topology supports the log agent's hypothesis about suspected downstream productcatalogservice as the most direct plausible root path."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [],
+          "propagation_path": [
+            "frontend",
+            "productcatalogservice"
+          ],
           "blast_radius": [
             "frontend"
           ],
@@ -638,23 +664,31 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The given topology lists frontend dependencies as specific services and does not include redis as a direct or transitive dependency. Without an explicit edge from redis to any of frontend's dependencies (or to frontend itself), a fault in redis cannot be structurally confirmed to propagate to frontend. A plausible alternative path would require redis to be a downstream dependency of one of the frontend's dependent services (which is not described in the topology). Therefore, the propagation path from redis to frontend is speculative, and the topology alone does not support the hypothesis.",
-          "path_assessment": "alternative_exists",
+          "llm_reasoning": "The symptom service frontend directly depends on productcatalogservice, making the path frontend -> productcatalogservice a structurally valid propagation route for a fault originating in the downstream service. Given the topology, the only explicit path from the symptom to a suspected root via a single hop is through productcatalogservice. Other dependencies (cartservice, checkoutservice, currencyservice, recommendationservice, adservice, shippingservice) are separate downstream calls that could also fail and cause symptom propagation, hence they appear as plausible alternative paths to potential root causes. The blast radius remains limited to the symptom service in this topology, with frontend being the primary service to monitor for impact, but if a downstream fault propagates back or cascades through shared resources, other services could be affected. The topology supports the log agent's hypothesis about suspected downstream productcatalogservice as the most direct plausible root path.",
+          "path_assessment": "plausible",
           "alternative_paths": [
             [
-              "redis",
-              "frontend"
+              "frontend",
+              "cartservice"
+            ],
+            [
+              "frontend",
+              "checkoutservice"
+            ],
+            [
+              "frontend",
+              "currencyservice"
             ]
           ],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": false
+          "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "disagreement",
-    "synthesis_reasoning": "There is a clear divergence: Log Agent points to Redis as the upstream anomaly with no frontend errors; Topology Agent does not support a Redis-to-Frontend propagation path; TCB-RCA identifies Frontend as the fault but provides no upstream trigger. Given the principle to elevate unobserved root causes when upstream anomalies are indicated without downstream logs, Redis is favored as the deepest root cause. The propagation path from Redis to Frontend is plausible through cache-related latency, even if topology data does not encode a direct dependency, so we present Redis as the primary root cause with Frontend as the immediate symptom host. The final ranking respects the topology constraints while allowing log-driven evidence to override when strong, and acknowledges the uncertainty due to structural mismatch.",
+    "synthesis_reasoning": "The strongest, convergent signals come from the Log Agent (upstream CPU fault in productcatalogservice) and Topology Agent (valid, direct path frontend ← productcatalogservice). These align to identify productcatalogservice as the most credible root cause. The TCB-RCA baseline does not elevate productcatalogservice as the root due to its processing of timing/topology; however, the presence of robust upstream CPU anomalies clearly supports productcatalogservice as the root. Frontend shows CPU and latency symptoms but lacks independent root evidence; thus it is better viewed as the downstream consumer affected by the upstream fault. When evidence disagrees, we prioritize log- and topology-based indications over the TCB-RCA’s default propagation rank, especially when a deeper upstream fault is strongly supported.",
     "tcb_rca_reference": {
       "candidates": [
         {

@@ -7,16 +7,163 @@ Option B 설계 (from thesis framework design):
   - 세 증거원 (Log / Topology / TCB-RCA)의 합의 여부 검증
   - 결정론적 baseline (cause_service 없음)과도 호환
 
-검증 단계:
+검증 단계 (v8+):
   Stage 1: cause_service 환각 검증 (실제 토폴로지 노드에 존재하는가?)
-  Stage 2: supporting_evidence 합의 카운트 (LLM 필드 활용)
-  Stage 3: evidence_convergence 기반 confidence 재보정
-  Stage 4: 전통적 키워드 매칭 (fallback, 결정론적 버전 호환)
+  Stage 1b: 5-signal evidence extraction (per candidate):
+            has_log_evidence, has_trace_support, has_metric_shift,
+            has_topology_path, is_temporally_prior
+  Stage 2: HARD drop rules (R1: topology path 없음 / R2: 증거 modality 0개)
+  Stage 3: SOFT rules (modality count 기반 confidence cap, temporal penalty)
+  Stage 4: supporting_evidence 합의 카운트 (legacy LLM 호환)
+  Stage 5: evidence_convergence 기반 confidence 재보정
+  Stage 6: 전통적 키워드 매칭 (fallback, 결정론적 버전 호환)
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+
+# =============================================================================
+# v8: 5-signal evidence extraction
+# =============================================================================
+
+# Confidence caps based on modality support count (v8 R3):
+MODALITY_CAP_SINGLE = 0.60  # Only one of log/trace/metric supports candidate
+MODALITY_CAP_DOUBLE = 0.80  # Two modalities support
+# Three modalities → no cap (LLM's value preserved)
+
+TEMPORAL_VIOLATION_PENALTY = 0.15  # v8 R4: candidate is later than symptom
+
+# Metric shift thresholds (uses log-derived statistics as metric proxy)
+METRIC_SHIFT_VOLUME_DELTA = 0.3  # abs(volume_delta) > 0.3 counts as shift
+METRIC_SHIFT_ERROR_RATIO = 0.05  # error_ratio > 0.05 counts
+
+
+def _candidate_evidence_signals(
+    cause_service: Optional[str],
+    log_evidence: List[Dict[str, Any]],
+    service_statistics: Dict[str, Any],
+    topo_path: List[str],
+    topo_dependencies: List[str],
+    rca_metadata: Dict[str, Any],
+) -> Dict[str, bool]:
+    """Compute the 5 evidence signals for a candidate service.
+
+    Args:
+        cause_service: the candidate's cause_service name (may be None)
+        log_evidence: list of log evidence dicts (from log_agent.evidence)
+        service_statistics: dict from get_service_statistics() (v6 output,
+            nested under service_statistics.services[svc])
+        topo_path: propagation path from topology agent
+        topo_dependencies: direct/transitive dependency list of symptom service
+        rca_metadata: synthesis result metadata including scoring_rules output
+
+    Returns:
+        Dict with 5 boolean signals:
+          has_log_evidence:   candidate has at least one log entry of its own
+          has_trace_support:  candidate's logs contain at least one trace_id
+          has_metric_shift:   candidate's log-stats show volume/error/keyword anomaly
+          has_topology_path:  candidate appears in propagation path or is a dependency
+          is_temporally_prior: candidate is not flagged as temporally later than symptom
+    """
+    result = {
+        "has_log_evidence":    False,
+        "has_trace_support":   False,
+        "has_metric_shift":    False,
+        "has_topology_path":   False,
+        "is_temporally_prior": True,  # default assumption (benefit of doubt)
+    }
+
+    if not cause_service:
+        # No structured service name — can only rely on keyword fallback
+        return result
+
+    cs_lower = str(cause_service).strip().lower()
+
+    # --- 1. has_log_evidence: candidate owns at least one log line ---
+    # --- 2. has_trace_support: any of those logs have trace_id ---
+    for ev in log_evidence:
+        if not isinstance(ev, dict):
+            continue
+        meta = ev.get("metadata") or {}
+        svc = str(meta.get("service") or "").strip().lower()
+        if svc == cs_lower:
+            result["has_log_evidence"] = True
+            if ev.get("trace_id"):
+                result["has_trace_support"] = True
+                # Can stop early since both are True
+                break
+
+    # --- 3. has_metric_shift: volume delta / error ratio / keyword hits ---
+    # We use v6's service_statistics as the "metric" proxy (we don't have
+    # real Prometheus metrics in this system — log-rate shifts play that role).
+    svcs = (service_statistics or {}).get("services") or {}
+    # Try case-insensitive lookup
+    stats = None
+    for k, v in svcs.items():
+        if str(k).strip().lower() == cs_lower:
+            stats = v
+            break
+    # --- 3a. has_metric_shift (PRIMARY — v8): real metric evidence ---
+    # If the Log Agent emitted explicit modality=metric evidence for this
+    # service (from Prometheus/Istio), that is the strongest signal. We check
+    # this FIRST and only fall back to the log-rate proxy if there's no
+    # dedicated metric entry.
+    for ev in log_evidence:
+        if not isinstance(ev, dict):
+            continue
+        if ev.get("modality") != "metric":
+            continue
+        meta = ev.get("metadata") or {}
+        svc = str(meta.get("service") or "").strip().lower()
+        if svc == cs_lower:
+            result["has_metric_shift"] = True
+            break
+
+    # --- 3b. has_metric_shift (FALLBACK): log-rate proxy ---
+    # Older flow or cases without metrics.csv — use v6 log statistics.
+    # Only run if the real metric check above didn't already flip the flag.
+    if not result["has_metric_shift"] and stats:
+        vd = abs(float(stats.get("volume_delta", 0) or 0))
+        er = float(stats.get("error_ratio", 0) or 0)
+        kw_hits = (
+            int(stats.get("timeout_hits", 0) or 0)
+            + int(stats.get("retry_hits", 0) or 0)
+            + int(stats.get("reset_hits", 0) or 0)
+        )
+        if vd > METRIC_SHIFT_VOLUME_DELTA or er > METRIC_SHIFT_ERROR_RATIO or kw_hits > 0:
+            result["has_metric_shift"] = True
+
+    # --- 4. has_topology_path: candidate in propagation path OR dependency ---
+    path_lower = {str(p).strip().lower() for p in topo_path or []}
+    deps_lower = {str(d).strip().lower() for d in topo_dependencies or []}
+    if cs_lower in path_lower or cs_lower in deps_lower:
+        result["has_topology_path"] = True
+
+    # --- 5. is_temporally_prior: RCA Agent's v7 scoring_rules flag ---
+    # The RCA agent annotates candidates with _temporal_violation when a
+    # candidate's first anomaly is later than the symptom. If that flag is
+    # True, the candidate CANNOT precede the symptom → not temporally_prior.
+    temporal_violation = rca_metadata.get("_temporal_violation_by_service", {}).get(cs_lower)
+    if temporal_violation is True:
+        result["is_temporally_prior"] = False
+
+    return result
+
+
+def _compute_modality_count(signals: Dict[str, bool]) -> int:
+    """Count supporting modalities (log / trace / metric). Max 3."""
+    return (
+        int(signals.get("has_log_evidence", False))
+        + int(signals.get("has_trace_support", False))
+        + int(signals.get("has_metric_shift", False))
+    )
+
+
+# =============================================================================
+# Legacy helpers (below)
+# =============================================================================
 
 
 # 기본 서비스 목록 (fallback, Topology Agent 결과가 없을 때 사용)
@@ -115,7 +262,39 @@ class VerifierService:
         topo_path = topo_result.get("propagation_path", []) or propagation_path
         if not isinstance(topo_path, list):
             topo_path = []
-        
+
+        # --- v8: sources for 5-signal evidence extraction ---
+        log_evidence_list: List[Dict[str, Any]] = []
+        for e in (log_result.get("evidence") or []):
+            if isinstance(e, dict):
+                log_evidence_list.append(e)
+
+        # v6 Log Agent publishes service_statistics; fall back gracefully if absent.
+        service_statistics = log_result.get("service_statistics") or {}
+        if not isinstance(service_statistics, dict):
+            service_statistics = {}
+
+        # Dependencies of the symptom service (for has_topology_path when the
+        # candidate isn't on the path yet but is a direct downstream).
+        topo_deps: List[str] = []
+        for key in ("related_services", "blast_radius"):
+            vals = topo_result.get(key) or []
+            if isinstance(vals, list):
+                topo_deps.extend(str(v) for v in vals if v)
+
+        # v7 scoring_rules emits _temporal_violation on each candidate; build a
+        # service→bool lookup so we can reference it in the 5-signal extractor.
+        temporal_violation_by_service: Dict[str, bool] = {}
+        for _c in candidates:
+            if not isinstance(_c, dict):
+                continue
+            _cs = str(_c.get("cause_service") or "").strip().lower()
+            if _cs:
+                temporal_violation_by_service[_cs] = bool(_c.get("_temporal_violation", False))
+        rca_metadata_for_signals = {
+            "_temporal_violation_by_service": temporal_violation_by_service,
+        }
+
         # LLM이 제공한 evidence_convergence (전역 메타데이터)
         evidence_convergence = rca_result.get("evidence_convergence")
         
@@ -154,7 +333,48 @@ class VerifierService:
                     )
                     rejected_candidates.append({**c, "_verdict": "rejected-hallucination"})
                     continue
-            
+
+            # =====================================================
+            # Stage 1b (v8): 5-signal evidence extraction + HARD drops
+            # =====================================================
+            signals = _candidate_evidence_signals(
+                cause_service=cause_service,
+                log_evidence=log_evidence_list,
+                service_statistics=service_statistics,
+                topo_path=topo_path,
+                topo_dependencies=topo_deps,
+                rca_metadata=rca_metadata_for_signals,
+            )
+            modality_count = _compute_modality_count(signals)
+
+            # R1: candidate must be on a topology path (or a dependency).
+            # Structurally impossible candidates are dropped, not just
+            # demoted — this is the Verifier's core role per thesis 3장.
+            # Exception: skip this check for candidates without cause_service
+            # (deterministic baseline uses free-text cause strings).
+            if cause_service and not signals["has_topology_path"]:
+                verification_notes.append(
+                    f"[DROPPED] '{cause_service}' is not on the topology "
+                    f"propagation path nor a dependency of the symptom "
+                    f"service '{service}'. Structurally impossible."
+                )
+                rejected_candidates.append({**c, "_verdict": "dropped-no-topology-path",
+                                            "_signals": signals})
+                continue
+
+            # R2: zero evidence modality → drop.
+            # If NONE of log/trace/metric supports this candidate, it is a
+            # pure structural guess. The v5 adservice-at-0.68 failure falls
+            # here: topology_agrees but zero real evidence.
+            if cause_service and modality_count == 0:
+                verification_notes.append(
+                    f"[DROPPED] '{cause_service}' has no supporting evidence "
+                    f"(log=0, trace=0, metric=0). Topology alone is insufficient."
+                )
+                rejected_candidates.append({**c, "_verdict": "dropped-no-evidence",
+                                            "_signals": signals})
+                continue
+
             # =====================================================
             # Stage 2: Supporting evidence 합의 카운트 (LLM 버전)
             # =====================================================
@@ -263,7 +483,47 @@ class VerifierService:
                         f"Candidate '{cause}' lacks strong support from both logs and topology."
                     )
                     verdict_for_candidate = "weak-evidence"
-            
+
+            # =====================================================
+            # Stage 4b (v8): modality-count cap + temporal penalty
+            # =====================================================
+            # These apply to candidates that SURVIVED the hard drops in Stage 1b.
+            # Guard: only run if we have signals (cause_service was present).
+            if cause_service:
+                # R3: single-modality candidates capped at 0.60; double at 0.80.
+                if modality_count == 1:
+                    before = confidence
+                    confidence = min(confidence, MODALITY_CAP_SINGLE)
+                    if confidence < before:
+                        which = [k for k in ("has_log_evidence",
+                                              "has_trace_support",
+                                              "has_metric_shift")
+                                 if signals.get(k)]
+                        verification_notes.append(
+                            f"Candidate '{cause_service}' supported by 1 modality "
+                            f"({which[0] if which else 'unknown'}); "
+                            f"confidence capped at {MODALITY_CAP_SINGLE}."
+                        )
+                elif modality_count == 2:
+                    before = confidence
+                    confidence = min(confidence, MODALITY_CAP_DOUBLE)
+                    if confidence < before:
+                        verification_notes.append(
+                            f"Candidate '{cause_service}' supported by 2 modalities; "
+                            f"confidence capped at {MODALITY_CAP_DOUBLE}."
+                        )
+
+                # R4: temporal causality penalty
+                if not signals["is_temporally_prior"]:
+                    confidence = max(0.10, confidence - TEMPORAL_VIOLATION_PENALTY)
+                    verification_notes.append(
+                        f"Candidate '{cause_service}' flagged as temporally posterior "
+                        f"to the symptom; confidence penalised by "
+                        f"{TEMPORAL_VIOLATION_PENALTY}."
+                    )
+                    if verdict_for_candidate == "accepted":
+                        verdict_for_candidate = "revised"
+
             # =====================================================
             # Stage 5: evidence_convergence 전역 조정
             # =====================================================
@@ -281,6 +541,8 @@ class VerifierService:
                 "confidence": round(confidence, 3),
                 "_verdict": verdict_for_candidate,
                 "_agreement_count": agreement_count,
+                "_signals": signals if cause_service else None,
+                "_modality_count": modality_count if cause_service else None,
             })
 
         revised_candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
@@ -289,10 +551,19 @@ class VerifierService:
 
         verdict = self._derive_final_verdict(revised_candidates, evidence_convergence)
 
-        # 임시 필드 제거
+        # 임시 필드 제거, diagnostic signals는 public 필드로 승격
         for c in revised_candidates:
             c.pop("_verdict", None)
             c.pop("_agreement_count", None)
+            # v8: keep signals/modality_count as proper fields for downstream
+            # analysis (diagnose_failures.py, paper tables). Rename with no
+            # underscore prefix to signal they are intentional outputs.
+            sig = c.pop("_signals", None)
+            mc = c.pop("_modality_count", None)
+            if sig is not None:
+                c["verification_signals"] = sig
+            if mc is not None:
+                c["modality_count"] = mc
 
         if not revised_candidates:
             if rejected_candidates:

@@ -276,6 +276,14 @@ def convert_case(case: Dict[str, Any], work_dir: Path) -> Optional[Dict[str, Any
         baseline_range = list(windows["baseline"])
         incident_range = list(windows["incident"])
 
+    # v8: RCAEval provides a metrics.csv alongside logs.csv in each case folder.
+    # We pass the path through attachments so Log Agent / Verifier can call
+    # the metric MCP tools without having to re-derive the path. If absent
+    # (e.g. for bench runs that don't ship metrics), downstream tools
+    # gracefully return has_data=False.
+    metrics_csv = case["path"] / "metrics.csv"
+    metrics_file = str(metrics_csv) if metrics_csv.exists() else None
+
     incident = {
         "incident_id": f"INC-{case['name'].upper()}",
         "service": "frontend",  # Online Boutique entry point
@@ -290,6 +298,8 @@ def convert_case(case: Dict[str, Any], work_dir: Path) -> Optional[Dict[str, Any
             # Dual windows (v6) — Log Agent uses these for baseline vs incident stats
             "baseline_range": baseline_range,
             "incident_range": incident_range,
+            # v8: metric source (RCAEval metrics.csv) — None if not shipped
+            "metrics_file": metrics_file,
         },
     }
     return {"logs_path": logs_path, "incident": incident, "meta": meta}
