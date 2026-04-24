@@ -4,7 +4,7 @@
   "case": "emailservice_cpu_1",
   "gt_service": "emailservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 31.94,
+  "elapsed_seconds": 30.48,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -21,7 +21,7 @@
       "frontend"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 31.94,
+    "elapsed_seconds": 30.48,
     "gt_fault": "cpu"
   },
   "result": {
@@ -37,14 +37,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "emailservice experiencing severe CPU fault leading to resource contention and throttling of downstream tasks, causing degraded performance observed at the symptom frontend.",
+        "cause": "Emailservice experiencing severe CPU fault with resource exhaustion, leading to downstream bottlenecks and increased latency on calls from frontend, thereby driving the frontend stress observed in the incident window.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "emailservice",
-        "reasoning": "The strongest signal is the extreme CPU anomaly for emailservice from the Log Agent (most severe deviation). Topology shows a plausible propagation path from frontend -> checkoutservice -> emailservice, consistent with emailservice as downstream influence. TCB-RCA flags frontend as the root, but there is no timing evidence from TCB-RCA to support frontend as the initiation point; the CPU anomaly is localized to emailservice and aligns with the observed symptom cascade.",
+        "reasoning": "All three sources converge on emailservice as the deepest upstream fault: Log Agent identifies a strong CPU and memory anomaly in emailservice with downstream impact on frontend; Topology shows a plausible propagation path frontend -> checkoutservice -> emailservice, consistent with the observed symptoms; TCB-RCA does not identify emailservice (it ranks frontend as root with no anomalies), but its topology-constrained temporal backtracking is overridden by the stronger, consistent log and topology signals. The absence of errors in logs on frontend and the strong signal on emailservice make emailservice the most credible root cause, aligned with the unobserved root-cause principle for deeper faults showing upstream symptoms.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -53,23 +53,23 @@
       },
       {
         "rank": 2,
-        "cause": "frontend identified by TCB-RCA as the initial faulting node with no observed upstream cause within the available data; however, log evidence points to downstream emailservice anomalies rather than a frontend-originating failure.",
-        "confidence": 0.5,
+        "cause": "Frontend perceived stress is primarily a downstream consequence of emailservice CPU fault; frontend may also have a modest CPU spike due to being a consumer of the failing path, but the root cause appears deeper in emailservice.",
+        "confidence": 0.36,
         "evidence_refs": [
-          "topology-agent:confirmed",
-          "tcb-rca:confirmed"
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "TCB-RCA ranks frontend as the root with zero temporal_gap observed, and topology confirms a downstream path from frontend to emailservice. However, the Log Agent specifically highlights emailservice CPU fault with no error logs on frontend, making frontend a less likely primary root given the stronger CPU signal downstream. This candidate is retained as a lower-confidence alternative, acknowledging the TCB-RCA constraint but de-emphasizing it due to stronger corroboration for emailservice from logs.",
+        "reasoning": "Frontend is implicated as the symptom service and participates in the propagation path, but there is no evidence of an intrinsic fault within frontend itself. TCB-RCA does not support frontend as root, and the strongest evidence points to emailservice as the upstream fault. Frontend's role is best described as affected rather than causative.",
         "supporting_evidence": {
-          "log_agent_agrees": false,
+          "log_agent_agrees": true,
           "topology_agent_agrees": true,
-          "tcb_rca_agrees": true
+          "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "emailservice experiencing severe CPU fault leading to resource contention and throttling of downstream tasks, causing degraded performance observed at the symptom frontend.",
+      "cause": "Emailservice experiencing severe CPU fault with resource exhaustion, leading to downstream bottlenecks and increased latency on calls from frontend, thereby driving the frontend stress observed in the incident window.",
       "confidence": 0.6,
       "explanation": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "emailservice"
@@ -104,7 +104,7 @@
       "notes": [
         "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
         "Candidate 'emailservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
-        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
+        "Candidate 'frontend' confirmed by 2/3 sources (log, topology)."
       ]
     },
     "evidence_summary": {
@@ -123,8 +123,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing cpu fault'. No error logs found. LLM hypothesis: The emailservice is experiencing a severe CPU fault which likely dominates resource contention; this may not trigger explicit errors but could throttle or serialize downstream tasks, contributing to degraded performance in related user-facing flows.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service emailservice experiencing cpu fault'. No error logs found. LLM hypothesis: Emailservice experienced a severe CPU fault, likely exhausting its compute resources and causing downstream bottlenecks or increased latency on calls from frontend, contributing to the frontend's observed stress during the incident window.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -264,12 +264,87 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "env platform is either empty or invalid",
+            "timestamp": "2024-01-15T20:12:45.174Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Detected Google metadata server: [169.254.169.254], setting ENV_PLATFORM to GCP. [path: /]",
+            "timestamp": "2024-01-15T20:12:45.175Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "ENV_PLATFORM is: gcp [path: /]",
+            "timestamp": "2024-01-15T20:12:45.175Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "received ad request (context_words=[])",
             "timestamp": "2024-01-15T20:12:45.177Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /cart]",
+            "timestamp": "2024-01-15T20:12:45.177Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /]",
+            "timestamp": "2024-01-15T20:12:45.179Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -503,19 +578,20 @@
           }
         ],
         "metadata": {
-          "hypothesis": "The emailservice is experiencing a severe CPU fault which likely dominates resource contention; this may not trigger explicit errors but could throttle or serialize downstream tasks, contributing to degraded performance in related user-facing flows.",
+          "hypothesis": "Emailservice experienced a severe CPU fault, likely exhausting its compute resources and causing downstream bottlenecks or increased latency on calls from frontend, contributing to the frontend's observed stress during the incident window.",
           "suspected_downstream": "emailservice",
           "anomalous_services": [
-            "emailservice"
+            "emailservice",
+            "frontend"
           ],
-          "llm_reasoning": "Metric signals show an extreme CPU z-score for emailservice (+348.5), the most severe anomaly among all services. Other services show only mild metric deviations. The log-rate table shows no clear error spikes; thus, the root cause is most plausibly the emailservice itself rather than downstream effects. Upstream/downstream relationships are not evidenced by error logs, but the strongest signal comes from emailservice metrics.",
+          "llm_reasoning": "Metric signals show a strong anomaly for emailservice (cpu_z +348.5, mem_jump +0.14, p95Δms +0.8, p99Δms +1.2) making it the most extreme footprint. Frontend shows a modest CPU spike (+5.1) but is a high-level consumer of services, including email-related flows. The log-rate table does not show errors, and volume_delta is not indicating cascading log spikes; thus, the root cause is most likely the emailservice consuming resources, with frontend affected indirectly through upstream/downstream interactions. Since upstream/root-cause analysis must follow the deepest anomaly, emailservice is the leading candidate for root cause; frontend is an affected service in the incident window.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.70).",
-        "confidence": 0.79,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.65).",
+        "confidence": 0.775,
         "evidence": [
           {
             "type": "topology",
@@ -527,7 +603,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend depends on checkoutservice, which is in the related dependency subgraph. The log agent's suspected downstream (emailservice) can be reached downstream of checkoutservice, making the path frontend -> checkoutservice -> emailservice structurally plausible given the known dependency relationships. No explicit alternate path to emailservice is evidenced by the topology (other frontend-dependent services do not show direct calls to emailservice in the provided graph). The blast radius is limited to frontend under the current path assumption, with frontend being the most critical service to monitor within that radius."
+              "llm_reasoning": "Frontend depends on checkoutservice; the computed path frontend -> checkoutservice -> emailservice is plausible if checkoutservice calls emailservice for notifications. The topology does not preclude downstream calls from checkoutservice to emailservice. No explicit alternative paths are provided in the topology, so only the asserted path is supported by the given dependency structure. The blast radius is currently limited to frontend; however, if the fault propagates further through checkoutservice to emailservice, additional services could be affected depending on their interactions with emailservice."
             }
           }
         ],
@@ -648,7 +724,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend depends on checkoutservice, which is in the related dependency subgraph. The log agent's suspected downstream (emailservice) can be reached downstream of checkoutservice, making the path frontend -> checkoutservice -> emailservice structurally plausible given the known dependency relationships. No explicit alternate path to emailservice is evidenced by the topology (other frontend-dependent services do not show direct calls to emailservice in the provided graph). The blast radius is limited to frontend under the current path assumption, with frontend being the most critical service to monitor within that radius.",
+          "llm_reasoning": "Frontend depends on checkoutservice; the computed path frontend -> checkoutservice -> emailservice is plausible if checkoutservice calls emailservice for notifications. The topology does not preclude downstream calls from checkoutservice to emailservice. No explicit alternative paths are provided in the topology, so only the asserted path is supported by the given dependency structure. The blast radius is currently limited to frontend; however, if the fault propagates further through checkoutservice to emailservice, additional services could be affected depending on their interactions with emailservice.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -659,7 +735,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "All sources converge on emailservice as a strong candidate: the Log Agent reports an extreme CPU anomaly in emailservice, and the topology shows a plausible propagation path from frontend through checkoutservice to emailservice. The TCB-RCA algorithm uniquely prefers frontend as the root, but this conflicts with the log-derived signal (no frontend anomaly) and with the structural evidence that emailservice is the downstream consumer in the observed path. Given the stronger, direct evidence of CPU fault in emailservice and a structurally plausible cascade ending at the symptom service (frontend), emailservice is preferred as the primary root cause. The frontend-only hypothesis remains a secondary candidate due to its alignment with topology and TCB-RCA but lacks corroborating timing evidence and contradicts the strong emailservice CPU signal. If further data becomes available (e.g., emailservice error logs or metrics detailing upstream triggers), re-evaluate to potentially elevate emailservice as confirmed unobserved or to adjust timing-based causality. ",
+    "synthesis_reasoning": "The strongest convergence across sources is that emailservice exhibits a strong CPU/resource anomaly and is structurally positioned upstream of the frontend via checkoutservice. The Log Agent provides the strongest direct signal for emailservice as the root cause, with Topology validating a viable propagation path to frontend. The TCB-RCA result conflicts with this interpretation, ranking frontend as root with no anomalies; given the observed CPU/anomaly signals in emailservice and the explicit propagation path through checkoutservice to emailservice, the evidence favors emailservice as the primary root cause. When evidence is strong on one path but weak or conflicting on another, prioritize the deeper root cause indicated by logs and supported by topology, and treat frontend as the symptom/affected service. The propagation path reflects emailservice -> checkoutservice -> frontend, matching both the structural dependency and the observed symptom.",
     "tcb_rca_reference": {
       "candidates": [
         {

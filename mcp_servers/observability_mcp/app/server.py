@@ -245,6 +245,188 @@ def get_retry_timeout_summary(
     )
 
 
+# =============================================================================
+# Phase 2: Evidence-aware tools
+# =============================================================================
+# These four tools return structured EvidenceUnit collections rather than raw
+# data. They are additive — all pre-existing tools remain available.
+#
+# Evidence tools let Agents (Phase 3+) receive already-interpreted signals:
+# instead of parsing log stats or metric summaries themselves, they get a list
+# of EvidenceUnits with explicit `modality`, `anomaly_type`, `severity`, and
+# `observation` fields.
+#
+# The underlying conversion happens in evidence_tools.py which reuses the
+# existing repository functions for raw data collection.
+
+from .evidence_tools import (
+    get_log_evidence_payload,
+    get_metric_evidence_payload,
+    get_topology_evidence_payload,
+    get_evidence_collection_payload,
+)
+
+
+@mcp.tool()
+def get_log_evidence(
+    start: str,
+    end: str,
+    log_file: Optional[str] = None,
+    baseline_start: Optional[str] = None,
+    baseline_end: Optional[str] = None,
+    incident_start: Optional[str] = None,
+    incident_end: Optional[str] = None,
+    focus_services: Optional[list] = None,
+) -> dict:
+    """
+    Return log-modality EvidenceUnits for all services within [start, end].
+
+    Unlike search_logs (which returns raw rows) or get_service_statistics
+    (which returns numeric aggregates), this tool returns a list of structured
+    EvidenceUnit dicts — each carrying modality='log', an anomaly_type
+    ('volume_shift' | 'error_spike' | 'keyword_distress' | 'dependency_failure'),
+    a severity score in [0,1], and the numeric observation behind it.
+
+    Dual-window usage: pass baseline_start/baseline_end for the comparison
+    baseline and incident_start/incident_end for the incident window. The
+    severity normalisation and low-volume artifact suppression match those
+    in evidence_factory.
+
+    Args:
+        start, end: ISO-8601 outer window (used for search + activity filter)
+        log_file: optional log path override
+        baseline_start, baseline_end: optional dual-window baseline
+        incident_start, incident_end: optional dual-window incident
+        focus_services: if given, only produce evidence for these services
+    """
+    logging.info(
+        "get_log_evidence: window=[%s, %s] baseline=%s~%s incident=%s~%s focus=%s",
+        start, end, baseline_start, baseline_end,
+        incident_start, incident_end, focus_services,
+    )
+    return get_log_evidence_payload(
+        start=start, end=end, log_file=log_file,
+        baseline_start=baseline_start, baseline_end=baseline_end,
+        incident_start=incident_start, incident_end=incident_end,
+        focus_services=focus_services,
+    )
+
+
+@mcp.tool()
+def get_metric_evidence(
+    start: str,
+    end: str,
+    metrics_file: Optional[str] = None,
+    baseline_start: Optional[str] = None,
+    baseline_end: Optional[str] = None,
+    incident_start: Optional[str] = None,
+    incident_end: Optional[str] = None,
+    focus_services: Optional[list] = None,
+) -> dict:
+    """
+    Return metric-modality EvidenceUnits from Prometheus/Istio metrics.
+
+    Produces up to three unit types per service:
+      - resource_saturation: CPU spike z-score or mem_jump ratio
+      - latency_degradation: p95 or p99 delta
+      - network_degradation: packet drops or Istio error delta
+
+    Severity uses the normalised [0,1] mapping from evidence_factory:
+    e.g. CPU z=20 → sev≈0.46, z=289 → sev≈1.0.
+
+    Args: see get_metric_summary plus focus_services.
+    """
+    logging.info(
+        "get_metric_evidence: window=[%s, %s] baseline=%s~%s focus=%s",
+        start, end, baseline_start, baseline_end, focus_services,
+    )
+    return get_metric_evidence_payload(
+        start=start, end=end, metrics_file=metrics_file,
+        baseline_start=baseline_start, baseline_end=baseline_end,
+        incident_start=incident_start, incident_end=incident_end,
+        focus_services=focus_services,
+    )
+
+
+@mcp.tool()
+def get_topology_evidence(
+    symptom_service: str,
+    candidate_services: list,
+    path: list,
+    start: str,
+    end: str,
+) -> dict:
+    """
+    Return topology-modality EvidenceUnits representing structural proximity.
+
+    Per v7 H4 principle, topology evidence has severity capped at 0.5 — this
+    is structural guessing, not observation. A candidate supported only by
+    topology evidence should not be chosen as final Top-1 by the RCA Agent.
+
+    Args:
+        symptom_service: the observed failing service
+        candidate_services: services to evaluate for topology proximity
+        path: the service-call path (e.g. ['api-gateway', 'auth-service', 'user-db'])
+        start, end: the window for tagging the evidence (content itself is time-invariant)
+    """
+    logging.info(
+        "get_topology_evidence: symptom=%s candidates=%d path_len=%d",
+        symptom_service, len(candidate_services), len(path),
+    )
+    return get_topology_evidence_payload(
+        symptom_service=symptom_service,
+        candidate_services=candidate_services,
+        path=path,
+        start=start, end=end,
+    )
+
+
+@mcp.tool()
+def get_evidence_collection(
+    start: str,
+    end: str,
+    log_file: Optional[str] = None,
+    metrics_file: Optional[str] = None,
+    baseline_start: Optional[str] = None,
+    baseline_end: Optional[str] = None,
+    incident_start: Optional[str] = None,
+    incident_end: Optional[str] = None,
+    focus_services: Optional[list] = None,
+    symptom_service: Optional[str] = None,
+    topology_path: Optional[list] = None,
+    candidate_services: Optional[list] = None,
+) -> dict:
+    """
+    Unified endpoint — return a merged EvidenceCollection across log + metric
+    (+ topology if the relevant args are provided).
+
+    This is the primary tool for evidence-aware Agents: one call returns the
+    complete multi-modality evidence for an incident window, already
+    deduplicated by evidence_id.
+
+    The topology slice requires all three of symptom_service, topology_path,
+    and candidate_services to be provided; otherwise it is skipped.
+
+    Args: union of get_log_evidence and get_metric_evidence, plus the
+    topology trio (symptom_service, topology_path, candidate_services).
+    """
+    logging.info(
+        "get_evidence_collection: window=[%s, %s] baseline=%s~%s topology_given=%s",
+        start, end, baseline_start, baseline_end,
+        bool(symptom_service and topology_path and candidate_services),
+    )
+    return get_evidence_collection_payload(
+        start=start, end=end,
+        log_file=log_file, metrics_file=metrics_file,
+        baseline_start=baseline_start, baseline_end=baseline_end,
+        incident_start=incident_start, incident_end=incident_end,
+        focus_services=focus_services,
+        symptom_service=symptom_service,
+        topology_path=topology_path,
+        candidate_services=candidate_services,
+    )
+
+
 def main():
     # 논문 1차 PoC는 로컬 실행이 쉬운 stdio로 시작
     mcp.run(transport="stdio")
