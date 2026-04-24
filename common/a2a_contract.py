@@ -55,6 +55,28 @@ AgentName = Literal[
 ]
 
 
+# FailureMode — 논문 Section 3에 명시된 "failure mode" 필드.
+# anomaly_type과는 다름: anomaly_type은 관측된 증상(error_spike 등)이고,
+# failure_mode는 그 증상의 원인이 되는 장애 패턴이다. 즉:
+#   anomaly_type = WHAT (observed symptom)
+#   failure_mode  = HOW (causal mechanism)
+# 예시: anomaly_type=latency_degradation + failure_mode=resource_exhaustion
+#       anomaly_type=error_spike        + failure_mode=cascading_failure
+FailureMode = Literal[
+    "resource_exhaustion",      # CPU/Mem/Disk 고갈
+    "cascading_failure",        # 하위 서비스 실패의 상위 전파
+    "network_partition",        # 네트워크 분리/지연
+    "dependency_timeout",       # 외부 의존성 호출 timeout
+    "deadlock_or_saturation",   # 동시성 문제, 쓰레드/커넥션 풀 고갈
+    "configuration_error",      # 잘못된 설정/배포
+    "data_corruption",          # DB / cache 데이터 이상
+    "retry_storm",              # 재시도 폭주
+    "noisy_neighbor",           # 인접 서비스의 자원 점유
+    "partial_outage",           # 일부 인스턴스 다운
+    "unknown",                  # 판정 불가 / 미지 장애 패턴
+]
+
+
 # ---------------------------------------------------------------------------
 # Candidate — one proposed root cause with its evidence trail
 # ---------------------------------------------------------------------------
@@ -110,6 +132,14 @@ class Candidate(BaseModel):
         description="해당 후보를 지목하는 토폴로지 경로 (있을 경우)",
     )
 
+    # Phase 4a: failure mode classification.
+    # anomaly_type과 구분되는 개념: anomaly_type은 observed symptom,
+    # failure_mode는 causal mechanism. 논문 Section 3에 명시된 필드.
+    failure_mode: Optional[FailureMode] = Field(
+        default=None,
+        description="장애 패턴 분류 (resource_exhaustion, cascading_failure, ...)",
+    )
+
     @field_validator("confidence")
     @classmethod
     def _conf_range(cls, v: float) -> float:
@@ -148,21 +178,25 @@ class ConsistencyChecks(BaseModel):
       - False: 증거는 있으나 모순된다 → drop 정당화
       - None:  증거가 없음 → missing_evidence로 보고하여 재조회 유도
 
-    차원
-    ----
+    4차원 (논문 Section 5에 명시)
+    ---------------------------
     temporal
-        원인 evidence의 시각이 symptom보다 먼저인가.
+        시간적 타당성: 원인 evidence의 시각이 symptom보다 먼저인가.
         (원인이 결과보다 시간상 먼저라는 기본 물리 법칙)
     topological
-        후보 서비스가 symptom 서비스의 upstream / transitive dependency인가.
-        (구조상 불가능한 경로는 배제)
+        토폴로지 도달성: 후보 서비스가 symptom 서비스의 upstream /
+        transitive dependency인가. (구조상 불가능한 경로는 배제)
     modality
-        서로 다른 modality의 증거가 같은 서비스를 지목하는가.
-        (log + metric + trace 교차 검증)
-    causal
-        observation 간의 인과 chain이 성립하는가.
-        예: DB 장애 → DB timeout 로그 → 호출자의 504 응답 — 이 순서대로
-        관측되는가.
+        교차 맥락 일관성: 서로 다른 modality의 증거가 같은 서비스를
+        지목하는가. (log + metric + trace 교차 검증)
+        논문의 "교차 맥락 일관성"에 대응.
+    counter_evidence
+        반례 존재 여부: 이 후보를 반증하는 증거가 있는가.
+        True = 반례 없음 (후보 유지 OK)
+        False = 반례 존재 (후보 기각)
+        None = 반례 검사 불가
+        논문의 "반례 존재 여부"에 대응. 예: 후보 서비스에 "정상 처리 중"
+        이라는 evidence가 있거나, CPU/Mem 모두 정상 범위인 경우.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -170,13 +204,13 @@ class ConsistencyChecks(BaseModel):
     temporal: Optional[bool] = None
     topological: Optional[bool] = None
     modality: Optional[bool] = None
-    causal: Optional[bool] = None
+    counter_evidence: Optional[bool] = None
 
     def passed(self) -> bool:
         """모든 수행된 검사가 True인가 (None 제외)."""
         results = [
             self.temporal, self.topological,
-            self.modality, self.causal,
+            self.modality, self.counter_evidence,
         ]
         performed = [r for r in results if r is not None]
         if not performed:
@@ -186,7 +220,7 @@ class ConsistencyChecks(BaseModel):
     def failed_dimensions(self) -> List[str]:
         """False로 판정된 차원 이름 목록."""
         out = []
-        for dim in ("temporal", "topological", "modality", "causal"):
+        for dim in ("temporal", "topological", "modality", "counter_evidence"):
             if getattr(self, dim) is False:
                 out.append(dim)
         return out
@@ -194,7 +228,7 @@ class ConsistencyChecks(BaseModel):
     def skipped_dimensions(self) -> List[str]:
         """None(판단 불가)인 차원 목록."""
         out = []
-        for dim in ("temporal", "topological", "modality", "causal"):
+        for dim in ("temporal", "topological", "modality", "counter_evidence"):
             if getattr(self, dim) is None:
                 out.append(dim)
         return out
@@ -398,5 +432,6 @@ __all__ = [
     "AgentResponse",
     "Candidate",
     "ConsistencyChecks",
+    "FailureMode",
     "make_legacy_response",
 ]

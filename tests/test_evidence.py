@@ -193,6 +193,41 @@ class TestEvidenceUnit:
             )
 
 
+class TestPrecededBy:
+    """Phase 4a: temporal ordering between evidences."""
+
+    @staticmethod
+    def _make(**overrides):
+        defaults = dict(
+            modality="log",
+            time_range=TimeRange(
+                start="2026-04-23T13:00:00+09:00",
+                end="2026-04-23T13:05:00+09:00",
+            ),
+            services=["x"],
+            anomaly_type="error_spike",
+            severity=0.5,
+            observation={},
+            source="t",
+        )
+        defaults.update(overrides)
+        return EvidenceUnit(**defaults)
+
+    def test_default_empty(self):
+        ev = self._make()
+        assert ev.preceded_by == []
+
+    def test_with_predecessors(self):
+        ev = self._make(preceded_by=["ev_log_predecessor1", "ev_log_predecessor2"])
+        assert len(ev.preceded_by) == 2
+        assert "ev_log_predecessor1" in ev.preceded_by
+
+    def test_json_roundtrip_preserves_preceded_by(self):
+        ev = self._make(preceded_by=["ev_log_0001", "ev_metric_0002"])
+        restored = EvidenceUnit.model_validate_json(ev.model_dump_json())
+        assert restored.preceded_by == ev.preceded_by
+
+
 # ---------------------------------------------------------------------------
 # make_evidence_id (deterministic)
 # ---------------------------------------------------------------------------

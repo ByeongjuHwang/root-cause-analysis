@@ -183,6 +183,17 @@ class EvidenceUnit(BaseModel):
     supporting_refs: List[str] = Field(default_factory=list)
     raw_samples: List[str] = Field(default_factory=list)
 
+    # Phase 4a: 시간적 선후 관계 (논문 Section 3).
+    # 이 증거보다 시간상 먼저 일어난 것으로 판단되는 다른 증거의 ID들.
+    # 주의: time_range.start의 단순 비교로 자동 유도할 수도 있지만, 명시
+    # 관계를 저장함으로써 Verifier의 temporal consistency check가 매번
+    # time_range를 비교하지 않아도 되도록 한다. 비어있을 수 있다 (대부분).
+    # 예: API error_spike(t=13:03)의 preceded_by = [db_timeout(t=13:02).id]
+    preceded_by: List[str] = Field(
+        default_factory=list,
+        description="이 증거보다 시간상 먼저 발생한 증거 ID 목록",
+    )
+
     # ---------- Validators -----------------------------------------------
 
     @field_validator("severity")

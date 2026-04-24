@@ -101,7 +101,7 @@ class TestConsistencyChecks:
 
     def test_all_true_passes(self):
         cc = ConsistencyChecks(
-            temporal=True, topological=True, modality=True, causal=True,
+            temporal=True, topological=True, modality=True, counter_evidence=True,
         )
         assert cc.passed() is True
 
@@ -112,17 +112,17 @@ class TestConsistencyChecks:
 
     def test_none_means_skipped(self):
         cc = ConsistencyChecks(temporal=True, topological=True)
-        # modality and causal not checked
+        # modality and counter_evidence not checked
         assert cc.passed() is True  # performed ones all pass
-        assert set(cc.skipped_dimensions()) == {"modality", "causal"}
+        assert set(cc.skipped_dimensions()) == {"modality", "counter_evidence"}
 
     def test_mixed_reports_correctly(self):
         cc = ConsistencyChecks(
             temporal=True, topological=False,
-            modality=None, causal=False,
+            modality=None, counter_evidence=False,
         )
         assert cc.passed() is False
-        assert set(cc.failed_dimensions()) == {"topological", "causal"}
+        assert set(cc.failed_dimensions()) == {"topological", "counter_evidence"}
         assert cc.skipped_dimensions() == ["modality"]
 
 
@@ -283,7 +283,7 @@ class TestAgentResponse:
 
     def test_verifier_with_consistency_checks(self):
         cc = ConsistencyChecks(
-            temporal=True, topological=True, modality=True, causal=False,
+            temporal=True, topological=True, modality=True, counter_evidence=False,
         )
         resp = AgentResponse(
             agent_name="verifier_agent", request_id="INC-001",
@@ -297,6 +297,73 @@ class TestAgentResponse:
                 agent_name="unknown_agent",  # type: ignore[arg-type]
                 request_id="INC-001",
             )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4a new fields — FailureMode on Candidate, counter_evidence on CC
+# ---------------------------------------------------------------------------
+
+class TestFailureMode:
+    def test_candidate_without_failure_mode_ok(self):
+        """failure_mode is optional (backward compat)."""
+        c = Candidate(service="svc", confidence=0.8)
+        assert c.failure_mode is None
+
+    def test_candidate_with_failure_mode(self):
+        c = Candidate(
+            service="svc", confidence=0.8,
+            failure_mode="resource_exhaustion",
+        )
+        assert c.failure_mode == "resource_exhaustion"
+
+    def test_invalid_failure_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            Candidate(
+                service="svc", confidence=0.8,
+                failure_mode="nonexistent_mode",  # type: ignore[arg-type]
+            )
+
+    def test_all_declared_failure_modes_accepted(self):
+        """Every Literal value should construct without error."""
+        declared = [
+            "resource_exhaustion", "cascading_failure", "network_partition",
+            "dependency_timeout", "deadlock_or_saturation", "configuration_error",
+            "data_corruption", "retry_storm", "noisy_neighbor",
+            "partial_outage", "unknown",
+        ]
+        for mode in declared:
+            c = Candidate(service="svc", confidence=0.5, failure_mode=mode)  # type: ignore[arg-type]
+            assert c.failure_mode == mode
+
+    def test_failure_mode_json_roundtrip(self):
+        c = Candidate(
+            service="db", confidence=0.9,
+            failure_mode="resource_exhaustion",
+            supporting_evidence=["ev_metric_abc"],
+        )
+        js = c.model_dump_json()
+        restored = Candidate.model_validate_json(js)
+        assert restored.failure_mode == "resource_exhaustion"
+
+
+class TestCounterEvidenceDimension:
+    def test_counter_evidence_field_present(self):
+        """Phase 4a renamed causal -> counter_evidence."""
+        cc = ConsistencyChecks(counter_evidence=True)
+        assert cc.counter_evidence is True
+
+    def test_counter_evidence_false_detected_as_failure(self):
+        cc = ConsistencyChecks(
+            temporal=True, topological=True, modality=True,
+            counter_evidence=False,
+        )
+        assert cc.passed() is False
+        assert "counter_evidence" in cc.failed_dimensions()
+
+    def test_old_causal_name_rejected(self):
+        """Rename must be enforced — old kwarg should fail."""
+        with pytest.raises(ValidationError):
+            ConsistencyChecks(causal=True)  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------
