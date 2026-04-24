@@ -17,6 +17,7 @@ Topology Analysis Agent — LLM-powered version.
 """
 
 from typing import Any, Dict, List, Optional
+import os
 
 from mcp_servers.architecture_mcp.app.repository import (
     get_service_dependencies,
@@ -127,6 +128,33 @@ TOPOLOGY_AGENT_SCHEMA_HINT = """{
 # Service
 # =========================================================================
 
+# Phase 4b: A2A contract dual-output helper (same pattern as RCA Agent).
+def _maybe_attach_topology_response(
+    result: dict,
+    incident_id: str,
+) -> dict:
+    """Attach AgentResponse when A2A_CONTRACT_MODE is set; else return as-is.
+
+    Topology Agent has no upstream (it runs independently of Log Agent), so
+    we build a standalone AgentResponse with an empty evidence_collection.
+    """
+    if os.getenv("A2A_CONTRACT_MODE", "off") == "off":
+        return result
+    try:
+        from common.response_builder import (
+            build_topology_agent_response,
+            attach_agent_response,
+        )
+        agent_resp = build_topology_agent_response(
+            legacy_result=result,
+            request_id=incident_id or "UNKNOWN",
+        )
+        attach_agent_response(result, agent_resp)
+    except Exception:
+        pass
+    return result
+
+
 class ArchitectureAdapter:
     """MCP 기반 아키텍처 조회 래퍼. 기존과 동일."""
     
@@ -211,11 +239,12 @@ class TopologyAnalysisServiceLLM:
         
         # === Step 3: LLM 결과 처리 ===
         if "_error" in llm_result:
-            return self._fallback_result(
+            fallback = self._fallback_result(
                 service, suspected_downstream, deps, related_services,
                 blast_radius, propagation, diagram_uri, topology_file,
                 llm_result.get("_error", "LLM error"),
             )
+            return _maybe_attach_topology_response(fallback, incident_id or "UNKNOWN")
         
         path_assessment = llm_result.get("propagation_path_assessment", "unknown")
         try:
@@ -256,7 +285,7 @@ class TopologyAnalysisServiceLLM:
         # Build full topology for RCA Agent consumption
         full_topo = _build_full_topology(topology_file=topology_file)
 
-        return {
+        result = {
             "summary": " ".join(summary_parts),
             "confidence": round(final_confidence, 3),
             "dependency_info": deps,
@@ -287,6 +316,7 @@ class TopologyAnalysisServiceLLM:
                 }
             ],
         }
+        return _maybe_attach_topology_response(result, incident_id or "UNKNOWN")
     
     def _fallback_result(
         self,

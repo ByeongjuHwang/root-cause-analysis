@@ -928,6 +928,28 @@ class LogAnalysisServiceLLM:
             # 어떤 예외도 여기서 무시한다 (log 기록은 shadow module 내부에서 처리).
             pass
 
+        # === Phase 4b: A2A Contract dual output ===
+        # Attach a structured AgentResponse to legacy_result so downstream
+        # agents (Phase 4c Verifier, Phase 4d Orchestrator) can consume it
+        # without parsing ad-hoc fields. Legacy dict fields remain unchanged
+        # — this is additive only.
+        # Feature flag A2A_CONTRACT_MODE: when "off" (default) we skip the
+        # attach entirely so the dict is byte-identical to pre-Phase-4b.
+        if os.getenv("A2A_CONTRACT_MODE", "off") != "off":
+            try:
+                from common.response_builder import (
+                    build_log_agent_response,
+                    attach_agent_response,
+                )
+                agent_resp = build_log_agent_response(
+                    legacy_result=legacy_result,
+                    request_id=incident_id or "UNKNOWN",
+                )
+                attach_agent_response(legacy_result, agent_resp)
+            except Exception:
+                # Contract building must never break the Agent.
+                pass
+
         return legacy_result
     
     def _log_to_evidence(self, record: LogRecord) -> Dict[str, Any]:

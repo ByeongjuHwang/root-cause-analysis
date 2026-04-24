@@ -4,10 +4,10 @@
   "case": "currencyservice_cpu_1",
   "gt_service": "currencyservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 29.42,
+  "elapsed_seconds": 34.64,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
     "top_confidence": 0.6,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 29.42,
+    "elapsed_seconds": 34.64,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,23 +36,38 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Significant CPU fault observed in cartservice acting as upstream bottleneck, causing downstream latency degradation across dependent services including frontend. This aligns with the strongest anomaly signal (CPU z-score highest for cartservice) and the topology path frontend <- cartservice, which would manifest as frontend latency/increased calls due to cartservice slowdown.",
+        "cause": "Cartservice is experiencing high CPU pressure which propagates load through the system, leading to resource contention that manifests as CPU fault symptoms in downstream services (including currencyservice and frontend). This aligns with the strongest CPU anomaly observed on cartservice and the downstream impact pattern suggested by the Log Agent; topology shows a plausible propagation path cartservice -> frontend.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "cartservice",
-        "reasoning": "All sources converge on cartservice as the plausible upstream root cause: Log Agent identifies cartservice as the top CPU anomaly and the direct dependency path to frontend supports a realistic propagation route. The TCB-RCA output does not identify cartservice (it ranks frontend with no observed anomalies), but topology and log signals provide a stronger, actionable indication of cartservice as the root cause. Given the absence of contradictory strong evidence, cartservice remains the most credible root cause considering both timing and topology. The unobserved logs criterion is not clearly met here (no explicit upstream reference in frontend logs to cartservice failure type), so cartservice is not elevated as an UNOBSERVED root by that rule, but remains the best-supported root cause by metrics and dependency structure.",
+        "reasoning": "Log Agent identifies cartservice as having the strongest CPU deviation and posits downstream strain affecting currencyservice and frontend, which matches the proposed propagation path cartservice -> frontend. Topology confirms a viable path from cartservice to frontend. The TCB-RCA baseline ranks frontend as the initial fault with no observed anomalies, but does not override the strong observable CPU contention signal at cartservice nor the structural plausibility of cartservice as upstream. Given the unobserved logs at frontend and lack of direct error signals, cartservice as upstream, with propagation to frontend, is the most coherent root-cause hypothesis when combining timing, topology, and resource signals.",
         "supporting_evidence": {
           "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": false
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend exhibits CPU fault symptoms in the incident window, with no dedicated error logs and an absence of a single upstream error signal in the logs. The propagation path from cartservice to frontend is plausible, but the TCB-RCA baseline assigns unknown anomaly to frontend with zero temporal evidence. This candidate reflects the possibility that frontend itself is the immediate symptomatic node or a shallow root cause not captured in logs.",
+        "confidence": 0.28,
+        "evidence_refs": [
+          "topology-agent:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "Topological analysis supports a cartservice -> frontend propagation direction, making frontend a plausible propagation target if upstream load transfers. However, there is no direct log evidence of a frontend-originating fault, and the TCB-RCA result flags frontend as unknown with no anomalies, reducing confidence. This candidate should be considered as a near-term symptom-driven root cause if upstream signals are weaker than observed, or if unobserved upstream conditions exist.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "Significant CPU fault observed in cartservice acting as upstream bottleneck, causing downstream latency degradation across dependent services including frontend. This aligns with the strongest anomaly signal (CPU z-score highest for cartservice) and the topology path frontend <- cartservice, which would manifest as frontend latency/increased calls due to cartservice slowdown.",
+      "cause": "Cartservice is experiencing high CPU pressure which propagates load through the system, leading to resource contention that manifests as CPU fault symptoms in downstream services (including currencyservice and frontend). This aligns with the strongest CPU anomaly observed on cartservice and the downstream impact pattern suggested by the Log Agent; topology shows a plausible propagation path cartservice -> frontend.",
       "confidence": 0.6,
       "explanation": "Candidate 'cartservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "cartservice"
@@ -84,7 +99,8 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'cartservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'cartservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'cartservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
       ]
     },
     "evidence_summary": {
@@ -96,15 +112,15 @@
         "setting currency [path: /setCurrency]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
         "propagation path: frontend -> cartservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Cartservice experiences a significant CPU fault which becomes the upstream bottleneck; frontend and other dependent services suffer increased latency as they call into cartservice, causing cascading performance degradation across the system.",
-        "confidence": 0.6,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Cartservice is experiencing CPU pressure which propagates load through the system, leading to elevated resource usage and contributing to downstream components (including currencyservice and frontend) showing signs of strain during the incident window.",
+        "confidence": 0.34,
         "evidence": [
           {
             "type": "log",
@@ -844,36 +860,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"3799\",\"nanos\":267580731},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-19T16:36:59.324Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "paymentservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: JPY3799.267580731",
-            "timestamp": "2024-01-19T16:36:59.324Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "paymentservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "payment went through (transaction_id: 1a13124c-ba59-4f6a-bc39-18a986ec3923)",
             "timestamp": "2024-01-19T16:36:59.325Z",
             "level": "INFO",
@@ -925,126 +911,6 @@
             "trace_id": null,
             "metadata": {
               "service": "checkoutservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"398\",\"nanos\":38354711},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-19T16:37:00.386Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "paymentservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "Transaction processed: visa ending 0454     Amount: CAD398.38354711",
-            "timestamp": "2024-01-19T16:37:00.386Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "paymentservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:37:00.400Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "emailservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"1483\",\"nanos\":882168946},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
-            "timestamp": "2024-01-19T16:37:03.359Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "paymentservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:37:03.371Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "emailservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:37:04.738Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "emailservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:37:06.116Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "emailservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "A request to send order confirmation email to someone@example.com has been received.",
-            "timestamp": "2024-01-19T16:37:07.336Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "emailservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -1218,41 +1084,39 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Cartservice experiences a significant CPU fault which becomes the upstream bottleneck; frontend and other dependent services suffer increased latency as they call into cartservice, causing cascading performance degradation across the system.",
+          "hypothesis": "Cartservice is experiencing CPU pressure which propagates load through the system, leading to elevated resource usage and contributing to downstream components (including currencyservice and frontend) showing signs of strain during the incident window.",
           "suspected_downstream": "cartservice",
           "anomalous_services": [
             "cartservice",
             "redis",
-            "checkoutservice",
-            "adservice",
-            "shippingservice",
-            "productcatalogservice",
             "currencyservice",
             "frontend",
-            "paymentservice",
-            "recommendationservice",
-            "emailservice"
+            "checkoutservice",
+            "shippingservice",
+            "adservice",
+            "productcatalogservice",
+            "recommendationservice"
           ],
-          "llm_reasoning": "Metric Summary shows cartservice has the highest CPU z-score (+13.2) among services, indicating a strong root-cause signal. Other services also show elevated but lower anomalies (e.g., redis +11.7, frontend +6.2, checkout +3.8). Given frontend directly depends on cartservice, the cartservice CPU spike is the most plausible upstream issue propagating slowdown to downstream services. Volume_delta does not indicate large log-rate shifts for a single service, so the metric anomaly is more decisive here. Earliest onset is inferred from metric spikes within the incident window, with cartservice as the initial high-signal service. ",
+          "llm_reasoning": "Metric signals show cartservice with the strongest CPU anomaly (cpu_z +13.2) and widespread but moderate CPU upticks across multiple services, including currencyservice and frontend. Although there is no single service exceeding the defined metric thresholds (>30 cpu_z, mem_jump >0.3, etc.), the cartservice represents the deepest and most extreme metric deviation, making it a plausible upstream root-cause. The log-rate table indicates non-zero activity across many services with no clear error spikes, suggesting resource contention rather than isolated failures. Since frontend depends directly on cartservice, cartservice's elevated load is the most likely upstream contributor to the observed incident pattern.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to cartservice: frontend → cartservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
-        "confidence": 0.796,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to cartservice: frontend → cartservice. Blast radius: ['frontend']. LLM assessment: implausible (confidence 0.40).",
+        "confidence": 0.4,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Frontend depends directly on cartservice, so a fault in cartservice could propagate to frontend and manifest as the symptom. The graph shows a direct frontend -> cartservice edge, which supports a plausible root-to-symptom path in reverse (cartservice -> frontend) as well. There are no alternate paths in the topology that connect other services to frontend in a way that would explain the symptom without involving cartservice. The blast radius remains limited in this topology, with frontend being the primary impacted service in this snapshot."
+              "llm_reasoning": "The log agent suspects downstream service cartservice. Fault propagation from root to symptom would proceed cartservice -> frontend (since frontend depends on cartservice). The computed path frontend -> cartservice represents a dependency direction opposite to fault propagation. While the edge exists, it does not describe fault flow from root to symptom. The alternative plausible path is cartservice -> frontend. Blast radius remains focused on frontend given the topology (no downstream consumers of frontend shown), and the topology supports cartservice as the probable root affecting the symptom."
             }
           }
         ],
@@ -1372,9 +1236,14 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Frontend depends directly on cartservice, so a fault in cartservice could propagate to frontend and manifest as the symptom. The graph shows a direct frontend -> cartservice edge, which supports a plausible root-to-symptom path in reverse (cartservice -> frontend) as well. There are no alternate paths in the topology that connect other services to frontend in a way that would explain the symptom without involving cartservice. The blast radius remains limited in this topology, with frontend being the primary impacted service in this snapshot.",
-          "path_assessment": "plausible",
-          "alternative_paths": [],
+          "llm_reasoning": "The log agent suspects downstream service cartservice. Fault propagation from root to symptom would proceed cartservice -> frontend (since frontend depends on cartservice). The computed path frontend -> cartservice represents a dependency direction opposite to fault propagation. While the edge exists, it does not describe fault flow from root to symptom. The alternative plausible path is cartservice -> frontend. Blast radius remains focused on frontend given the topology (no downstream consumers of frontend shown), and the topology supports cartservice as the probable root affecting the symptom.",
+          "path_assessment": "implausible",
+          "alternative_paths": [
+            [
+              "cartservice",
+              "frontend"
+            ]
+          ],
           "critical_services_in_blast": [
             "frontend"
           ],
@@ -1383,7 +1252,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The Log Agent and Topology Agent converge on cartservice as the upstream failure source: cartservice shows the strongest CPU anomaly, and frontend directly depends on cartservice, making cartservice a plausible root cause. The TCB-RCA result does not support cartservice as a root cause (it ranks frontend with no anomalies), which lowers overall agreement. Since the observed symptom is frontend latency with an upstream bottleneck candidate in cartservice, and given the topology confirms a direct path, prioritizing cartservice as root cause is warranted. If additional data shows explicit propagation timing from cartservice to frontend (e.g., request latency increases or error rates rising in frontend concurrent with cartservice spike), confidence would increase further.",
+    "synthesis_reasoning": "All sources converge on cartservice as a plausible upstream root cause due to strongest CPU anomaly and structurally valid propagation to frontend. The Topology Agent confirms a feasible cartservice -> frontend path, aligning with the Log Agent's CPU contention narrative. The TCB-RCA baseline, however, does not corroborate a clear anomaly at frontend or at cartservice before the incident window, resulting in disagreement about the exact root cause. Given the absence of explicit frontend error logs and the presence of a strong CPU signal at cartservice, cartservice is preferred as the primary root cause. Frontend remains a secondary candidate due to its role as the symptom service and the plausible downstream impact from cartservice. The final propagation path reflects the most conservative, structurally supported sequence from root to symptom: cartservice -> frontend.",
     "tcb_rca_reference": {
       "candidates": [
         {
