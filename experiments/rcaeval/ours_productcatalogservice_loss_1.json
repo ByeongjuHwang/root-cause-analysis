@@ -4,7 +4,7 @@
   "case": "productcatalogservice_loss_1",
   "gt_service": "productcatalogservice",
   "gt_fault": "loss",
-  "elapsed_seconds": 31.87,
+  "elapsed_seconds": 28.58,
   "evaluation": {
     "ac_at_1": false,
     "ac_at_3": false,
@@ -19,7 +19,7 @@
       "frontend"
     ],
     "predicted_path_length": 1,
-    "elapsed_seconds": 31.87,
+    "elapsed_seconds": 28.58,
     "gt_fault": "loss"
   },
   "result": {
@@ -35,7 +35,7 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Frontend service experienced a CPU spike leading to elevated tail latency, effectively acting as the source of the observed performance degradation that manifested at the symptom frontend service.",
+        "cause": "Frontend service encountered resource contention (CPU spike and latency increase) leading to elevated tail latency and loss perception, without downstream dependency errors. Logs show strong frontend anomaly with no corroborating error signals in downstream services; topology supports frontend as the symptom origin with a plausible path but does not indicate a distinct downstream failure driving the frontend issue.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
@@ -43,7 +43,7 @@
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "All three sources converge on frontend as the primary source of degradation. The Log Agent identifies a strong frontend anomaly (CPU spike, latency elevation) with no direct error logs, suggesting a performance bottleneck rather than a stalled upstream dependency. The Topology Agent shows a direct, plausible propagation path from frontend to currencyservice, consistent with frontend being the origin of load/latency affecting downstream services; this supports a frontend-centric root cause within the given topology constraints. The TCB-RCA engine also marks frontend as the propagation source with a coherent propagation path (frontend), reinforcing that frontend is the most credible root cause given temporal/structural constraints. Since the symptom service is frontend, the root cause being frontend indicates the issue originated at the symptom service itself rather than an upstream dependency.",
+        "reasoning": "All three sources converge on frontend as the central issue: Log Agent identifies frontend CPU spike and latency as the primary fault driver with downstream services remaining functional; Topology Agent confirms frontend as the propagation anchor with a plausible frontend -> currencyservice path but no downstream error signals; TCB-RCA includes frontend as a propagation root. Despite TCB-RCA reporting a low numerical confidence, its structural constraint supports frontend as the root cause. Given the absence of observed downstream failures and the strongest log-based signal centered on frontend, frontend is the most credible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Frontend service experienced a CPU spike leading to elevated tail latency, effectively acting as the source of the observed performance degradation that manifested at the symptom frontend service.",
+      "cause": "Frontend service encountered resource contention (CPU spike and latency increase) leading to elevated tail latency and loss perception, without downstream dependency errors. Logs show strong frontend anomaly with no corroborating error signals in downstream services; topology supports frontend as the symptom origin with a plausible path but does not indicate a distinct downstream failure driving the frontend issue.",
       "confidence": 0.6,
       "explanation": "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca).",
       "cause_service": "frontend"
@@ -101,7 +101,7 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing loss fault'. No error logs found. LLM hypothesis: Frontend experienced a CPU spike leading to elevated tail latency, causing downstream services (e.g., productcatalogservice) to observe increased load/latency and volume but no direct errors.",
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing loss fault'. No error logs found. LLM hypothesis: Frontend experienced a CPU spike and latency increase, likely under high load or contention, driving increased requests to downstream services (notably productcatalogservice). This caused elevated tail latency in frontend without corresponding error logs, suggesting resource/throughput pressure rather than functional failures in dependencies.",
         "confidence": 0.65,
         "evidence": [
           {
@@ -576,19 +576,20 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Frontend experienced a CPU spike leading to elevated tail latency, causing downstream services (e.g., productcatalogservice) to observe increased load/latency and volume but no direct errors.",
+          "hypothesis": "Frontend experienced a CPU spike and latency increase, likely under high load or contention, driving increased requests to downstream services (notably productcatalogservice). This caused elevated tail latency in frontend without corresponding error logs, suggesting resource/throughput pressure rather than functional failures in dependencies.",
           "suspected_downstream": "frontend",
           "anomalous_services": [
-            "frontend"
+            "frontend",
+            "productcatalogservice"
           ],
-          "llm_reasoning": "Metric Summary shows a strong anomaly in frontend (cpu_z +8.2, p95_Δms +179ms, p99_Δms +428.3ms) while other services have no such CPU/memory spikes. Log-volume changes are present but do not show errors; downstream services exhibit negative volume_delta but no error spikes, consistent with frontend becoming the bottleneck. Without upstream error logs, frontend is the prime root-cause candidate.",
+          "llm_reasoning": "Metric summary shows a strong anomaly for frontend (cpu_z +8.2, p95_Δms +179 ms, p99_Δms +428.3 ms) while other services show no comparable metric faults. Productcatalogservice shows a small but notable volume delta (+1.00) indicating increased load downstream, but no error spikes. The combination points to frontend resource strain as the primary fault driver, with downstream calls behaving normally; there are no upstream error signals in the provided logs to indicate a downstream dependency failure propagating errors.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
-        "confidence": 0.796,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -600,7 +601,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptoms (frontend) depend on currencyservice per the topology. The log agent's suspected_downstream is currencyservice, and the graph shows frontend -> currencyservice, meaning a failure in currencyservice can propagate to frontend. No alternative structural paths exist from frontend to currencyservice in this topology, so the path is plausible and matches the hypothesis. The blast radius remains limited to frontend under this topology, with frontend being the primary critical service to monitor due to its high criticality and direct dependency on currencyservice."
+              "llm_reasoning": "The symptom service frontend directly depends on currencyservice, making frontend -> currencyservice a structurally plausible propagation path for a root cause in currencyservice to reach the symptom. There are no alternative upstream paths from a root cause to frontend given the topology, since frontend is a consumer of these services and not a downstream aggregator. The blast radius, under the current topology, remains constrained to frontend (the symptom) unless currencyservice or other downstream dependencies further fail; however, within the stated blast radius, frontend is the only affected service. The hypothesis is supported by the explicit dependency edge frontend -> currencyservice in the topology."
             }
           }
         ],
@@ -720,7 +721,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptoms (frontend) depend on currencyservice per the topology. The log agent's suspected_downstream is currencyservice, and the graph shows frontend -> currencyservice, meaning a failure in currencyservice can propagate to frontend. No alternative structural paths exist from frontend to currencyservice in this topology, so the path is plausible and matches the hypothesis. The blast radius remains limited to frontend under this topology, with frontend being the primary critical service to monitor due to its high criticality and direct dependency on currencyservice.",
+          "llm_reasoning": "The symptom service frontend directly depends on currencyservice, making frontend -> currencyservice a structurally plausible propagation path for a root cause in currencyservice to reach the symptom. There are no alternative upstream paths from a root cause to frontend given the topology, since frontend is a consumer of these services and not a downstream aggregator. The blast radius, under the current topology, remains constrained to frontend (the symptom) unless currencyservice or other downstream dependencies further fail; however, within the stated blast radius, frontend is the only affected service. The hypothesis is supported by the explicit dependency edge frontend -> currencyservice in the topology.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -730,8 +731,8 @@
         }
       }
     ],
-    "evidence_convergence": "strong_agreement",
-    "synthesis_reasoning": "The three sources unanimously point to frontend as the root cause. Log evidence shows a clear frontend performance anomaly without downstream error cascades, topology confirms frontend as the origin with a plausible single-path propagation to currencyservice, and the TCB-RCA aligns with frontend as the initial node. Given the symptom service is frontend, this implies the performance bottleneck originated within the symptom service itself rather than an upstream failure. No unobserved upstream failure is indicated, and no weak-evidence indications are present. Therefore, frontend is the most credible root cause, with high confidence.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "The Log Agent points to frontend resource pressure (CPU spike, increased p95/p99 latency) with no error signals in downstream services, suggesting a resource/throughput problem at the frontend rather than a functional failure deeper in the dependency chain. The Topology Agent supports frontend as the initial affected node with a structurally plausible edge to currencyservice, reinforcing that the frontend is the likely causal anchor rather than a downstream outage causing the symptom. The TCB-RCA result includes frontend as a candidate and aligns with the propagation constraint, but its zero confidence for the frontend anomaly indicates weaker internal scoring; still, its topology-aligned propagation path does not contradict frontend being the root. Considering stronger and more consistent signals from logs and topology, frontend is selected as the root cause, with propagation path limited to the symptom service (frontend) as the most coherent narrative. If needed, future evidence showing a downstream failure in currencyservice would prompt revisiting the root cause, but current data favors frontend resource contention as the primary driver.",
     "tcb_rca_reference": {
       "candidates": [
         {

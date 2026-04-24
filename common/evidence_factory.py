@@ -70,46 +70,65 @@ def _severity_from_cpu_zscore(z: Optional[float]) -> float:
 
     실데이터 관찰: CPU fault 시 z가 100~300 수준으로 튐. 정상 노이즈는
     z < 3 수준. scale=20으로 두면 z=20에서 sev≈0.73, z=50에서 sev≈0.92.
+
+    방향성 (Phase 3b fix): **양의 z만** severity를 받는다. 음의 z는
+    "CPU가 baseline보다 오히려 낮다"는 뜻이고, 이것은 fault가 아니다
+    (해당 서비스가 downstream 문제로 덜 일하게 된 증상일 수 있음).
     """
-    if z is None:
+    if z is None or z <= 0:
         return 0.0
-    return _sigmoid_severity(abs(z), scale=20.0)
+    return _sigmoid_severity(z, scale=20.0)
 
 
 def _severity_from_mem_jump(ratio: Optional[float]) -> float:
-    """Memory jump ratio (0.0 = flat, 1.0 = 두 배) → severity."""
-    if ratio is None:
+    """Memory jump ratio → severity. 오직 양의 ratio(증가)만 이상으로 본다.
+
+    음의 ratio는 메모리 해제 / 서비스 trim의 정상 현상일 수 있다.
+    """
+    if ratio is None or ratio <= 0:
         return 0.0
-    # 0.3 이상이면 강한 신호 (실험적으로). scale=0.3.
-    return _sigmoid_severity(abs(ratio), scale=0.3)
+    return _sigmoid_severity(ratio, scale=0.3)
 
 
 def _severity_from_latency_delta(delta_ms: Optional[float]) -> float:
-    """p95 / p99 latency delta (ms) → severity."""
-    if delta_ms is None:
+    """p95 / p99 latency delta (ms) → severity.
+
+    **양의 delta만** severity를 받는다 (느려진 경우). 음의 delta는
+    "latency가 오히려 빨라짐"이고, 이는 증상이 아니다.
+
+    이 수정은 Phase 3a shadow 관찰에서 발견된 hub-service bias의
+    직접적 해결이다: downstream이 느려져서 호출량이 줄면 hub의
+    latency는 오히려 감소하는데, 이전에는 abs()로 severity를 줘서
+    hub가 evidence 상위에 올라가는 잘못된 동작을 했다.
+    """
+    if delta_ms is None or delta_ms <= 0:
         return 0.0
-    return _sigmoid_severity(abs(delta_ms), scale=100.0)
+    return _sigmoid_severity(delta_ms, scale=100.0)
 
 
 def _severity_from_drop_count(cnt: Optional[float]) -> float:
-    """packet drop 누적 수 → severity. 0이면 0, 그 외는 점증."""
+    """packet drop 누적 수 → severity. 오직 양수(실제 drop 발생)만."""
     if cnt is None or cnt <= 0:
         return 0.0
     return _sigmoid_severity(float(cnt), scale=100.0)
 
 
 def _severity_from_error_ratio(r: Optional[float]) -> float:
-    """error_ratio [0, 1] → severity. scale=0.1 (10% 에러면 sev≈0.73)."""
-    if r is None:
+    """error_ratio [0, 1] → severity. 오직 양수만.
+
+    원래 error_ratio는 0 이상만 가능하지만, 방어적으로 guard.
+    """
+    if r is None or r <= 0:
         return 0.0
-    return _sigmoid_severity(abs(r), scale=0.1)
+    return _sigmoid_severity(r, scale=0.1)
 
 
 def _severity_from_volume_delta(delta: Optional[float]) -> float:
-    """log volume delta (-1, +∞) → severity.
+    """log volume delta → severity.
 
-    주의: v6 regression 경험을 반영하여 boosted severity 부여를 피한다.
-    volume_delta는 noisy한 신호이므로 상한 0.6을 둔다.
+    **volume_delta는 예외다** — 양수(급증)와 음수(급감) 모두 이상 신호다.
+    Crash된 서비스는 로그가 급감하고, retry storm은 급증한다. 따라서
+    abs()를 유지한다. 단 상한 0.6으로 noisy signal을 견제.
     """
     if delta is None:
         return 0.0

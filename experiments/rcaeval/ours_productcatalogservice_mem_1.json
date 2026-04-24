@@ -4,7 +4,7 @@
   "case": "productcatalogservice_mem_1",
   "gt_service": "productcatalogservice",
   "gt_fault": "mem",
-  "elapsed_seconds": 31.63,
+  "elapsed_seconds": 28.4,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 31.63,
+    "elapsed_seconds": 28.4,
     "gt_fault": "mem"
   },
   "result": {
@@ -36,23 +36,40 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Productcatalogservice is experiencing memory and latency faults (high mem_jump, CPU spike, elevated p95/p99), causing downstream calls to frontend to suffer and yield degraded frontend performance.",
+        "cause": "Product catalog service is under memory and CPU stress, causing high tail latency and downstream timeouts/queuing that affect the frontend when it calls productcatalogservice.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "productcatalogservice",
-        "reasoning": "All sources except the TCB-RCA point to productcatalogservice as the upstream fault. Logs show MEM/latency anomalies in productcatalogservice and frontend exhibits latency symptoms consistent with dependency on a failing productcatalogservice. Topology confirms a direct frontend -> productcatalogservice path, making this structurally plausible. The TCB-RCA rank places frontend as the root, but given the stronger alignment between Log and Topology, and the absence of timing-based evidence supporting frontend as the initial fault, productcatalogservice is the more credible root cause. Therefore, productcatalogservice is prioritized as the primary root cause with high confidence.",
+        "reasoning": "Strong evidence from Log Agent indicates clear performance degradation in productcatalogservice (CPU/mem spikes, high p95/p99 latency) correlating with frontend latency. Topology confirms a direct frontend -> productcatalogservice path, making this a structurally plausible root cause. TCB-RCA internally did not flag productcatalogservice as the root (it labeled frontend as the anomaly) but given the magnitude and locality of the metrics on productcatalogservice, the log-driven signal takes precedence for root cause determination. The unobserved/weak-evidence caveats are not triggered here since productcatalogservice shows concrete anomalies with a direct impact on the symptom path.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend is the symptom-bearing service that experiences increased latency due to downstream calls to productcatalogservice; as a result, frontend’s latency is elevated and observed as the incident symptom.",
+        "confidence": 0.5,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "Frontend is the symptom service and shows latency amplification as it propagates downstream delays from productcatalogservice. While the topology supports a direct path and the TCB-RCA algorithm ranks frontend with zero anomalies, the convergence of logs (frontend latency) with a strong downstream issue suggests frontend as a key propagation node rather than the root cause. This candidate is kept as a secondary root-cause candidate to reflect its role in the propagation path rather than an independent root cause.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "Productcatalogservice is experiencing memory and latency faults (high mem_jump, CPU spike, elevated p95/p99), causing downstream calls to frontend to suffer and yield degraded frontend performance.",
+      "cause": "Product catalog service is under memory and CPU stress, causing high tail latency and downstream timeouts/queuing that affect the frontend when it calls productcatalogservice.",
       "confidence": 0.6,
       "explanation": "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "productcatalogservice"
@@ -84,7 +101,8 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -103,8 +121,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing mem fault'. No error logs found. LLM hypothesis: Productcatalogservice is experiencing memory and latency faults (high mem_jump, CPU spike, elevated p95/p99) causing downstream frontend calls to suffer, leading to degraded frontend performance and increased latency.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing mem fault'. No error logs found. LLM hypothesis: Product catalog service is experiencing memory and CPU stress leading to increased tail latency; frontend downstream calls to productcatalogservice time out or queue, amplifying latency across the frontend path.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -583,13 +601,13 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Productcatalogservice is experiencing memory and latency faults (high mem_jump, CPU spike, elevated p95/p99) causing downstream frontend calls to suffer, leading to degraded frontend performance and increased latency.",
+          "hypothesis": "Product catalog service is experiencing memory and CPU stress leading to increased tail latency; frontend downstream calls to productcatalogservice time out or queue, amplifying latency across the frontend path.",
           "suspected_downstream": "productcatalogservice",
           "anomalous_services": [
             "productcatalogservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric signals show a strong anomaly in productcatalogservice (mem_jump > 0.3, cpu_z > 30, large p95/p99 deltas), which is the deepest root-cause candidate among observed services. Frontend also shows latency spikes and elevated tail latency, consistent with relying on a failing productcatalogservice. Other services show no comparable metric spikes. Upstream/downstream pattern indicates frontend depends on productcatalogservice, making it the most plausible primary fault leading to cascading symptoms.",
+          "llm_reasoning": "Metric summary shows strong anomalies in productcatalogservice (cpu_z +50.1, mem_jump +12.07, p95_Δms +30, p99_Δms +171.3, p99 latency spike). Frontend also shows significant latency increases (p95/p99 spikes) but not as extreme as productcatalogservice. Upstream/downstream pattern indicates frontend depends on productcatalogservice; the deepest root cause is the metric-anomalous service with direct impact on downstream callers.",
           "referenced_upstreams": {}
         }
       },
@@ -608,7 +626,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "In the topology, frontend directly depends on productcatalogservice. A fault in productcatalogservice could propagate to frontend, matching the suspected_downstream hypothesis. There are no evident alternate dependency paths from the root to the symptom within the given graph (no indirect routes from productcatalogservice to frontend beyond the direct dependency). The blast radius, given the provided data, includes primarily the symptom service (frontend); monitoring should prioritize frontend for failure signals, with awareness that downstream service health (productcatalogservice) is the source in this model."
+              "llm_reasoning": "The symptom service frontend directly depends on productcatalogservice. A fault in productcatalogservice can cause frontend to fail when it attempts to fetch data, making the path frontend -> productcatalogservice structurally plausible. Other dependencies exist (cartservice, currencyservice, etc.), but the immediate direct call path from frontend to productcatalogservice aligns with the log agent's suspected downstream. The blast radius remains limited to frontend given current topology, unless downstream failures cascade further through the dependency graph."
             }
           }
         ],
@@ -728,7 +746,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "In the topology, frontend directly depends on productcatalogservice. A fault in productcatalogservice could propagate to frontend, matching the suspected_downstream hypothesis. There are no evident alternate dependency paths from the root to the symptom within the given graph (no indirect routes from productcatalogservice to frontend beyond the direct dependency). The blast radius, given the provided data, includes primarily the symptom service (frontend); monitoring should prioritize frontend for failure signals, with awareness that downstream service health (productcatalogservice) is the source in this model.",
+          "llm_reasoning": "The symptom service frontend directly depends on productcatalogservice. A fault in productcatalogservice can cause frontend to fail when it attempts to fetch data, making the path frontend -> productcatalogservice structurally plausible. Other dependencies exist (cartservice, currencyservice, etc.), but the immediate direct call path from frontend to productcatalogservice aligns with the log agent's suspected downstream. The blast radius remains limited to frontend given current topology, unless downstream failures cascade further through the dependency graph.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -738,8 +756,8 @@
         }
       }
     ],
-    "evidence_convergence": "strong_agreement",
-    "synthesis_reasoning": "The Log Agent identifies productcatalogservice as having significant memory/latency anomalies and notes downstream frontend latency spikes, while the Topology Agent confirms a direct frontend dependency on productcatalogservice with plausible propagation. The TCB-RCA result conflicts by ranking frontend as the root, but lacks timing-based support and is overridden by the stronger, corroborated signals from Log and Topology. The UNOBSERVED root-cause rule does not apply here since productcatalogservice exhibits observable logs. Given the convergence on the upstream fault and the direct propagation path, productcatalogservice is the most credible root cause with high confidence.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "The strongest signal comes from the Log Agent, which identifies productcatalogservice as having substantial memory/CPU stress with large p99 spikes and downstream effects on the frontend. The Topology Agent corroborates a direct frontend -> productcatalogservice path, making the propagation path structurally plausible. The TCB-RCA result conflicts with the log-driven root-cause signal (it marks frontend as the root with zero temporal anomaly), but within the given constraints we privilege direct performance anomalies observed in the downstream service and their impact on the symptom path. Therefore, the primary root cause candidate is productcatalogservice, with frontend as a consequential propagation node. If future data shows logs or metrics from productcatalogservice stabilize while frontend remains degraded, reevaluation would be warranted.",
     "tcb_rca_reference": {
       "candidates": [
         {
