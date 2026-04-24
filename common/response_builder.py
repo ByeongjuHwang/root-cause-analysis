@@ -416,6 +416,166 @@ def build_rca_agent_response(
 
 
 # ---------------------------------------------------------------------------
+# Verifier Agent → AgentResponse
+# ---------------------------------------------------------------------------
+
+def build_verifier_agent_response(
+    legacy_result: Dict[str, Any],
+    request_id: str,
+    upstream_rca_response: Optional[AgentResponse] = None,
+    consistency_by_service: Optional[Dict[str, ConsistencyChecks]] = None,
+) -> AgentResponse:
+    """Package Verifier's legacy dict into a structured AgentResponse.
+
+    Unlike other agents, Verifier always produces consistency_checks at the
+    per-candidate level. We aggregate into AgentResponse.consistency_checks
+    using the *top candidate's* per-dimension result (common pattern for the
+    schema's single-field consistency_checks).
+
+    Parameters
+    ----------
+    legacy_result
+        The dict returned by VerifierService.verify() — contains
+        revised_root_cause_candidates, verification_notes, etc.
+    request_id
+        Incident ID.
+    upstream_rca_response
+        If provided, Verifier inherits evidence_collection from upstream
+        RCA (which in turn inherited from Log Agent). This is how Verifier's
+        AgentResponse gets evidence_ids on its candidates.
+    consistency_by_service
+        Per-service ConsistencyChecks computed by the Verifier during its
+        own pipeline. Key is lowercase service name. This is the core
+        evidence-aware result — we cannot recompute it here (needs all the
+        per-candidate signals); Verifier computes and passes in.
+    """
+    incident_id = request_id or legacy_result.get("incident_id") or "UNKNOWN"
+
+    # Evidence collection — inherit from upstream RCA if present
+    if upstream_rca_response is not None:
+        collection = upstream_rca_response.evidence_collection
+    else:
+        collection = EvidenceCollection()
+
+    raw_candidates = legacy_result.get("revised_root_cause_candidates") or []
+    consistency_by_service = consistency_by_service or {}
+
+    # Assumptions — Verifier's own config
+    assumptions: List[str] = [
+        "verifier_mode=hybrid (5-signal + consistency_checks)",
+    ]
+    if legacy_result.get("verdict"):
+        assumptions.append(f"verdict={legacy_result['verdict']}")
+
+    # Rejection info: a meta-hint for downstream
+    rejected_count = legacy_result.get("rejected_candidates_count", 0)
+    if rejected_count:
+        assumptions.append(f"rejected_during_verify={rejected_count}")
+
+    # missing_evidence = modalities absent from the inherited collection
+    modalities_present = set(collection.modalities_present())
+    missing: List[str] = []
+    if collection and len(collection) > 0:
+        if "log" not in modalities_present:
+            missing.append("log_evidence_units")
+        if "metric" not in modalities_present:
+            missing.append("metric_evidence_units")
+        if "trace" not in modalities_present:
+            missing.append("trace_evidence_units")
+
+    candidates: List[Candidate] = []
+    for c in raw_candidates:
+        if not isinstance(c, dict):
+            continue
+        svc = (c.get("cause_service") or "").strip()
+        if not svc:
+            # Free-text candidate — skip for AgentResponse (it needs structured service)
+            continue
+        conf = _clip_confidence(c.get("confidence"))
+        reasoning = (c.get("reasoning") or "")[:300]
+
+        supporting_ids = [u.evidence_id for u in collection.by_service(svc)]
+
+        # Failure mode — inherit from upstream if available
+        failure_mode: Optional[FailureMode] = None
+        if upstream_rca_response is not None:
+            for uc in upstream_rca_response.candidates:
+                if uc.service.lower() == svc.lower():
+                    failure_mode = uc.failure_mode
+                    break
+        if failure_mode is None:
+            strongest = collection.strongest_by_service(svc)
+            failure_mode = _infer_failure_mode(
+                strongest.anomaly_type if strongest else None
+            )
+
+        # Pull per-candidate ConsistencyChecks if the Verifier computed one
+        per_cand_cc = consistency_by_service.get(svc.lower())
+
+        # Propagation path if present (v8 signals field carries topology)
+        topology_path = None
+        if isinstance(c.get("propagation_path"), list):
+            topology_path = c["propagation_path"]
+
+        # Build per-candidate assumptions — include consistency status as hints
+        cand_assumps = list(assumptions)
+        if per_cand_cc is not None:
+            dims = []
+            for dim in ("temporal", "topological", "modality", "counter_evidence"):
+                val = getattr(per_cand_cc, dim)
+                if val is True:
+                    dims.append(f"{dim}=OK")
+                elif val is False:
+                    dims.append(f"{dim}=FAIL")
+                else:
+                    dims.append(f"{dim}=NA")
+            cand_assumps.append("consistency: " + ", ".join(dims))
+
+        # Verifier-specific hint: rank after re-scoring
+        rank = c.get("rank")
+        if rank is not None:
+            cand_assumps.append(f"verifier_rank={rank}")
+
+        candidates.append(Candidate(
+            service=svc,
+            confidence=conf,
+            supporting_evidence=supporting_ids,
+            assumptions=cand_assumps,
+            missing_evidence=list(missing),
+            reasoning=reasoning,
+            topology_path=topology_path,
+            failure_mode=failure_mode,
+        ))
+
+    # Top-level ConsistencyChecks — use the top candidate's checks.
+    # If Verifier didn't compute any (e.g. all candidates lacked cause_service),
+    # leave as None (AgentResponse schema permits).
+    top_cc: Optional[ConsistencyChecks] = None
+    if candidates:
+        top_svc = candidates[0].service.lower()
+        top_cc = consistency_by_service.get(top_svc)
+
+    # Completeness uses evidence_collection coverage of the accepted candidates
+    cand_services = [c.service for c in candidates[:3]]
+    score = (
+        completeness_score(collection, cand_services)
+        if cand_services and len(collection) > 0
+        else _clip_confidence(legacy_result.get("final_confidence"))
+    )
+
+    return AgentResponse(
+        agent_name="verifier_agent",
+        request_id=incident_id,
+        candidates=candidates,
+        evidence_collection=collection,
+        completeness_score=score,
+        consistency_checks=top_cc,
+        recommended_next_actions=[],
+        reasoning=(legacy_result.get("explanation") or "")[:600],
+    )
+
+
+# ---------------------------------------------------------------------------
 # Attach helper — write AgentResponse into a legacy dict
 # ---------------------------------------------------------------------------
 
@@ -447,4 +607,5 @@ __all__ = [
     "build_log_agent_response",
     "build_rca_agent_response",
     "build_topology_agent_response",
+    "build_verifier_agent_response",
 ]

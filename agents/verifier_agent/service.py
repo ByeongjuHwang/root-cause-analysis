@@ -21,7 +21,11 @@ Option B 설계 (from thesis framework design):
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+from common.a2a_contract import AgentResponse, ConsistencyChecks
+from common.evidence import EvidenceCollection, EvidenceUnit
 
 
 # =============================================================================
@@ -159,6 +163,171 @@ def _compute_modality_count(signals: Dict[str, bool]) -> int:
         + int(signals.get("has_trace_support", False))
         + int(signals.get("has_metric_shift", False))
     )
+
+
+# =============================================================================
+# Phase 4c: 4-dimension ConsistencyChecks
+# =============================================================================
+
+# Threshold — evidence severity below this is treated as "low enough to be a
+# counter-signal" (i.e., a sign that the service is actually healthy on that
+# modality). Tuned so that genuinely weak anomalies (near noise) are treated
+# as counter-evidence rather than supporting evidence.
+COUNTER_EVIDENCE_SEVERITY_THRESHOLD = 0.25
+
+
+def _check_counter_evidence(
+    candidate_service: str,
+    evidence_collection: Optional[EvidenceCollection],
+) -> Optional[bool]:
+    """Option A: Does the candidate have low-severity evidence (possible
+    counter-signal)?
+
+    Return values follow ConsistencyChecks convention:
+      True  : No counter-evidence found → candidate is consistent
+      False : Counter-evidence exists   → candidate is likely NOT the cause
+      None  : Cannot determine (no evidence for this service at all — the
+              Verifier should flag this as missing_evidence, not False)
+
+    Logic
+    -----
+    If the candidate has ANY evidence unit at all on the service:
+      - Pick the strongest (max severity) evidence.
+      - If strongest severity >= threshold → candidate is meaningfully
+        supported → True (no counter-evidence).
+      - If strongest severity < threshold → every signal we have is weak,
+        which itself is a counter-indicator → False.
+    If the candidate has NO evidence at all on the service:
+      - Return None (cannot judge). The Verifier will mark this as missing.
+    """
+    if evidence_collection is None or len(evidence_collection) == 0:
+        return None
+
+    units = evidence_collection.by_service(candidate_service)
+    if not units:
+        return None
+
+    max_sev = max(u.severity for u in units)
+    # If strongest supporting signal is itself weak, that's counter-evidence.
+    if max_sev < COUNTER_EVIDENCE_SEVERITY_THRESHOLD:
+        return False
+    return True
+
+
+def _compute_consistency_checks(
+    candidate_service: Optional[str],
+    signals: Dict[str, bool],
+    modality_count: int,
+    evidence_collection: Optional[EvidenceCollection],
+) -> ConsistencyChecks:
+    """Map the existing 5-signal results into a 4-dim ConsistencyChecks.
+
+    Mapping
+    -------
+    temporal          : is_temporally_prior (direct)
+    topological       : has_topology_path (direct)
+    modality          : modality_count >= 2 (cross-context requires 2+ modalities)
+    counter_evidence  : _check_counter_evidence() — fully new dimension
+    """
+    if not candidate_service:
+        # Free-text candidate (deterministic baseline) — can't check.
+        return ConsistencyChecks()
+
+    # temporal: we default to True in the signals dict; only set False when
+    # scoring_rules detected a violation. Preserve the 3-value semantics:
+    # if we had evidence but no temporal info, call it None (skipped).
+    # In practice signals always sets this to True or False, so we pass it
+    # through directly.
+    temporal: Optional[bool] = bool(signals.get("is_temporally_prior", True))
+
+    # topological: True if candidate is on the propagation path or is a dep.
+    # If we cannot determine (signals missing), None.
+    if "has_topology_path" in signals:
+        topological: Optional[bool] = bool(signals["has_topology_path"])
+    else:
+        topological = None
+
+    # modality: cross-context is satisfied if the candidate is supported by
+    # at least 2 modalities (log/trace/metric). Single modality is too thin
+    # for cross-context confirmation per paper Section 5.
+    # If modality_count == 0 → not checkable; our R2 already drops these,
+    # but if we reach here it means the hard drop was skipped.
+    if modality_count == 0:
+        modality: Optional[bool] = None
+    else:
+        modality = modality_count >= 2
+
+    # counter_evidence: fully new computation from evidence collection
+    counter_ev = _check_counter_evidence(candidate_service, evidence_collection)
+
+    return ConsistencyChecks(
+        temporal=temporal,
+        topological=topological,
+        modality=modality,
+        counter_evidence=counter_ev,
+    )
+
+
+def _extract_evidence_collection_from_agents(
+    log_result: Dict[str, Any],
+    rca_result: Dict[str, Any],
+) -> Optional[EvidenceCollection]:
+    """Recover an EvidenceCollection from agent results.
+
+    Preference order:
+      1. RCA Agent's _agent_response.evidence_collection (Phase 4b attached)
+      2. Log Agent's _agent_response.evidence_collection
+      3. Log Agent's evidence_collection (Phase 3b plumbed, dict form)
+      4. None
+
+    This is the dual-read pattern — we use the Phase 4b contract when
+    available, but gracefully fall back to Phase 3b's legacy payload.
+    """
+    # Try Phase 4b contract path first
+    for src in (rca_result, log_result):
+        if not isinstance(src, dict):
+            continue
+        contract = src.get("_agent_response")
+        if isinstance(contract, dict):
+            ev_payload = contract.get("evidence_collection")
+            if ev_payload and ev_payload.get("units"):
+                try:
+                    units = [
+                        EvidenceUnit.model_validate(u)
+                        for u in ev_payload["units"]
+                    ]
+                    return EvidenceCollection(units=units)
+                except Exception:
+                    pass
+
+    # Fallback: Phase 3b payload on Log Agent legacy dict
+    ev_payload = log_result.get("evidence_collection") if isinstance(log_result, dict) else None
+    if isinstance(ev_payload, dict) and ev_payload.get("units"):
+        try:
+            units = [
+                EvidenceUnit.model_validate(u)
+                for u in ev_payload["units"]
+            ]
+            return EvidenceCollection(units=units)
+        except Exception:
+            pass
+
+    return None
+
+
+def _extract_upstream_rca_response(
+    rca_result: Dict[str, Any],
+) -> Optional[AgentResponse]:
+    """Reconstitute upstream RCA Agent's AgentResponse when Phase 4b was active."""
+    if not isinstance(rca_result, dict):
+        return None
+    contract = rca_result.get("_agent_response")
+    if not isinstance(contract, dict):
+        return None
+    try:
+        return AgentResponse.model_validate(contract)
+    except Exception:
+        return None
 
 
 # =============================================================================
@@ -303,6 +472,29 @@ class VerifierService:
         if not isinstance(anomalous_services, list):
             anomalous_services = []
 
+        # =====================================================
+        # Phase 4c: Evidence Collection + ConsistencyChecks setup
+        # =====================================================
+        # Controlled by VERIFIER_CONSISTENCY_MODE env var:
+        #   off     : skip entirely (legacy v8 behavior only)
+        #   augment : compute consistency_checks and attach to each candidate,
+        #             but do NOT drop candidates based on consistency alone.
+        #             (safe default: rely on existing v8 rules for drops)
+        #   strict  : in addition, drop candidates whose consistency_checks
+        #             show any FAIL (temporal=False, topological=False,
+        #             modality=False, or counter_evidence=False).
+        consistency_mode = os.getenv("VERIFIER_CONSISTENCY_MODE", "off").lower()
+        evidence_collection = None
+        upstream_rca_response = None
+        if consistency_mode in ("augment", "strict"):
+            evidence_collection = _extract_evidence_collection_from_agents(
+                log_result, rca_result,
+            )
+            upstream_rca_response = _extract_upstream_rca_response(rca_result)
+
+        # per-service ConsistencyChecks, populated below during the loop
+        consistency_by_service: Dict[str, ConsistencyChecks] = {}
+
         verification_notes: List[str] = []
         revised_candidates: List[Dict[str, Any]] = []
         rejected_candidates: List[Dict[str, Any]] = []
@@ -374,6 +566,39 @@ class VerifierService:
                 rejected_candidates.append({**c, "_verdict": "dropped-no-evidence",
                                             "_signals": signals})
                 continue
+
+            # =====================================================
+            # Phase 4c: ConsistencyChecks computation (per candidate)
+            # =====================================================
+            # This is the paper's 4-dim verification: temporal, topological,
+            # modality (cross-context), counter_evidence.
+            # We compute it only when VERIFIER_CONSISTENCY_MODE is augment/strict.
+            # In "strict" mode, FAIL on any dimension is an additional drop.
+            consistency: Optional[ConsistencyChecks] = None
+            if cause_service and consistency_mode in ("augment", "strict"):
+                consistency = _compute_consistency_checks(
+                    candidate_service=cause_service,
+                    signals=signals,
+                    modality_count=modality_count,
+                    evidence_collection=evidence_collection,
+                )
+                consistency_by_service[str(cause_service).strip().lower()] = consistency
+
+                # In strict mode, apply the 4-dim checks as additional HARD drops.
+                if consistency_mode == "strict":
+                    failed_dims = consistency.failed_dimensions()
+                    if failed_dims:
+                        verification_notes.append(
+                            f"[DROPPED-STRICT] '{cause_service}' failed consistency "
+                            f"dimensions: {failed_dims}"
+                        )
+                        rejected_candidates.append({
+                            **c,
+                            "_verdict": f"dropped-consistency-{'+'.join(failed_dims)}",
+                            "_signals": signals,
+                            "_consistency": consistency.model_dump(),
+                        })
+                        continue
 
             # =====================================================
             # Stage 2: Supporting evidence 합의 카운트 (LLM 버전)
@@ -543,6 +768,7 @@ class VerifierService:
                 "_agreement_count": agreement_count,
                 "_signals": signals if cause_service else None,
                 "_modality_count": modality_count if cause_service else None,
+                "_consistency": consistency.model_dump() if consistency else None,
             })
 
         revised_candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
@@ -560,10 +786,17 @@ class VerifierService:
             # underscore prefix to signal they are intentional outputs.
             sig = c.pop("_signals", None)
             mc = c.pop("_modality_count", None)
+            cc = c.pop("_consistency", None)
             if sig is not None:
                 c["verification_signals"] = sig
             if mc is not None:
                 c["modality_count"] = mc
+            if cc is not None:
+                # Phase 4c: expose per-candidate consistency_checks for the
+                # paper's 4-dim story (temporal / topological / modality /
+                # counter_evidence). Downstream tooling (Orchestrator,
+                # analysis scripts) can read this field.
+                c["consistency_checks"] = cc
 
         if not revised_candidates:
             if rejected_candidates:
@@ -582,7 +815,7 @@ class VerifierService:
             else "No verification note available."
         )
 
-        return {
+        result = {
             "incident_id": incident_id,
             "service": service,
             "verdict": verdict,
@@ -592,6 +825,32 @@ class VerifierService:
             "explanation": explanation,
             "rejected_candidates_count": len(rejected_candidates),
         }
+
+        # =====================================================
+        # Phase 4c: Attach AgentResponse (dual output)
+        # =====================================================
+        # Under A2A_CONTRACT_MODE != off, serialise the verifier's findings
+        # into a structured AgentResponse and embed as _agent_response.
+        # consistency_by_service was populated during the per-candidate loop
+        # (only when VERIFIER_CONSISTENCY_MODE is augment/strict).
+        if os.getenv("A2A_CONTRACT_MODE", "off") != "off":
+            try:
+                from common.response_builder import (
+                    build_verifier_agent_response,
+                    attach_agent_response,
+                )
+                verifier_resp = build_verifier_agent_response(
+                    legacy_result=result,
+                    request_id=incident_id or "UNKNOWN",
+                    upstream_rca_response=upstream_rca_response,
+                    consistency_by_service=consistency_by_service,
+                )
+                attach_agent_response(result, verifier_resp)
+            except Exception:
+                # Never break the Verifier on contract build failure
+                pass
+
+        return result
 
     def _derive_final_verdict(
         self,
