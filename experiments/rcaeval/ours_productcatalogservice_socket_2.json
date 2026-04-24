@@ -4,7 +4,7 @@
   "case": "productcatalogservice_socket_2",
   "gt_service": "productcatalogservice",
   "gt_fault": "socket",
-  "elapsed_seconds": 24.51,
+  "elapsed_seconds": 30.54,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 24.51,
+    "elapsed_seconds": 30.54,
     "gt_fault": "socket"
   },
   "result": {
@@ -36,14 +36,30 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Product catalog service is experiencing CPU spikes and latency increases (high cpu_z, mem_jump, p95/p99 Δms), acting as the primary bottleneck that propagates delays to downstream services and to the frontend.",
+        "cause": "Product Catalog Service experiencing resource saturation (memory/CPU) leading to increased latency and socket faults, propagating degradation to dependent frontend.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "productcatalogservice",
-        "reasoning": "All three sources converge on productcatalogservice as the primary upstream perturbation: Log Agent identifies the deepest metric anomalies in productcatalogservice with downstream symptoms in checkout and frontend; Topology shows a direct frontend <- productcatalogservice relationship, making a plausible propagation path; TCB-RCA fails to flag productcatalogservice (it ranks frontend with zero anomalies), but given the observed metrics and the topology-supported route from root to symptom, productcatalogservice remains the strongest root-cause candidate despite the TCB-RCA inconsistency.",
+        "reasoning": "All three sources converge on productcatalogservice as the likely upstream trigger. Log Agent highlights heavy resource metrics (mem_jump, cpu_z) and downstream latency/sockets in frontend. Topology supports a root-to-symptom path through frontend via productcatalogservice, despite noting a directionality nuance. TCB-RCA finds no strong temporal anomaly for a root from its backtracking (rank 1 shows frontend unknown), indicating weaker timing evidence for a root at frontend. Given the stronger observable metrics and structural plausibility, productcatalogservice is the most credible root candidate.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": false
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend shows latency degradation and socket faults, but is primarily a symptom of upstream issues rather than a root cause; included as a plausible but weaker candidate due to TCB-RCA lack of temporal root signals and causal placement in topology.",
+        "confidence": 0.36,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "Frontend is the observed symptom service with degraded latency and sockets. Log Agent identifies frontend latency as downstream of productcatalogservice. Topology acknowledges direct dependency from frontend to productcatalogservice, making frontend unlikely to be the primary root. TCB-RCA does not identify a strong root at frontend. However, given it is the immediate service affected, it remains a secondary consideration for propagation paths.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +68,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Product catalog service is experiencing CPU spikes and latency increases (high cpu_z, mem_jump, p95/p99 Δms), acting as the primary bottleneck that propagates delays to downstream services and to the frontend.",
+      "cause": "Product Catalog Service experiencing resource saturation (memory/CPU) leading to increased latency and socket faults, propagating degradation to dependent frontend.",
       "confidence": 0.6,
       "explanation": "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "productcatalogservice"
@@ -84,7 +100,8 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' confirmed by 2/3 sources (log, topology)."
       ]
     },
     "evidence_summary": {
@@ -103,8 +120,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing socket fault'. No error logs found. LLM hypothesis: Product catalog service is experiencing CPU and latency spikes, becoming a bottleneck that propagates delays to frontend and downstream services (checkout), manifesting as elevated tail latencies and throughput strain.",
-        "confidence": 0.68,
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing socket fault'. No error logs found. LLM hypothesis: Product catalog service is experiencing resource saturation (memory/CPU) causing latency that propagates to dependent services, notably frontend, resulting in degraded latency and socket faults.",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "log",
@@ -334,6 +351,51 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "received ad request (context_words=[kitchen])",
+            "timestamp": "2024-01-17T16:31:17.276Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[footwear])",
+            "timestamp": "2024-01-17T16:31:17.512Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[])",
+            "timestamp": "2024-01-17T16:31:17.535Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[GetQuote] received request",
             "timestamp": "2024-01-17T16:31:17.563Z",
             "level": "INFO",
@@ -355,6 +417,36 @@
             "trace_id": null,
             "metadata": {
               "service": "shippingservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[])",
+            "timestamp": "2024-01-17T16:31:17.827Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[footwear])",
+            "timestamp": "2024-01-17T16:31:17.852Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -559,6 +651,46 @@
           {
             "type": "metric",
             "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+223ms",
+            "timestamp": "2024-01-17T16:39:17.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 12.46,
+              "cpu_max": 0.2422,
+              "mem_jump_ratio": 0.046,
+              "p95_delta_ms": 26.47,
+              "p99_delta_ms": 223.04,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+72ms",
+            "timestamp": "2024-01-17T16:39:17.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "cpu_spike_zscore": 7.51,
+              "cpu_max": 2.4564,
+              "mem_jump_ratio": 0.082,
+              "p95_delta_ms": 36.31,
+              "p99_delta_ms": 72.43,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 28
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
             "content": "CPU spike z=29.8 (max=4.27); Memory jump +0.99",
             "timestamp": "2024-01-17T16:39:17.000Z",
             "level": "INFO",
@@ -578,20 +710,21 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Product catalog service is experiencing CPU and latency spikes, becoming a bottleneck that propagates delays to frontend and downstream services (checkout), manifesting as elevated tail latencies and throughput strain.",
+          "hypothesis": "Product catalog service is experiencing resource saturation (memory/CPU) causing latency that propagates to dependent services, notably frontend, resulting in degraded latency and socket faults.",
           "suspected_downstream": "productcatalogservice",
           "anomalous_services": [
             "productcatalogservice",
+            "frontend",
             "checkoutservice",
-            "frontend"
+            "adservice"
           ],
-          "llm_reasoning": "Metric signals show strong anomalies in productcatalogservice (cpu_z 29.8, mem_jump 0.99, p95_Δms 9.7, p99_Δms 11.6), which are the most extreme across the board. Checkoutservice also shows severe tail latency (p99_Δms 223.0, p95_Δms 26.5) and frontend exhibits notable latency increases, suggesting downstream impact. In absence of explicit upstream error logs, the deepest root-cause candidate with strongest metric disruption is productcatalogservice, likely causing downstream strain. Volume_delta and error rates do not point to other services as primary causes, and redis/adservice show no metric anomalies. The earliest and most pronounced metric anomaly corresponds to productcatalogservice, followed by downstream symptoms in checkoutservice and frontend. ",
+          "llm_reasoning": "Metric signals show the strongest anomaly in productcatalogservice (mem_jump 0.99, cpu_z 29.8) with high tail latency indicators (p95/p99) and socket activity. Frontend also shows latency degradation, likely due to dependency on productcatalogservice. Other downstream services show milder metric abnormalities. Upstream/dependency relationships suggest productcatalogservice as the deeper root cause driving downstream symptoms.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: implausible (confidence 0.15).",
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: implausible (confidence 0.60).",
         "confidence": 0.4,
         "evidence": [
           {
@@ -604,7 +737,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Topology shows frontend depends on productcatalogservice, so faults in productcatalogservice would affect frontend (upstream impact). The computed path frontend → productcatalogservice represents a downstream-to-downstream direction not aligned with how faults typically propagate to the symptom (upstream from root to symptom). Therefore, the proposed propagation path is structurally implausible given the dependency graph. No alternative path from the symptom to the suspected root is evident within the provided topology since the symptom is an upstream consumer of productcatalogservice, not a downstream target. Confidence is low due to directional mismatch. Within the blast radius, monitor both frontend and productcatalogservice as they are the most critical connected components; if the fault propagates further, frontend’s dependencies (cartservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice) could experience degraded behavior through the frontend, so they are relevant for broader monitoring."
+              "llm_reasoning": "The symptom service frontend depends directly on productcatalogservice, so a fault in productcatalogservice could propagate to frontend, matching the suspected_downstream hypothesis. However, the explicit propagation path given (frontend → productcatalogservice) is the opposite direction of a root-to-symptom fault propagation. Structurally, the root-causing path should be productcatalogservice → frontend. Alternative plausible root causes exist among other frontend dependencies (cartservice, currencyservice, etc.) since faults there could also propagate to frontend. The blast radius based on topology is limited to frontend as the symptom, with frontend being the primary service to monitor due to its high criticality. The topology supports the possibility that productcatalogservice could be the root cause, but the directionality of the stated propagation path is inconsistent with a root-to-symptom propagation in the given graph."
             }
           }
         ],
@@ -724,19 +857,47 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Topology shows frontend depends on productcatalogservice, so faults in productcatalogservice would affect frontend (upstream impact). The computed path frontend → productcatalogservice represents a downstream-to-downstream direction not aligned with how faults typically propagate to the symptom (upstream from root to symptom). Therefore, the proposed propagation path is structurally implausible given the dependency graph. No alternative path from the symptom to the suspected root is evident within the provided topology since the symptom is an upstream consumer of productcatalogservice, not a downstream target. Confidence is low due to directional mismatch. Within the blast radius, monitor both frontend and productcatalogservice as they are the most critical connected components; if the fault propagates further, frontend’s dependencies (cartservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice) could experience degraded behavior through the frontend, so they are relevant for broader monitoring.",
+          "llm_reasoning": "The symptom service frontend depends directly on productcatalogservice, so a fault in productcatalogservice could propagate to frontend, matching the suspected_downstream hypothesis. However, the explicit propagation path given (frontend → productcatalogservice) is the opposite direction of a root-to-symptom fault propagation. Structurally, the root-causing path should be productcatalogservice → frontend. Alternative plausible root causes exist among other frontend dependencies (cartservice, currencyservice, etc.) since faults there could also propagate to frontend. The blast radius based on topology is limited to frontend as the symptom, with frontend being the primary service to monitor due to its high criticality. The topology supports the possibility that productcatalogservice could be the root cause, but the directionality of the stated propagation path is inconsistent with a root-to-symptom propagation in the given graph.",
           "path_assessment": "implausible",
-          "alternative_paths": [],
-          "critical_services_in_blast": [
-            "frontend",
-            "productcatalogservice"
+          "alternative_paths": [
+            [
+              "productcatalogservice",
+              "frontend"
+            ],
+            [
+              "cartservice",
+              "frontend"
+            ],
+            [
+              "currencyservice",
+              "frontend"
+            ],
+            [
+              "recommendationservice",
+              "frontend"
+            ],
+            [
+              "checkoutservice",
+              "frontend"
+            ],
+            [
+              "adservice",
+              "frontend"
+            ],
+            [
+              "shippingservice",
+              "frontend"
+            ]
           ],
-          "topology_supports_hypothesis": false
+          "critical_services_in_blast": [
+            "frontend"
+          ],
+          "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The Log Agent provides the strongest, most consistent signal pointing to productcatalogservice as the upstream bottleneck driving downstream latency and errors observed at the frontend. The Topology Agent corroborates a direct dependency path from frontend to productcatalogservice, supporting a realistic propagation route. The TCB-RCA results conflict with this interpretation by not listing productcatalogservice as a root candidate; however, the strength of the log-based metrics and structural dependency outweigh the TCB-RCA discrepancy. The unobserved root-cause rule does not apply here since productcatalogservice shows explicit anomalies rather than only headers referencing upstream issues. Therefore, the most plausible root cause is productcatalogservice, with a propagation path from productcatalogservice to frontend.",
+    "synthesis_reasoning": "The strongest signal comes from Log Agent indicating productcatalogservice as the likely upstream culprit with clear resource saturation metrics and downstream impact on frontend. Topology corroborates a plausible root-to-symptom path via productcatalogservice → frontend, though it notes a directional nuance in the presented propagation claim. The TCB-RCA Engine does not identify a strong temporal root cause at frontend and yields a weak signal for a root at frontend, reducing confidence in frontend as the root. Given the convergence of significant log signals and structural plausibility, productcatalogservice stands as the primary root candidate. When faced with disagreement, the log and topology evidence outweighs the weak timing-based signal from TCB-RCA. If further data become available (e.g., productcatalogservice-specific failures, saturation events, or upstream dependencies), re-evaluation should be performed.",
     "tcb_rca_reference": {
       "candidates": [
         {

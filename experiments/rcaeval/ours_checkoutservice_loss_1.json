@@ -4,7 +4,7 @@
   "case": "checkoutservice_loss_1",
   "gt_service": "checkoutservice",
   "gt_fault": "loss",
-  "elapsed_seconds": 23.47,
+  "elapsed_seconds": 29.82,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 23.47,
+    "elapsed_seconds": 29.82,
     "gt_fault": "loss"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Checkoutservice exhibits severe tail-latency (p95/p99 spikes) and CPU uplift, leading to upstream degradation perceived by frontend as 'no healthy upstream' and SERVICE_UNAVAILABLE errors during checkout flows.",
+        "cause": "Checkoutservice exhibits high latency and CPU stress, indicating upstream degradation that propagates to the frontend as 'no healthy upstream' and SERVICE_UNAVAILABLE errors.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "Strong convergence between Log Agent and Topology Agent: logs show checkoutservice latency spike preceding frontend upstream failures, and the dependency graph from frontend lists checkoutservice as the immediate downstream. The TCB-RCA result places frontend as the root based on timing constraints, but the observed latency/uptime degradation in checkoutservice with upstream impact on frontend provides a more credible, deeper root cause consistent with the observed symptom and structure. Therefore, checkoutservice is favored as the root cause with Frontend as the downstream symptom.",
+        "reasoning": "All three sources concur that frontend failure is tied to the checkoutservice degradation. The Log Agent identifies checkoutservice as the primary anomalous downstream service causing frontend to report no healthy upstream. The Topology Agent confirms a direct propagation path frontend -> checkoutservice, making checkoutservice a structurally plausible root. The TCB-RCA Engine prioritizes frontend as the root due to temporal backtracking, but this conflicts with the log/topology evidence and is overridden here because the logs show a concrete performance problem at checkoutservice and a plausible downstream propagation path. The absence of conflicting evidence for a deeper upstream beyond checkoutservice makes checkoutservice the strongest root cause candidate.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Checkoutservice exhibits severe tail-latency (p95/p99 spikes) and CPU uplift, leading to upstream degradation perceived by frontend as 'no healthy upstream' and SERVICE_UNAVAILABLE errors during checkout flows.",
+      "cause": "Checkoutservice exhibits high latency and CPU stress, indicating upstream degradation that propagates to the frontend as 'no healthy upstream' and SERVICE_UNAVAILABLE errors.",
       "confidence": 0.6,
       "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "checkoutservice"
@@ -103,8 +103,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service checkoutservice experiencing loss fault'. Errors detected in 1 service(s): frontend (2 errors). LLM hypothesis: Checkoutservice is experiencing severe tail latency (p95/p99 spike) which propagates to frontend, causing 'no healthy upstream' errors and SERVICE_UNAVAILABLE responses during checkout flows.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service checkoutservice experiencing loss fault'. Errors detected in 1 service(s): frontend (2 errors). LLM hypothesis: Checkoutservice experienced latency and CPU stress leading to upstream instability, which caused frontend to report downstream unhealth (no healthy upstream) and return SERVICE_UNAVAILABLE errors.",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "log",
@@ -668,20 +668,20 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Checkoutservice is experiencing severe tail latency (p95/p99 spike) which propagates to frontend, causing 'no healthy upstream' errors and SERVICE_UNAVAILABLE responses during checkout flows.",
+          "hypothesis": "Checkoutservice experienced latency and CPU stress leading to upstream instability, which caused frontend to report downstream unhealth (no healthy upstream) and return SERVICE_UNAVAILABLE errors.",
           "suspected_downstream": "checkoutservice",
           "anomalous_services": [
             "checkoutservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric signals flag checkoutservice as a strong root-cause candidate due to p95_Δms and p99_Δms spikes (251.4/503.5 ms) and CPU uplift. Frontend shows error_LOGSERVICE_UNAVAILABLE with no healthy upstream in the same window, consistent with upstream checkoutservice degradation. Other services show minor or no decisive metric anomalies. Upstream/root-cause inference follows the data: checkoutservice failures precede frontend errors, aligning with dependency topology.",
+          "llm_reasoning": "Metric signals show checkoutservice with the strongest anomaly: high p95/p99 latency increases and CPU z-score (>5), suggesting a performance bottleneck upstream. Frontend logs show SERVICE_UNAVAILABLE with 'no healthy upstream', consistent with a downstream dependency (checkoutservice) failure. Other services have weaker metric signals. The error pattern aligns with an upstream checkoutservice degradation propagating to frontend.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.92).",
-        "confidence": 0.856,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -693,7 +693,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Frontend directly depends on checkoutservice, so a failure in checkoutservice can propagate to frontend. No alternative transitive path from frontend to other downstream services leads to the suspected root within the given topology. The blast radius is limited to frontend, but since checkoutservice is the immediate dependency implicated by the symptom, it is also critical to monitor."
+              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice (frontend -> checkoutservice). This provides a structurally plausible propagation path for a fault originating at checkoutservice to affect frontend. There are no alternative indirect paths from frontend to checkoutservice within the given topology (checkoutservice is listed under frontend dependencies, with no alternate routes). Given the topology, the blast radius is limited to the symptom frontend, with other related services not explicitly indicated as affected in the topology snippet. The hypothesis that checkoutservice could be the suspected downstream aligns with the defined dependency edge frontend -> checkoutservice."
             }
           }
         ],
@@ -813,19 +813,18 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Frontend directly depends on checkoutservice, so a failure in checkoutservice can propagate to frontend. No alternative transitive path from frontend to other downstream services leads to the suspected root within the given topology. The blast radius is limited to frontend, but since checkoutservice is the immediate dependency implicated by the symptom, it is also critical to monitor.",
+          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice (frontend -> checkoutservice). This provides a structurally plausible propagation path for a fault originating at checkoutservice to affect frontend. There are no alternative indirect paths from frontend to checkoutservice within the given topology (checkoutservice is listed under frontend dependencies, with no alternate routes). Given the topology, the blast radius is limited to the symptom frontend, with other related services not explicitly indicated as affected in the topology snippet. The hypothesis that checkoutservice could be the suspected downstream aligns with the defined dependency edge frontend -> checkoutservice.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "frontend",
-            "checkoutservice"
+            "frontend"
           ],
           "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "Two sources (Log Agent and Topology Agent) converge on checkoutservice as the root cause: checkoutservice shows notable latency spikes and degradation, and frontend observes 'no healthy upstream' aligned with that downstream failure. The TCB-RCA result conflicts by elevating frontend as the root due to timing/backtracking constraints, but it does not reconcile the upstream latency evidence. Given the absence of contradictory evidence for checkoutservice and the structural plausibility (frontend directly depends on checkoutservice with a direct propagation path), checkoutservice is the most credible root cause. The propagation path is checkoutservice -> frontend, consistent with the symptom being at frontend and the blast radius being limited to frontend.",
+    "synthesis_reasoning": "There is strong agreement between Log Agent and Topology Agent that checkoutservice is the upstream cause affecting the symptom frontend. The TCB-RCA result conflicts by suggesting frontend as the root, but given the observed metrics (high latency and CPU spike in checkoutservice) and the direct dependency edge (frontend depends on checkoutservice) it is more credible that checkoutservice is the root cause rather than frontend. Therefore, checkoutservice is ranked as the primary root cause, with a propagation path directly to frontend. The convergence is partial because one source (TCB-RCA) disagrees on the root cause, but the other sources provide stronger, consistent evidence for checkoutservice as the root. If more data becomes available (e.g., upstream services or additional logs), reassessment could elevate or adjust the root to a deeper upstream if unobserved failures are detected.",
     "tcb_rca_reference": {
       "candidates": [
         {

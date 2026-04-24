@@ -4,10 +4,10 @@
   "case": "currencyservice_cpu_1",
   "gt_service": "currencyservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 25.31,
+  "elapsed_seconds": 31.5,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
     "top_confidence": 0.6,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 25.31,
+    "elapsed_seconds": 31.5,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "CPU stress and performance anomaly in cartservice identified as strongest upstream catalyst propagating load to frontend.",
+        "cause": "Cartservice experiencing a CPU fault causing degraded response times for downstream dependents (notably frontend), which propagates load to currencyservice and manifests as the observed frontend CPU fault symptom.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "cartservice",
-        "reasoning": "Both Log Agent and Topology Agent converge on cartservice as the plausible root cause: cartservice shows the strongest CPU anomaly and frontend is directly dependent on cartservice, enabling a plausible propagation path. The TCB-RCA result prioritizes frontend with zero temporal gap, offering weak or no support for cartservice as root. Given the stronger support from logs and structural topology, cartservice is favored as the root cause, with frontend acting as the downstream symptom.",
+        "reasoning": "Strong convergence between Log Agent (CPU spike in cartservice with highest anomaly) and Topology (direct frontend <- cartservice dependency) supports cartservice as the root cause. The TCB-RCA result conflicts (suggesting frontend as the initial fault), but the timing/topology evidence for cartservice aligns with the observed symptom cascade and is more credible given the log-based CPU anomaly and direct propagation path.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,24 +52,23 @@
       },
       {
         "rank": 2,
-        "cause": "Frontend exhibits CPU-related symptoms and is the direct symptom service; treated here as a downstream consequence rather than root cause.",
+        "cause": "Frontend exhibiting the symptom of CPU fault due to upstream bottleneck in cartservice; considered as an alternative root from the TCB-RCA perspective but lacks independent root-cause signals beyond downstream impact.",
         "confidence": 0.33,
         "evidence_refs": [
-          "log-agent:confirmed",
           "topology-agent:confirmed",
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "All sources identify frontend as the symptom service, and the topology confirms a downstream position relative to cartservice. TCB-RCA assigns frontend as the highest-ranked candidate but with essentially no confidence in isolation (depth=0, temporal_gap=0, confidence=0.00). Given the evidence, frontend is not a credible root cause by itself, but is included for completeness as the observed symptom path.",
+        "reasoning": "Frontend is implicated by both the symptom service designation and the TCB-RCA's propagation path. However, there is no direct log evidence of a fault at frontend itself (only causal load from cartservice), reducing its credibility as the primary root cause. The TCB-RCA alignment increases credibility only in the absence of corroborating log evidence for frontend, so it remains a secondary candidate.",
         "supporting_evidence": {
-          "log_agent_agrees": true,
+          "log_agent_agrees": false,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": true
         }
       }
     ],
     "final_verdict": {
-      "cause": "CPU stress and performance anomaly in cartservice identified as strongest upstream catalyst propagating load to frontend.",
+      "cause": "Cartservice experiencing a CPU fault causing degraded response times for downstream dependents (notably frontend), which propagates load to currencyservice and manifests as the observed frontend CPU fault symptom.",
       "confidence": 0.6,
       "explanation": "Candidate 'cartservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "cartservice"
@@ -102,7 +101,7 @@
       "notes": [
         "Candidate 'cartservice' confirmed by 2/3 sources (log, topology).",
         "Candidate 'cartservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
-        "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca)."
+        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -121,8 +120,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: CPU stress in cartservice is the likely root cause, propagating load to frontend via its downstream dependencies; currencyservice also shows elevated metrics suggesting cross-service strain, but cartservice exhibits the strongest metric anomaly.",
-        "confidence": 0.55,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Cartservice experiences a CPU fault leading to degraded response times for dependent frontend, which in turn propagates load to currencyservice causing observed symptoms; upstream bottleneck in cartservice is the primary cause.",
+        "confidence": 0.42,
         "evidence": [
           {
             "type": "log",
@@ -711,21 +710,21 @@
           }
         ],
         "metadata": {
-          "hypothesis": "CPU stress in cartservice is the likely root cause, propagating load to frontend via its downstream dependencies; currencyservice also shows elevated metrics suggesting cross-service strain, but cartservice exhibits the strongest metric anomaly.",
+          "hypothesis": "Cartservice experiences a CPU fault leading to degraded response times for dependent frontend, which in turn propagates load to currencyservice causing observed symptoms; upstream bottleneck in cartservice is the primary cause.",
           "suspected_downstream": "cartservice",
           "anomalous_services": [
             "cartservice",
             "frontend",
             "currencyservice"
           ],
-          "llm_reasoning": "Metric summary shows cartservice with the highest cpu_z (13.2) among services, indicating a strong performance abnormality that can cascade to dependent services like frontend. Currencyservice and frontend also show metric anomalies (cpu_z 7.7 and 6.2 respectively) and are directly connected in the topology. Log-volume indicators show widespread activity without explicit errors, but the absence of error logs coupled with CPU/memory/tail latency shifts points to a performance bottleneck rather than failed operations. Upstream/downstream inference points to cartservice as the most probable root cause affecting frontend and triggering downstream pressure.",
+          "llm_reasoning": "Metric signals show cartservice with the strongest CPU spike (cpu_z = 13.2) among non-zero anomalies, while frontend shows moderate load and currencyservice shows smaller metric deviations. No explicit errors are logged, but frontend relies on cartservice; the absence of errors suggests a resource/throughput bottleneck rather than functional failures. Upstream dependency linkage supports cartservice as the likely root cause.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to cartservice: frontend → cartservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
-        "confidence": 0.796,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to cartservice: frontend → cartservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -737,7 +736,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Frontend directly depends on cartservice, making the path frontend -> cartservice a structurally plausible propagation path. There are no alternative dependency routes from frontend to cartservice in the given topology. The blast radius currently centers on frontend; if the fault propagates, cartservice is the most immediate downstream service to monitor. The topology aligns with the log agent hypothesis that downstream cartservice could be involved."
+              "llm_reasoning": "The symptom service frontend directly depends on cartservice, so a fault in cartservice could propagate to frontend. Given the log agent's suspected downstream, the direct dependency path frontend -> cartservice is structurally plausible. No alternative explicit paths are evident from the provided topology. The blast radius, as defined, includes frontend (and implicitly the root cause service if expanded), with frontend being the most critical service to monitor within the affected area."
             }
           }
         ],
@@ -857,19 +856,18 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Frontend directly depends on cartservice, making the path frontend -> cartservice a structurally plausible propagation path. There are no alternative dependency routes from frontend to cartservice in the given topology. The blast radius currently centers on frontend; if the fault propagates, cartservice is the most immediate downstream service to monitor. The topology aligns with the log agent hypothesis that downstream cartservice could be involved.",
+          "llm_reasoning": "The symptom service frontend directly depends on cartservice, so a fault in cartservice could propagate to frontend. Given the log agent's suspected downstream, the direct dependency path frontend -> cartservice is structurally plausible. No alternative explicit paths are evident from the provided topology. The blast radius, as defined, includes frontend (and implicitly the root cause service if expanded), with frontend being the most critical service to monitor within the affected area.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "frontend",
-            "cartservice"
+            "frontend"
           ],
           "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest cross-source convergence points to cartservice as the root cause: Log Agent identifies cartservice as the primary performance anomaly with CPU stress, and Topology confirms a direct, structurally plausible path from cartservice to frontend. The TCB-RCA result is discordant, ranking frontend as the sole candidate with zero timing evidence; thus its impact is limited in this synthesis. Given the absence of explicit errors and the presence of CPU/memory/latency shifts rather than faulted operations, the most credible root cause is cartservice experiencing CPU stress, driving downstream pressure on frontend. If feasible, investigate cartservice resource contention, underlying queueing, and downstream impact on currencyservice as corroborative signals. The final propagation path from root to symptom is cartservice -> frontend.",
+    "synthesis_reasoning": "The strongest signal points to cartservice as the root cause: clear CPU spike in cartservice (Log Agent) and a structurally plausible propagation path to frontend (Topology Agent). The TCB-RCA result conflicts by ranking frontend as the initial fault, but it is weaker evidence here due to lack of direct frontend fault signals and because topology plus CPU anomaly in cartservice better explain the observed cascade. Given the unobserved root-cause principle, if cartservice shows upstream CPU pressure with no explicit errors, it remains a credible root cause. Therefore, cartservice is prioritized, with frontend as a plausible secondary if cartservice fault signals weaken or if cross-service timing shifts are observed.",
     "tcb_rca_reference": {
       "candidates": [
         {

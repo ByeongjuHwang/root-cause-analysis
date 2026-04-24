@@ -4,7 +4,7 @@
   "case": "currencyservice_delay_1",
   "gt_service": "currencyservice",
   "gt_fault": "delay",
-  "elapsed_seconds": 25.12,
+  "elapsed_seconds": 29.43,
   "evaluation": {
     "ac_at_1": false,
     "ac_at_3": false,
@@ -13,14 +13,14 @@
     "top_confidence": 0.6,
     "verdict": "revised",
     "ground_truth_root_cause": "currencyservice",
-    "predicted_top_cause_service": "checkoutservice",
-    "predicted_top_cause_excerpt": "checkoutservice",
+    "predicted_top_cause_service": "productcatalogservice",
+    "predicted_top_cause_excerpt": "productcatalogservice",
     "predicted_path": [
-      "checkoutservice",
+      "productcatalogservice",
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 25.12,
+    "elapsed_seconds": 29.43,
     "gt_fault": "delay"
   },
   "result": {
@@ -36,45 +36,30 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Checkoutservice latency/throughput bottleneck causing downstream frontend delays; high p95/p99 latency and elevated CPU observed, propagating latency to frontend when calling checkout-related endpoints.",
+        "cause": "Resource saturation (CPU spike) in productcatalogservice leading to degraded responsiveness, propagating latency downstream to checkoutservice and frontend.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
-        "cause_service": "checkoutservice",
-        "reasoning": "All three sources converge on a structural and temporal plausibility path: the frontend symptom is observed while checkoutservice shows strongest latency anomalies, and the topology confirms a direct frontend -> checkoutservice propagation path. The TCB-RCA tool, while not indicating frontend as root, evaluates timing and topology constraints and does not contradict checkoutservice as a plausible upstream bottleneck. Given the combination of upstream latency signals and a structurally plausible path, checkoutservice is the most credible root cause.",
+        "cause_service": "productcatalogservice",
+        "reasoning": "Both the Log Agent and the Topology Agent converge on productcatalogservice as the upstream bottleneck with a plausible propagation path to the symptom frontend (frontend depends on productcatalogservice). The TCB-RCA algorithm did not identify this deeper root cause (it surfaced frontend with zero temporal evidence), so its result is treated as weaker here. Given strong alignment between logs (CPU-driven saturation signal) and established dependency path, productcatalogservice is the most credible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
-      },
-      {
-        "rank": 2,
-        "cause": "Frontend itself exhibiting delays as the root cause (self-originated latency) with a direct path to the symptom service; however, logs indicate absence of frontend-specific errors and the strongest anomalies are upstream in checkoutservice.",
-        "confidence": 0.28,
-        "evidence_refs": [
-          "tcb-rca:confirmed"
-        ],
-        "cause_service": "frontend",
-        "reasoning": "The TCB-RCA algorithm ranks frontend as the only observed node with zero traversal from itself (no upstream anomalies detected within its traversal). While this indicates a potential root cause candidate from a temporal/topology constraint perspective, the Log and Topology analyses do not support frontend as the primary initiator; they point to upstream latency in checkoutservice. Therefore, frontend as root is considered less credible but retained as a secondary hypothesis due to TCB-RCA alignment.",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
-          "topology_agent_agrees": false,
-          "tcb_rca_agrees": true
-        }
       }
     ],
     "final_verdict": {
-      "cause": "Checkoutservice latency/throughput bottleneck causing downstream frontend delays; high p95/p99 latency and elevated CPU observed, propagating latency to frontend when calling checkout-related endpoints.",
+      "cause": "Resource saturation (CPU spike) in productcatalogservice leading to degraded responsiveness, propagating latency downstream to checkoutservice and frontend.",
       "confidence": 0.6,
-      "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "checkoutservice"
+      "explanation": "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "productcatalogservice"
     },
     "impact_analysis": {
       "affected_services": [
-        "checkoutservice",
+        "productcatalogservice",
         "frontend"
       ],
       "related_services": [
@@ -87,7 +72,7 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "checkoutservice",
+        "productcatalogservice",
         "frontend"
       ],
       "blast_radius": [
@@ -98,9 +83,8 @@
       "verdict": "revised",
       "final_confidence": 0.6,
       "notes": [
-        "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'checkoutservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
-        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -113,14 +97,14 @@
       ],
       "topology_evidence": [
         "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
-        "propagation path: frontend -> checkoutservice"
+        "propagation path: frontend -> productcatalogservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing delay fault'. No error logs found. LLM hypothesis: Checkoutservice is experiencing latency and processing delays (high p95/p99, elevated CPU) which propagates to frontend as delays when calling checkout-related endpoints; downstream services (frontend, possibly product catalog and currency calls) exhibit degraded responsiveness as a consequence.",
-        "confidence": 0.63,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing delay fault'. No error logs found. LLM hypothesis: Resource saturation in productcatalogservice (high CPU spike) degraded its responsiveness, causing downstream checkoutservice and frontend latency; currencyservice also shows moderate strain but is secondary to the product catalog bottleneck.",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "log",
@@ -709,22 +693,22 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Checkoutservice is experiencing latency and processing delays (high p95/p99, elevated CPU) which propagates to frontend as delays when calling checkout-related endpoints; downstream services (frontend, possibly product catalog and currency calls) exhibit degraded responsiveness as a consequence.",
-          "suspected_downstream": "checkoutservice",
+          "hypothesis": "Resource saturation in productcatalogservice (high CPU spike) degraded its responsiveness, causing downstream checkoutservice and frontend latency; currencyservice also shows moderate strain but is secondary to the product catalog bottleneck.",
+          "suspected_downstream": "productcatalogservice",
           "anomalous_services": [
-            "checkoutservice",
             "productcatalogservice",
-            "currencyservice",
-            "frontend"
+            "checkoutservice",
+            "frontend",
+            "currencyservice"
           ],
-          "llm_reasoning": "Metric data shows checkoutservice has the strongest anomaly (p95/p99 latency spikes and CPU z-score > 6) implying a bottleneck. Frontend, productcatalogservice, and currencyservice also show CPU anomalies, but with lower severity. Given frontend depends on checkoutservice, the latency in checkoutservice is the most plausible upstream bottleneck triggering broader service delays. Absence of error logs across all services suggests the fault is latency/throughput rather than erroring endpoints. The pattern aligns with an upstream slowdown causing downstream propagation.",
+          "llm_reasoning": "Metric signals show the strongest anomaly in productcatalogservice (cpu_z > 30 would be decisive, here +20.1 but still the highest among services; latency tail spikes are largest for checkoutservice, but productcatalogservice exhibits clear resource pressure which likely propagates downstream to checkoutservice and frontend). Upstream/downstream relationships imply frontend depends on checkoutservice and productcatalogservice; the observed latency degradation aligns with a root cause in the catalog service propagating through the call chain. Volume_delta is less informative due to varying window lengths and low baseline counts for some services, so metrics take precedence in identifying the root cause.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
-        "confidence": 0.805,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
+        "confidence": 0.835,
         "evidence": [
           {
             "type": "topology",
@@ -736,14 +720,14 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, making frontend -> checkoutservice a structurally plausible propagation path. There are no alternative transitive paths from frontend to the suspected root within the given dependency subgraph that bypass checkoutservice, given the explicit single-step dependency link. The blast radius derived from the topology (only frontend listed as potentially affected) matches the current symptom focus; further propagation would require movement beyond the symptom’s direct dependency graph, which is not indicated in the provided topology. Therefore, the hypothesis is consistent with the topology structure."
+              "llm_reasoning": "The symptom service (frontend) directly depends on productcatalogservice, forming a structurally plausible propagation path frontend -> productcatalogservice. No alternative indirect paths from frontend to productcatalogservice exist in the given topology. The blast radius is limited to the symptom itself per the provided structure, with frontend being the most critical service within that scope. The topology confirms that productcatalogservice is a downstream dependency of frontend, aligning with the log agent's suspected_downstream hypothesis."
             }
           }
         ],
         "metadata": {
           "propagation_path": [
             "frontend",
-            "checkoutservice"
+            "productcatalogservice"
           ],
           "blast_radius": [
             "frontend"
@@ -856,7 +840,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, making frontend -> checkoutservice a structurally plausible propagation path. There are no alternative transitive paths from frontend to the suspected root within the given dependency subgraph that bypass checkoutservice, given the explicit single-step dependency link. The blast radius derived from the topology (only frontend listed as potentially affected) matches the current symptom focus; further propagation would require movement beyond the symptom’s direct dependency graph, which is not indicated in the provided topology. Therefore, the hypothesis is consistent with the topology structure.",
+          "llm_reasoning": "The symptom service (frontend) directly depends on productcatalogservice, forming a structurally plausible propagation path frontend -> productcatalogservice. No alternative indirect paths from frontend to productcatalogservice exist in the given topology. The blast radius is limited to the symptom itself per the provided structure, with frontend being the most critical service within that scope. The topology confirms that productcatalogservice is a downstream dependency of frontend, aligning with the log agent's suspected_downstream hypothesis.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -867,7 +851,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest converging signal is that checkoutservice shows the most significant latency anomalies and the topology confirms a direct frontend <- checkoutservice relationship, which aligns with the observed symptom on the frontend. The Log Agent supports this upstream latency narrative, while the TCB-RCA results place frontend as a plausible root from a purely temporal/topology ordering perspective, but without corroborating log-based fault indicators. Given the importance of upstream latency in driving cascading delays and the structural plausibility, checkoutservice is favored as the primary root cause. Frontend remains a weaker secondary hypothesis due to lack of error or latency signals at the frontend itself and contrary to the primary log/topology signals.",
+    "synthesis_reasoning": "The strongest signal comes from the Log Agent identifying resource saturation in productcatalogservice and the Topology Agent confirming a direct downstream path from productcatalogservice to the symptom frontend. The TCB-RCA result does not corroborate this deeper root cause, lowering overall convergence. Given the principle to respect topology and log-based causation, the most plausible root cause is productcatalogservice. If productcatalogservice monitoring were unavailable or inconclusive, we would consider unobserved root causes or weak_evidence scenarios; here, the observed CPU spike and downstream impact provide a coherent propagation model.",
     "tcb_rca_reference": {
       "candidates": [
         {

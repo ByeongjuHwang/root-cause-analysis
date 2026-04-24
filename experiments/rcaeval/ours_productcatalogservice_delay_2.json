@@ -4,23 +4,23 @@
   "case": "productcatalogservice_delay_2",
   "gt_service": "productcatalogservice",
   "gt_fault": "delay",
-  "elapsed_seconds": 26.62,
+  "elapsed_seconds": 28.93,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.48,
-    "verdict": "weak-evidence",
+    "top_confidence": 0.78,
+    "verdict": "rejected",
     "ground_truth_root_cause": "productcatalogservice",
-    "predicted_top_cause_service": "frontend",
-    "predicted_top_cause_excerpt": "frontend",
+    "predicted_top_cause_service": "productcatalogservice",
+    "predicted_top_cause_excerpt": "productcatalogservice",
     "predicted_path": [
-      "currencyservice",
+      "productcatalogservice",
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 26.62,
+    "elapsed_seconds": 28.93,
     "gt_fault": "delay"
   },
   "result": {
@@ -36,46 +36,30 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Frontend itself exhibiting elevated tail latency potentially due to upstream downstream delays or internal frontend bottlenecks, with no error logs but strong tail latency signals.",
-        "confidence": 0.48,
+        "cause": "Product catalog service latency spike causing upstream frontend delays; downstream bottleneck in productcatalogservice leads to frontend latency degradation and propagation of delays.",
+        "confidence": 0.78,
         "evidence_refs": [
           "log-agent:confirmed",
-          "topology-agent:confirmed",
-          "tcb-rca:confirmed"
-        ],
-        "cause_service": "frontend",
-        "reasoning": "Log agent highlights frontend tail-latency as the symptom, and TCB-RCA identifies frontend as a propagation node with zero temporal gap (i.e., a plausible root in deterministic sequencing). However, there is no concrete upstream failure signal pointing to a specific upstream service; the observed pattern is consistent with an internal frontend bottleneck or an upstream latency source, but not definitively proven. The topology supports a frontend-centric propagation path to currencyservice.",
-        "supporting_evidence": {
-          "log_agent_agrees": true,
-          "topology_agent_agrees": true,
-          "tcb_rca_agrees": true
-        }
-      },
-      {
-        "rank": 2,
-        "cause": "Downstream currencyservice experiencing latency issues that propagate to frontend, causing elevated tail latency on frontend requests without error spikes.",
-        "confidence": 0.28,
-        "evidence_refs": [
           "topology-agent:confirmed"
         ],
-        "cause_service": "currencyservice",
-        "reasoning": "Topology shows a plausible direct propagation path from frontend to currencyservice, and the log analysis identifies frontend tail latency without explicit error origins, which is consistent with a downstream bottleneck. There is no concrete error signal in currencyservice logs provided, making it an unobserved/underlying bottleneck plausible but not directly confirmed by logs.",
+        "cause_service": "productcatalogservice",
+        "reasoning": "All sources except the deterministic TCB-RCA point to productcatalogservice as the upstream bottleneck driving frontend latency. Logs show elevated latency in productcatalogservice (p95Δms ~18.1, p99Δms ~34.1) with frontend as the symptom. Topology confirms frontend depends on productcatalogservice and that a failure there is a plausible propagation path to frontend. TCB-RCA favors frontend as root but with zero confidence; given the strong alignment between log signals and topology constraints, productcatalogservice is the most credible root cause to explain the observed cascade.",
         "supporting_evidence": {
-          "log_agent_agrees": false,
+          "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "Frontend itself exhibiting elevated tail latency potentially due to upstream downstream delays or internal frontend bottlenecks, with no error logs but strong tail latency signals.",
-      "confidence": 0.48,
-      "explanation": "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca).",
-      "cause_service": "frontend"
+      "cause": "Product catalog service latency spike causing upstream frontend delays; downstream bottleneck in productcatalogservice leads to frontend latency degradation and propagation of delays.",
+      "confidence": 0.78,
+      "explanation": "[DROPPED] 'productcatalogservice' has no supporting evidence (log=0, trace=0, metric=0). Topology alone is insufficient.",
+      "cause_service": "productcatalogservice"
     },
     "impact_analysis": {
       "affected_services": [
-        "currencyservice",
+        "productcatalogservice",
         "frontend"
       ],
       "related_services": [
@@ -88,7 +72,7 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "currencyservice",
+        "productcatalogservice",
         "frontend"
       ],
       "blast_radius": [
@@ -96,11 +80,11 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.48,
+      "verdict": "rejected",
+      "final_confidence": 0.0,
       "notes": [
-        "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca).",
-        "Candidate 'currencyservice' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "[DROPPED] 'productcatalogservice' has no supporting evidence (log=0, trace=0, metric=0). Topology alone is insufficient.",
+        "All 1 candidates rejected due to hallucination."
       ]
     },
     "evidence_summary": {
@@ -112,14 +96,14 @@
         "request started [path: /]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
-        "propagation path: frontend -> currencyservice"
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+        "propagation path: frontend -> productcatalogservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing delay fault'. No error logs found. LLM hypothesis: Frontend tail latency is elevated, likely due to downstream dependencies slowing down responses or internal bottlenecks within the frontend path, causing increased p95/p99 latencies without a spike in error rates.",
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing delay fault'. No error logs found. LLM hypothesis: Frontend latency degradation is driven by increased latency in productcatalogservice, causing upstream request handling to slow down and propagate delays to the frontend. Product catalog calls may be the bottleneck in the critical path for frontend operations.",
         "confidence": 0.65,
         "evidence": [
           {
@@ -496,41 +480,81 @@
               "upstream": null,
               "error_type": null
             }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+204ms",
+            "timestamp": "2024-01-17T17:59:36.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 7.76,
+              "cpu_max": 0.185,
+              "mem_jump_ratio": 0.044,
+              "p95_delta_ms": -18.28,
+              "p99_delta_ms": -203.96,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+185ms; p99 latency Δ=+336ms",
+            "timestamp": "2024-01-17T17:59:36.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "cpu_spike_zscore": 5.9,
+              "cpu_max": 2.4587,
+              "mem_jump_ratio": 0.068,
+              "p95_delta_ms": 184.92,
+              "p99_delta_ms": 335.89,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": 0.0,
+              "sockets_max": 28
+            }
           }
         ],
         "metadata": {
-          "hypothesis": "Frontend tail latency is elevated, likely due to downstream dependencies slowing down responses or internal bottlenecks within the frontend path, causing increased p95/p99 latencies without a spike in error rates.",
-          "suspected_downstream": null,
+          "hypothesis": "Frontend latency degradation is driven by increased latency in productcatalogservice, causing upstream request handling to slow down and propagate delays to the frontend. Product catalog calls may be the bottleneck in the critical path for frontend operations.",
+          "suspected_downstream": "productcatalogservice",
           "anomalous_services": [
             "frontend"
           ],
-          "llm_reasoning": "Metric signals show a strong tail-latency spike for frontend (p95_Δms and p99_Δms both high) while other services lack comparable metric anomalies. No explicit error logs are present. This points to either downstream dependency latency impacting frontend requests or an internal frontend bottleneck. Log-rate indicators do not single out a specific downstream service, and there is no definitive upstream error signal to pinpoint a deeper root cause. Interaction with multiple dependencies is consistent with the observed latency pattern.",
+          "llm_reasoning": "Metric signals identify frontend as the strongest anomaly (p95/p99 latency spikes, latency degradation) among services. Productcatalogservice shows elevated latency deltas (p95Δms ~18.1, p99Δms ~34.1) and modest CPU increase, which aligns with a downstream bottleneck impacting frontend. Other downstreams show smaller or non-significant metric deviations. No explicit upstream error traces are present, so the root cause is inferred from downstream metric elevation with frontend as the symptom location.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.78).",
-        "confidence": 0.814,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.65).",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend directly depends on currencyservice, matching the computed propagation path frontend -> currencyservice. No alternative paths are evident within the given dependency subgraph, so the propagation path is structurally plausible and aligns with the log agent's suspected downstream. The blast radius is constrained to frontend given the current propagation model, with minimal additional services inferred as affected without further downstream dependencies shown. Monitoring should prioritize frontend, with currencyservice monitored due to the hypothesized root cause relationship."
+              "llm_reasoning": "The symptom service frontend depends on productcatalogservice. A fault in productcatalogservice could impact frontend, so the plausible propagation direction is productcatalogservice -> frontend. The provided path frontend -> productcatalogservice mismatches the dependency direction for fault propagation. The topology confirms productcatalogservice is a downstream dependency of frontend, and a failure there could explain frontend symptoms; however, the actual propagation path from root cause to symptom should be the reverse of the dependency edge. The blast radius remains limited to frontend for this incident in the given topology, with frontend being the most critical node to monitor within that radius."
             }
           }
         ],
         "metadata": {
           "propagation_path": [
             "frontend",
-            "currencyservice"
+            "productcatalogservice"
           ],
           "blast_radius": [
             "frontend"
@@ -643,9 +667,14 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend directly depends on currencyservice, matching the computed propagation path frontend -> currencyservice. No alternative paths are evident within the given dependency subgraph, so the propagation path is structurally plausible and aligns with the log agent's suspected downstream. The blast radius is constrained to frontend given the current propagation model, with minimal additional services inferred as affected without further downstream dependencies shown. Monitoring should prioritize frontend, with currencyservice monitored due to the hypothesized root cause relationship.",
-          "path_assessment": "plausible",
-          "alternative_paths": [],
+          "llm_reasoning": "The symptom service frontend depends on productcatalogservice. A fault in productcatalogservice could impact frontend, so the plausible propagation direction is productcatalogservice -> frontend. The provided path frontend -> productcatalogservice mismatches the dependency direction for fault propagation. The topology confirms productcatalogservice is a downstream dependency of frontend, and a failure there could explain frontend symptoms; however, the actual propagation path from root cause to symptom should be the reverse of the dependency edge. The blast radius remains limited to frontend for this incident in the given topology, with frontend being the most critical node to monitor within that radius.",
+          "path_assessment": "alternative_exists",
+          "alternative_paths": [
+            [
+              "productcatalogservice",
+              "frontend"
+            ]
+          ],
           "critical_services_in_blast": [
             "frontend"
           ],
@@ -654,7 +683,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "All sources converge on a plausible propagation path from currencyservice to frontend. The Log Agent strongly indicates frontend tail latency but does not pinpoint a specific upstream failure, leaving currencyservice as a strong unobserved root candidate given the topology (frontend -> currencyservice) and absence of error logs. The TCB-RCA favors frontend as a potential root due to zero temporal gap, but its evidence is weak in grounding a root cause beyond the observed symptom. Therefore, currencyservice is the preferred root candidate due to structural plausibility and alignment with the observed latency pattern, while frontend remains a secondary candidate due to corroborating but non-definitive log/TCB signals. If currencyservice logs later show anomalies, re-evaluate with higher confidence.",
+    "synthesis_reasoning": "The Log Agent and Topology Agent converge on a downstream bottleneck in productcatalogservice causing frontend delay, which matches the symptom and the structural dependency. The TCB-RCA result contravenes this by naming frontend as the root with zero confidence; given the absence of timing or topology support for frontend as root (and strong evidence pointing to downstream bottleneck), the root cause should be considered productcatalogservice. When evidence is strong but one method (TCB-RCA) conflicts, we privilege the empirical signals (logs and topology) and treat TCB-RCA as weaker due to its zero confidence in this instance.",
     "tcb_rca_reference": {
       "candidates": [
         {

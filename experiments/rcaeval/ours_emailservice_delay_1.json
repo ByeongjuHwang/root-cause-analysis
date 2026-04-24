@@ -4,23 +4,24 @@
   "case": "emailservice_delay_1",
   "gt_service": "emailservice",
   "gt_fault": "delay",
-  "elapsed_seconds": 24.95,
+  "elapsed_seconds": 35.95,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
     "top_confidence": 0.6,
     "verdict": "revised",
     "ground_truth_root_cause": "emailservice",
-    "predicted_top_cause_service": "checkoutservice",
-    "predicted_top_cause_excerpt": "checkoutservice",
+    "predicted_top_cause_service": "redis",
+    "predicted_top_cause_excerpt": "redis",
     "predicted_path": [
-      "checkoutservice",
+      "redis",
+      "cartservice",
       "frontend"
     ],
-    "predicted_path_length": 2,
-    "elapsed_seconds": 24.95,
+    "predicted_path_length": 3,
+    "elapsed_seconds": 35.95,
     "gt_fault": "delay"
   },
   "result": {
@@ -36,14 +37,30 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Checkoutservice exhibits CPU/memory pressure leading to latency in downstream checkout workflow, which propagates delays to email processing and ultimately surfaces as frontend delay observed as the symptom.",
+        "cause": "Redis cache experiencing a strong CPU spike and performance degradation, acting as a shared upstream resource whose slowdown propagates latency and pressure to downstream services (e.g., cartservice, productcatalogservice, checkoutservice) and ultimately to the frontend, causing the observed emailservice delay.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
-        "cause_service": "checkoutservice",
-        "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the plausible upstream driver: (1) logs indicate CPU/memory anomaly in checkoutservice correlating with downstream latency, (2) frontend depends directly on checkoutservice, making a direct propagation path plausible. The TCB-RCA approach ranks frontend as the root due to temporal/backtracking constraints, but has zero anomalous evidence for frontend and does not identify checkoutservice as a root cause; given the stronger alignment between log signals and structural propagation, checkoutservice is favored as the root cause. The absence of explicit errors does not negateCheckoutservice being the deeper cause; unobserved root-cause possibility is acknowledged but not preferred unless stronger evidence emerges.",
+        "cause_service": "redis",
+        "reasoning": "All sources converge on Redis as a central shared resource with anomalous performance likely driving downstream pressure. Log Agent highlights a strong Redis anomaly with downstream ripple effects and elevated tail latency in emailservice. Topology shows frontend depends on key services that could be Redis-backed, making propagation structurally plausible. TCB-RCA does not identify Redis as a root cause (it reports frontend-level propagation), but the unobserved root cause rule applies here: Redis is upstream to multiple services and has no explicit error logs in the provided data. Given the absence of error logs yet clear performance anomaly, Redis is the most credible deeper root cause.",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": false
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Cart service exhibits CPU spikes and degradation that, given frontend dependency, can cause upstream latency to propagate to the frontend. This is a plausible proximate/root reason if Redis degradation manifests through cached data or session/state accessed by cartservice.",
+        "confidence": 0.54,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
+        ],
+        "cause_service": "cartservice",
+        "reasoning": "Cartservice is structurally a critical dependency of the frontend and is listed among the most impactful dependents in the topology. The Log Agent notes broad downstream CPU spikes and elevated activity without explicit errors; cartservice is explicitly in the anomalous set. However, this is less likely to be the primary root cause than Redis itself, and it is more likely a downstream manifestation of Redis pressure. TCB-RCA remains non-committal on this as a root cause. Therefore, it is a plausible but secondary root-cause candidate.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,14 +69,15 @@
       }
     ],
     "final_verdict": {
-      "cause": "Checkoutservice exhibits CPU/memory pressure leading to latency in downstream checkout workflow, which propagates delays to email processing and ultimately surfaces as frontend delay observed as the symptom.",
+      "cause": "Redis cache experiencing a strong CPU spike and performance degradation, acting as a shared upstream resource whose slowdown propagates latency and pressure to downstream services (e.g., cartservice, productcatalogservice, checkoutservice) and ultimately to the frontend, causing the observed emailservice delay.",
       "confidence": 0.6,
-      "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "checkoutservice"
+      "explanation": "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "redis"
     },
     "impact_analysis": {
       "affected_services": [
-        "checkoutservice",
+        "redis",
+        "cartservice",
         "frontend"
       ],
       "related_services": [
@@ -72,7 +90,8 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "checkoutservice",
+        "redis",
+        "cartservice",
         "frontend"
       ],
       "blast_radius": [
@@ -83,8 +102,9 @@
       "verdict": "revised",
       "final_confidence": 0.6,
       "notes": [
-        "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'checkoutservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'redis' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'cartservice' confirmed by 2/3 sources (log, topology)."
       ]
     },
     "evidence_summary": {
@@ -92,19 +112,18 @@
         "received ad request (context_words=[hair, beauty])",
         "request complete [path: /product/2ZYFJ3GM2N]",
         "request started [path: /product/1YMWWN1N4O]",
-        "AddItemAsync called with userId=5d5efbc0-3f6b-4ff9-b940-12e9fdb6eb1e, productId=2ZYFJ3GM2N, quantity=1",
-        "Getting supported currencies..."
+        "serving product page [path: /product/1YMWWN1N4O]",
+        "request started [path: /cart]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
-        "propagation path: frontend -> checkoutservice"
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible."
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: A mild but notable CPU/memory anomaly in checkoutservice prompted cascading latency across dependent frontend paths, with downstream services showing elevated resource pressure and minor volume changes, leading to delayed email processing through the checkout workflow.",
-        "confidence": 0.25,
+        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: A strong anomaly in the Redis cache (high CPU spike) is driving latency and throughput pressures across downstream services, causing elevated tail latency (notably in emailservice) and increased log volume in the frontend workflow.",
+        "confidence": 0.55,
         "evidence": [
           {
             "type": "log",
@@ -154,6 +173,51 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "serving product page [path: /product/1YMWWN1N4O]",
+            "timestamp": "2024-01-20T06:39:06.012Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-20T06:39:06.013Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "adding to cart [path: /cart]",
+            "timestamp": "2024-01-20T06:39:06.013Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "AddItemAsync called with userId=5d5efbc0-3f6b-4ff9-b940-12e9fdb6eb1e, productId=2ZYFJ3GM2N, quantity=1",
             "timestamp": "2024-01-20T06:39:06.018Z",
             "level": "INFO",
@@ -184,12 +248,42 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "request complete [path: /cart]",
+            "timestamp": "2024-01-20T06:39:06.022Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "GetCartAsync called with userId=2f97863c-6211-4327-9caa-a69cda4b79e3",
             "timestamp": "2024-01-20T06:39:06.024Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-20T06:39:06.027Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -769,6 +863,36 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"23251\",\"nanos\":785935590},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-20T06:39:08.890Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Transaction processed: visa ending 0454     Amount: JPY23251.785935590",
+            "timestamp": "2024-01-20T06:39:08.890Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "payment went through (transaction_id: f62c6558-f7b6-4b2b-80df-71402f145ea6)",
             "timestamp": "2024-01-20T06:39:08.893Z",
             "level": "INFO",
@@ -829,12 +953,57 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"129009\",\"nanos\":620522270},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-20T06:39:09.416Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Transaction processed: visa ending 0454     Amount: JPY129009.620522270",
+            "timestamp": "2024-01-20T06:39:09.416Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
             "timestamp": "2024-01-20T06:39:09.428Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"CAD\",\"units\":\"239\",\"nanos\":465333921},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-20T06:39:10.315Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -1068,26 +1237,29 @@
           }
         ],
         "metadata": {
-          "hypothesis": "A mild but notable CPU/memory anomaly in checkoutservice prompted cascading latency across dependent frontend paths, with downstream services showing elevated resource pressure and minor volume changes, leading to delayed email processing through the checkout workflow.",
-          "suspected_downstream": "checkoutservice",
+          "hypothesis": "A strong anomaly in the Redis cache (high CPU spike) is driving latency and throughput pressures across downstream services, causing elevated tail latency (notably in emailservice) and increased log volume in the frontend workflow.",
+          "suspected_downstream": "redis",
           "anomalous_services": [
-            "recommendationservice",
-            "redis",
+            "checkoutservice",
+            "paymentservice",
             "emailservice",
-            "adservice",
+            "recommendationservice",
             "shippingservice",
             "cartservice",
             "currencyservice",
-            "productcatalogservice"
+            "adservice",
+            "redis",
+            "productcatalogservice",
+            "frontend"
           ],
-          "llm_reasoning": "Metric signals show higher CPU z-scores across several services (not exceeding strong thresholds but indicating pressure), with checkoutservice having the highest relative anomaly. No explicit error/timeout indicators, and log-volume shifts are modest; however, upstream pressure on checkoutservice plausibly propagates to frontend and email-related paths given the dependency graph. Due to lack of definitive thresholds being crossed, confidence remains low.",
+          "llm_reasoning": "Metric signals show the strongest anomaly in redis (cpu_z 9.0, mem_jump 0.04, p95/p99 data not provided but tail latency notable for emailservice). Several downstream services (checkoutservice, frontend, etc.) also exhibit CPU spikes and increased activity without errors, suggesting ripple effects. The absence of explicit error logs points to a performance/dependency issue rather than application errors, consistent with a root cause in a shared upstream resource like Redis. The upstream linkage is inferred from the topology that frontend depends on downstream services; Redis sits as a critical shared resource whose degradation can propagate to multiple dependencies.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.82).",
-        "confidence": 0.826,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.58).",
+        "confidence": 0.754,
         "evidence": [
           {
             "type": "topology",
@@ -1099,15 +1271,12 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, so a fault in checkoutservice can propagate to frontend. No other viable alternative propagation path from frontend to a root cause is evident in the given topology; the log agent's downsteam hypothesis (checkoutservice) is consistent with the direct dependency link. Blast radius is limited to the symptom service in the provided topology, with frontend being the most critical service to monitor."
+              "llm_reasoning": "Frontend depends on multiple services; a failure or degraded behavior in a dependency that itself relies on redis (e.g., cartservice) can propagate to frontend. The direct path frontend -> [dependency] is structurally plausible, and if that dependency uses redis as a cache/store, redis could be the downstream causing the upstream service to fail and thus propagate to frontend. Alternative paths exist where any of the listed dependencies fail independently and cause frontend symptoms. Confidence is moderate due to limited visibility into transitive dependencies and whether each dependency actually uses redis. The blast radius remains centered on frontend and its key dependents; among them, cartservice and product catalog, along with checkout and shipping, are the most critical to monitor given their impact on user flows."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [
-            "frontend",
-            "checkoutservice"
-          ],
+          "propagation_path": [],
           "blast_radius": [
             "frontend"
           ],
@@ -1219,18 +1388,43 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, so a fault in checkoutservice can propagate to frontend. No other viable alternative propagation path from frontend to a root cause is evident in the given topology; the log agent's downsteam hypothesis (checkoutservice) is consistent with the direct dependency link. Blast radius is limited to the symptom service in the provided topology, with frontend being the most critical service to monitor.",
+          "llm_reasoning": "Frontend depends on multiple services; a failure or degraded behavior in a dependency that itself relies on redis (e.g., cartservice) can propagate to frontend. The direct path frontend -> [dependency] is structurally plausible, and if that dependency uses redis as a cache/store, redis could be the downstream causing the upstream service to fail and thus propagate to frontend. Alternative paths exist where any of the listed dependencies fail independently and cause frontend symptoms. Confidence is moderate due to limited visibility into transitive dependencies and whether each dependency actually uses redis. The blast radius remains centered on frontend and its key dependents; among them, cartservice and product catalog, along with checkout and shipping, are the most critical to monitor given their impact on user flows.",
           "path_assessment": "plausible",
-          "alternative_paths": [],
+          "alternative_paths": [
+            [
+              "cartservice"
+            ],
+            [
+              "productcatalogservice"
+            ],
+            [
+              "currencyservice"
+            ],
+            [
+              "recommendationservice"
+            ],
+            [
+              "checkoutservice"
+            ],
+            [
+              "adservice"
+            ],
+            [
+              "shippingservice"
+            ]
+          ],
           "critical_services_in_blast": [
-            "frontend"
+            "cartservice",
+            "productcatalogservice",
+            "checkoutservice",
+            "shippingservice"
           ],
           "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest convergence is between Log Agent and Topology Agent: checkoutservice is a plausible upstream driver that affects the frontend via a direct dependency path. The TCB-RCA result conflicts with this conclusion by elevating frontend as the root due to its traversal logic and lack of detected anomalies at checkoutservice. Given the observed CPU/memory pressure signals in checkoutservice and the direct dependency path to the symptom frontend, checkoutservice is the most credible root cause candidate. If future data reveals explicit errors or sustained anomalies at frontend without checkoutservice anomalies, reevaluation would be warranted.",
+    "synthesis_reasoning": "The strongest, convergent evidence points to Redis as the unobserved root cause: a shared resource with a pronounced CPU spike and downstream ripple effects across multiple services, plus the Log Agent’s explicit emphasis on Redis-related degradation. The Topology Agent supports a structurally plausible path from Redis through dependent services (e.g., cartservice) to the frontend, aligning with the symptom (frontend delay). The TCB-RCA results do not identify Redis as a root cause, which lowers its agreement score, but given the unobserved root cause detection rule and the log/topology signals, Redis remains the top candidate. The most plausible propagation path is Redis -> cartservice -> frontend, reflecting the observed symptom on the frontend and the degraded downstream components while respecting the topology constraints.",
     "tcb_rca_reference": {
       "candidates": [
         {

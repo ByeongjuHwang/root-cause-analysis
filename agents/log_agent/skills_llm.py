@@ -8,6 +8,7 @@ v2 대비 개선:
 """
 
 from typing import Any, Dict, List, Optional
+import os
 
 from mcp_servers.observability_mcp.app.repository import (
     load_logs,
@@ -114,6 +115,7 @@ def build_log_agent_user_prompt(
     referenced_upstreams: Optional[Dict[str, List[str]]] = None,
     service_statistics: Optional[Dict[str, Any]] = None,
     metric_summaries: Optional[Dict[str, Any]] = None,
+    evidence_collection: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Log Agent용 user prompt 생성.
 
@@ -126,6 +128,13 @@ def build_log_agent_user_prompt(
             제공되면 CPU z-score, memory jump, p95/p99 latency, network drops
             를 별도 섹션으로 출력. 이 modality가 있으면 CPU/MEM/DELAY/LOSS
             fault 감지가 크게 좋아진다 (log-rate보다 훨씬 강한 신호).
+        evidence_collection: Phase 3b — get_evidence_collection() 결과 (선택).
+            구조화된 EvidenceUnit 목록 (modality/anomaly_type/severity 등).
+            제공되면 LLM에게 "evidence layer가 짚은 dominant 서비스" 정보를
+            주어 multi-modality 정보를 한 번에 종합 판단할 수 있게 한다.
+            기존 service_statistics + metric_summaries와 보완 관계
+            (직교 정보가 아니라 같은 raw data의 다른 표현이므로 LLM이
+            상호 검증하여 더 안정된 판단 가능).
     """
     
     lines = []
@@ -338,6 +347,81 @@ def build_log_agent_user_prompt(
             "are causally upstream of log-rate changes in most faults."
         )
         lines.append("")
+
+    # === Phase 3b: Evidence-Aware Summary ===
+    # 위의 service_statistics + metric_summaries 섹션은 raw 신호 (개별 카운트 / z-score)다.
+    # 이 섹션은 같은 raw 데이터를 evidence_factory가 정규화한 결과다:
+    #   - severity는 modality 간 비교 가능한 [0,1] 점수 (degradation only — directional)
+    #   - anomaly_type은 fault 분류 힌트
+    #   - dominant_services는 evidence-aware layer가 종합 판단한 상위 후보
+    # LLM은 두 표현을 교차 검증하여 더 안정된 root cause를 결정해야 한다.
+    # 두 표현이 일치하면 강한 신호, 충돌하면 evidence 한계(예: hub bias)를
+    # legacy stats + topology constraint로 교정해야 한다.
+    if evidence_collection and evidence_collection.get("units"):
+        units = evidence_collection["units"]
+        modalities_present = evidence_collection.get("modalities_present") or []
+
+        # per-service severity aggregation (max severity per service)
+        # plus per-modality count for evidence diversity scoring
+        per_service: Dict[str, Dict[str, Any]] = {}
+        for u in units:
+            sev = float(u.get("severity") or 0.0)
+            anom = u.get("anomaly_type") or "unknown"
+            mod = u.get("modality") or "unknown"
+            for svc in (u.get("services") or []):
+                entry = per_service.setdefault(svc, {
+                    "max_severity": 0.0,
+                    "top_anomaly": None,
+                    "modalities": set(),
+                    "evidence_count": 0,
+                })
+                entry["evidence_count"] += 1
+                entry["modalities"].add(mod)
+                if sev > entry["max_severity"]:
+                    entry["max_severity"] = sev
+                    entry["top_anomaly"] = anom
+
+        # Rank by (max_severity desc, evidence_count desc)
+        ranked = sorted(
+            per_service.items(),
+            key=lambda kv: (-kv[1]["max_severity"], -kv[1]["evidence_count"]),
+        )
+
+        if ranked:
+            lines.append(f"## Evidence-Aware Summary "
+                         f"(modalities: {','.join(modalities_present)})")
+            lines.append(
+                "evidence_factory가 raw signal을 [0,1] severity로 정규화하고 "
+                "modality 간 비교 가능한 형태로 통합한 결과. severity는 degradation만 "
+                "반영 (개선 신호는 0). 위 service_statistics/metric_summaries와 "
+                "교차 검증용으로 사용하라:"
+            )
+            for svc, info in ranked[:5]:
+                mods_str = ",".join(sorted(info["modalities"]))
+                lines.append(
+                    f"- **{svc}**: max_severity={info['max_severity']:.2f} "
+                    f"({info['top_anomaly']}), "
+                    f"modalities={{{mods_str}}}, "
+                    f"evidence_count={info['evidence_count']}"
+                )
+            lines.append("")
+            lines.append(
+                "주의: Evidence dominant 서비스가 legacy 분석과 일치하면 강한 신호이나, "
+                "충돌하는 경우 다음을 고려하라:"
+            )
+            lines.append(
+                "  (a) Hub service는 downstream 부하로 metric이 흔들릴 수 있음 — "
+                "topology constraint를 우선시"
+            )
+            lines.append(
+                "  (b) Symptom service는 측정 위치이므로 자연히 latency degradation을 "
+                "보이며, 그것이 root cause라는 뜻은 아님"
+            )
+            lines.append(
+                "  (c) 단일 modality(metric만)로 지목된 후보보다 multi-modality(log+metric) "
+                "지지를 받는 후보가 우선"
+            )
+            lines.append("")
 
     lines.append(f"## Service-level Error Summary")
     if not service_error_summary:
@@ -635,6 +719,43 @@ class LogAnalysisServiceLLM:
                 metric_summaries = None
                 _ = exc
 
+        # === Step 2.8 (Phase 3b): Evidence-Aware Collection ===
+        # Build a structured EvidenceCollection from log + metric data using
+        # evidence_factory. This is the same raw data already gathered above,
+        # but normalised to severity [0,1] with directional semantics
+        # (degradation only). Provides modality-comparable signals to the LLM.
+        #
+        # Feature flag: opt-in via env var EVIDENCE_AWARE_PROMPT=1.
+        # Phase 3b finding: keep this off by default until evaluated on
+        # multiple smoke runs and the full 90-case run.
+        # Set EVIDENCE_AWARE_PROMPT=1 to enable evidence injection into prompt.
+        evidence_collection: Optional[Dict[str, Any]] = None
+        if os.getenv("EVIDENCE_AWARE_PROMPT") == "1":
+            try:
+                from mcp_servers.observability_mcp.app.evidence_tools import (
+                    get_evidence_collection_payload,
+                )
+                # Use same window resolution as the rest of the pipeline.
+                ev_baseline_start = baseline_range[0] if baseline_range else None
+                ev_baseline_end = baseline_range[1] if baseline_range else None
+                ev_incident_start = incident_range[0] if incident_range else None
+                ev_incident_end = incident_range[1] if incident_range else None
+
+                evidence_collection = get_evidence_collection_payload(
+                    start=start, end=end,
+                    log_file=log_file, metrics_file=metrics_file,
+                    baseline_start=ev_baseline_start, baseline_end=ev_baseline_end,
+                    incident_start=ev_incident_start, incident_end=ev_incident_end,
+                    focus_services=None,
+                    symptom_service=service,
+                    topology_path=None,        # not yet plumbed into log agent
+                    candidate_services=None,
+                )
+            except Exception as exc:
+                # Evidence collection is supplementary — never block the pipeline
+                evidence_collection = None
+                _ = exc
+
         # v8: materialise metric evidence entries for services with a detectable
         # signal. Each entry has modality=metric so downstream agents (RCA /
         # Verifier) can count it as a supporting modality independent of logs.
@@ -721,6 +842,7 @@ class LogAnalysisServiceLLM:
             referenced_upstreams=referenced_upstreams if referenced_upstreams else None,
             service_statistics=service_statistics,
             metric_summaries=metric_summaries,
+            evidence_collection=evidence_collection,
         )
         
         llm_result = await self.llm.call_json(
@@ -784,6 +906,10 @@ class LogAnalysisServiceLLM:
             "llm_reasoning": reasoning,
             "log_file": log_file,
             "referenced_upstreams": referenced_upstreams if referenced_upstreams else {},
+            # Phase 3b: structured evidence for downstream agents (RCA / Verifier).
+            # None when EVIDENCE_AWARE_PROMPT is off; otherwise a serialised
+            # EvidenceCollection payload (JSON-friendly dict from MCP tool).
+            "evidence_collection": evidence_collection,
         }
 
         try:

@@ -4,7 +4,7 @@
   "case": "recommendationservice_loss_3",
   "gt_service": "recommendationservice",
   "gt_fault": "loss",
-  "elapsed_seconds": 29.6,
+  "elapsed_seconds": 27.51,
   "evaluation": {
     "ac_at_1": false,
     "ac_at_3": false,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 29.6,
+    "elapsed_seconds": 27.51,
     "gt_fault": "loss"
   },
   "result": {
@@ -36,38 +36,23 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Upstream adservice experiencing CPU pressure leading to higher latency (CPU spike, higher p99) which propagates latency to frontend during calls and degrades overall frontend performance.",
+        "cause": "Adservice experiences CPU saturation leading to degraded response times, causing upstream slowdown that propagates latency to frontend and downstream services (cart, recommendation, checkout), resulting in the observed loss/fault in the recommendations path.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "adservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on adservice as the upstream fault source: frontend latency spikes correlate with CPU pressure in adservice and the propagation path frontend → adservice is structurally plausible. The TCB-RCA result conflicts by not identifying adservice as the root cause (it returns frontend as the root). Given the strong cross-source agreement on adservice as the upstream degradation source and the propagation path, adservice is the most credible root cause, with frontend being a downstream symptom.",
+        "reasoning": "Strong alignment between Log Agent (CPU saturation signals for adservice correlating with latency in frontend and dependents) and Topology Agent (direct frontend→adservice dependency with plausible propagation). The TCB-RCA baseline ranks frontend as the root due to its temporal/topology constraints, but it contradicts observed latency and lacks evidence of anomalies in frontend that would indicate it's the true upstream cause. Given the cross-source convergence on adservice as the deepest upstream contributor and the plausible propagation path, adservice is the most credible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
-      },
-      {
-        "rank": 2,
-        "cause": "Frontend as the root cause is identified by the TCB-RCA algorithm (temporal backtracking) as the primary node with no observed upstream anomalies in its view; suggests frontend anomaly propagates to itself or lacks upstream signals within the provided topology data.",
-        "confidence": 0.43,
-        "evidence_refs": [
-          "tcb-rca:confirmed"
-        ],
-        "cause_service": "frontend",
-        "reasoning": "TCB-RCA assigns frontend as the root since its traversal path and timing indicate a direct propagation path starting at frontend with no upstream anomaly detected in its local view. However, this contradicts the significant upstream signals observed by the logs (adservice CPU pressure) and the topology (> frontend depends on adservice). Given the cross-source agreement on adservice as upstream fault, frontend as root is less plausible as the true cause; it is kept as a lower-ranked alternative reflecting the TCB-RCA outcome.",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
-          "topology_agent_agrees": false,
-          "tcb_rca_agrees": true
-        }
       }
     ],
     "final_verdict": {
-      "cause": "Upstream adservice experiencing CPU pressure leading to higher latency (CPU spike, higher p99) which propagates latency to frontend during calls and degrades overall frontend performance.",
+      "cause": "Adservice experiences CPU saturation leading to degraded response times, causing upstream slowdown that propagates latency to frontend and downstream services (cart, recommendation, checkout), resulting in the observed loss/fault in the recommendations path.",
       "confidence": 0.6,
       "explanation": "Candidate 'adservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "adservice"
@@ -99,8 +84,7 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'adservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'adservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
-        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "Candidate 'adservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -119,8 +103,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service recommendationservice experiencing loss fault'. No error logs found. LLM hypothesis: Frontend latency spikes (high p99) are driven by upstream CPU-constrained adservice, causing longer downstream calls and overall degradation in frontend performance.",
-        "confidence": 0.65,
+        "summary": "Incident at frontend: 'Service recommendationservice experiencing loss fault'. No error logs found. LLM hypothesis: Adservice experiences CPU saturation leading to degraded response times, which propagates latency to frontend and dependent services (cart, recommendation, checkout), causing overall symptom of loss/fault in recommendations path.",
+        "confidence": 0.62,
         "evidence": [
           {
             "type": "log",
@@ -350,6 +334,21 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=68c2bde5-688d-4c90-95f5-cec307ebd524",
+            "timestamp": "2024-01-20T13:18:52.182Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', '0PUK6V6EV0', '6E92ZMYYFZ', 'L9ECAV7KIM', '66VCHSJNUP']",
             "timestamp": "2024-01-20T13:18:52.186Z",
             "level": "INFO",
@@ -395,6 +394,66 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=7b90304e-3a02-483d-8e74-bd6b2c4ac5dc",
+            "timestamp": "2024-01-20T13:18:52.288Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=880a519f-f993-4727-9924-e68531a6d028",
+            "timestamp": "2024-01-20T13:18:52.333Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['0PUK6V6EV0', '1YMWWN1N4O', '6E92ZMYYFZ', '2ZYFJ3GM2N', 'L9ECAV7KIM']",
+            "timestamp": "2024-01-20T13:18:52.338Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['66VCHSJNUP', '6E92ZMYYFZ', '9SIQT8TOJO', 'OLJCESPC7Z', 'LS4PSXUNUM']",
+            "timestamp": "2024-01-20T13:18:52.344Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "received ad request (context_words=[kitchen])",
             "timestamp": "2024-01-20T13:18:52.352Z",
             "level": "INFO",
@@ -425,12 +484,87 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "AddItemAsync called with userId=880a519f-f993-4727-9924-e68531a6d028, productId=0PUK6V6EV0, quantity=2",
+            "timestamp": "2024-01-20T13:18:52.365Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=880a519f-f993-4727-9924-e68531a6d028",
+            "timestamp": "2024-01-20T13:18:52.376Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['66VCHSJNUP', '6E92ZMYYFZ', 'OLJCESPC7Z', 'L9ECAV7KIM', '2ZYFJ3GM2N']",
+            "timestamp": "2024-01-20T13:18:52.382Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['1YMWWN1N4O', '9SIQT8TOJO', '66VCHSJNUP', 'L9ECAV7KIM', '6E92ZMYYFZ']",
+            "timestamp": "2024-01-20T13:18:52.436Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "received ad request (context_words=[kitchen])",
             "timestamp": "2024-01-20T13:18:52.450Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[Recv ListRecommendations] product_ids=['9SIQT8TOJO', '1YMWWN1N4O', '66VCHSJNUP', '6E92ZMYYFZ', 'OLJCESPC7Z']",
+            "timestamp": "2024-01-20T13:18:52.481Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -530,12 +664,87 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "order confirmation email sent to \"someone@example.com\"",
+            "timestamp": "2024-01-20T13:18:52.761Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"a30fd1db-c380-4705-a47f-0d00d73579e3\" user_currency=\"JPY\"",
+            "timestamp": "2024-01-20T13:18:54.705Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "payment went through (transaction_id: 9b14ea49-146d-461c-b5c0-4ae93b22d7a7)",
+            "timestamp": "2024-01-20T13:18:54.725Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
             "timestamp": "2024-01-20T13:18:54.732Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "order confirmation email sent to \"someone@example.com\"",
+            "timestamp": "2024-01-20T13:18:54.733Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"dde926da-027e-4bff-af5b-ec2b305fc902\" user_currency=\"CAD\"",
+            "timestamp": "2024-01-20T13:18:54.943Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -571,23 +780,106 @@
               "upstream": null,
               "error_type": null
             }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+253ms",
+            "timestamp": "2024-01-20T13:26:52.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "cpu_spike_zscore": 7.37,
+              "cpu_max": 0.6634,
+              "mem_jump_ratio": 0.031,
+              "p95_delta_ms": 48.13,
+              "p99_delta_ms": 252.65,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 4
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+310ms",
+            "timestamp": "2024-01-20T13:26:52.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 7.6,
+              "cpu_max": 0.121,
+              "mem_jump_ratio": 0.052,
+              "p95_delta_ms": 22.35,
+              "p99_delta_ms": 310.49,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+76ms; p99 latency Δ=+306ms",
+            "timestamp": "2024-01-20T13:26:52.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "cpu_spike_zscore": 6.87,
+              "cpu_max": 2.1385,
+              "mem_jump_ratio": 0.075,
+              "p95_delta_ms": 76.49,
+              "p99_delta_ms": 305.9,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 26
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+56ms; p99 latency Δ=+123ms",
+            "timestamp": "2024-01-20T13:26:52.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "recommendationservice",
+              "cpu_spike_zscore": 4.08,
+              "cpu_max": 0.4646,
+              "mem_jump_ratio": 0.025,
+              "p95_delta_ms": 55.82,
+              "p99_delta_ms": 123.49,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 4
+            }
           }
         ],
         "metadata": {
-          "hypothesis": "Frontend latency spikes (high p99) are driven by upstream CPU-constrained adservice, causing longer downstream calls and overall degradation in frontend performance.",
+          "hypothesis": "Adservice experiences CPU saturation leading to degraded response times, which propagates latency to frontend and dependent services (cart, recommendation, checkout), causing overall symptom of loss/fault in recommendations path.",
           "suspected_downstream": "adservice",
           "anomalous_services": [
+            "adservice",
             "frontend",
-            "adservice"
+            "cartservice",
+            "recommendationservice",
+            "checkoutservice"
           ],
-          "llm_reasoning": "Metric signals show strong anomalies in frontend (p99_Δms +305.9, cpu_z +6.9) and a significant CPU spike in adservice (cpu_z +18.0, p99_Δms +5.2). Frontend depends directly on adservice, so adservice's degradation is a plausible upstream root cause. No log errors are present, but metric anomalies indicate resource pressure upstream correlating with frontend latency.",
+          "llm_reasoning": "Metric signals show strong anomaly for adservice (cpu_z +18.0) with notable resource pressure, while frontend shows a substantial latency degradation (p95/p99 spikes). Other downstream services (cartservice, recommendationservice, checkoutservice) also exhibit latency increases, consistent with upstream slowdown. The upstream-downstream pattern and topology (frontend depends on adservice) support adservice as the deepest root cause; logs contain no explicit errors, so metric-driven root-cause prioritization guides the hypothesis.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to adservice: frontend → adservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.65).",
-        "confidence": 0.775,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to adservice: frontend → adservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -599,7 +891,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom (frontend) directly depends on adservice. A fault in adservice can propagate to frontend during a call, which aligns with the log agent's suspected_downstream. There are no alternative downstream-only paths from frontend to potential root cause within the given topology; the direct frontend -> adservice edge is the only immediate propagation path. Therefore, the hypothesis is structurally supported. The blast radius is currently limited to frontend, but if adservice fault propagates further, frontend remains affected; monitoring adservice and frontend is most critical."
+              "llm_reasoning": "Frontend directly depends on adservice, so a fault in adservice can propagate to frontend, causing the symptom. Other dependencies exist but adservice is the most plausible root given the suspected_downstream hint. The blast radius is limited to frontend in the provided topology, but monitoring the directly depended services (especially adservice and high-impact peers like cart/product catalog) is prudent."
             }
           }
         ],
@@ -719,19 +1011,22 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom (frontend) directly depends on adservice. A fault in adservice can propagate to frontend during a call, which aligns with the log agent's suspected_downstream. There are no alternative downstream-only paths from frontend to potential root cause within the given topology; the direct frontend -> adservice edge is the only immediate propagation path. Therefore, the hypothesis is structurally supported. The blast radius is currently limited to frontend, but if adservice fault propagates further, frontend remains affected; monitoring adservice and frontend is most critical.",
+          "llm_reasoning": "Frontend directly depends on adservice, so a fault in adservice can propagate to frontend, causing the symptom. Other dependencies exist but adservice is the most plausible root given the suspected_downstream hint. The blast radius is limited to frontend in the provided topology, but monitoring the directly depended services (especially adservice and high-impact peers like cart/product catalog) is prudent.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "frontend",
-            "adservice"
+            "adservice",
+            "cartservice",
+            "productcatalogservice",
+            "checkoutservice",
+            "shippingservice"
           ],
           "topology_supports_hypothesis": true
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "Strong consensus between Log Agent and Topology Agent places adservice as the upstream contributor to frontend degradation, with the suggested propagation path frontend <- adservice. The TCB-RCA result diverges, pinpointing frontend as the root due to its internal timing view and lack of observed upstream anomalies; however, this appears inconsistent with the observed CPU spike in adservice and the direct frontend→adservice dependency. Given the explicit upstream CPU pressure in adservice and structurally plausible propagation, adservice is prioritized as the primary root cause. The candidate with frontend as root is retained as a secondary possibility only because the TCB-RCA method surfaced it, but it has weaker corroboration across the other sources. The most plausible propagation path is adservice -> frontend, leading to frontend symptom observations.",
+    "synthesis_reasoning": "The Log Agent and Topology Agent jointly support adservice as the upstream fault: adservice shows CPU pressure with downstream latency impact on frontend and related services, and frontend directly depends on adservice. The TCB-RCA baseline conflicts (rank1 frontend with no anomalies) but lacks supporting timing evidence for frontend as the actual root. Given the observable metrics and structural dependency, adservice remains the strongest root candidate, with a propagation path adservice -> frontend explaining the symptom. The confidence reflects solid cross-source agreement between log and topology, tempered by the TCB-RCA disagreement.",
     "tcb_rca_reference": {
       "candidates": [
         {

@@ -4,7 +4,7 @@
   "case": "emailservice_loss_3",
   "gt_service": "emailservice",
   "gt_fault": "loss",
-  "elapsed_seconds": 28.38,
+  "elapsed_seconds": 38.58,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -21,7 +21,7 @@
       "frontend"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 28.38,
+    "elapsed_seconds": 38.58,
     "gt_fault": "loss"
   },
   "result": {
@@ -37,14 +37,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "emailservice is unhealthy or unavailable, causing downstream checkoutservice to fail when attempting to deliver order confirmations, which in turn triggers SERVICE_UNAVAILABLE errors observed by the frontend via the checkoutpath.",
+        "cause": "Email delivery service under upstream/downstream failure (downstream email path degraded). Checkoutservice reports failure to contact emailservice with 'no healthy upstream', while downstream impact propagates to frontend; emailservice shows no local errors but is implicated as the degraded upstream dependency causing downstream latency and intermittent unavailability signals.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "emailservice",
-        "reasoning": "All non-TCB sources converge on emailservice as the proximate upstream dependency implicated in the error path frontend -> checkoutservice -> emailservice. The Log Agent notes a SERVICE_UNAVAILABLE in checkoutservice due to an unhealthy upstream email path, and the Topology Agent documents the plausible propagation path frontend -> checkoutservice -> emailservice within the depicted dependency graph. The TCB-RCA engine, however, ranks frontend as the root with zero temporal evidentiary support, which conflicts with the observed downstream failure pattern. Given the absence of emailservice logs does not indicate health but rather monitoring unavailability (unobserved root cause), emailservice remains the deeper root cause supported by structural and log-context evidence.",
+        "reasoning": "Strong convergence between Log Agent’s downstream impact signal pointing to emailservice and the Topology Agent’s plausible propagation path frontend -> checkoutservice -> emailservice. Emailservice is the deeper root (unobserved) because logs do not show local errors but upstream health appears degraded, aligning with the unobserved root cause detection rule. TCB-RCA does not identify emailservice as a root cause due to its focus on timing/structure from frontend, so its guidance is overridden by the combined log/topology signals.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -53,14 +53,14 @@
       },
       {
         "rank": 2,
-        "cause": "checkoutservice experiences failure delivering order confirmations due to reliance on emailservice, thereby causing downstream SERVICE_UNAVAILABLE errors observed by the frontend; acts as the intermediate bottleneck in the path.",
-        "confidence": 0.33,
+        "cause": "Checkoutservice experienced high p99 latency and CPU spike, and logged a failed contact to emailservice ('no healthy upstream'), making it the likely proximate cause that propagated calls to emailservice and caused frontend symptoms.",
+        "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "Checkoutservice is implicated as the immediate caller to emailservice and is the service that surfaces SERVICE_UNAVAILABLE when the downstream emailpath is unhealthy. This aligns with the log observation of checkoutservice errors and the topology path frontend -> checkoutservice -> emailservice. However, checkoutservice is one step removed from the actual upstream issue if emailservice is the true root; thus it is a strong suspect but not the deepest root.",
+        "reasoning": " aligns with the log causal pattern and the structurally plausible path frontend -> checkoutservice -> emailservice. It is a strong proximate cause but not necessarily the deepest one; the absence of emailservice health in logs makes emailservice a more credible root per unobserved root cause guidance.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -69,15 +69,15 @@
       },
       {
         "rank": 3,
-        "cause": "frontend shows the symptom and is considered a propagation recipient in the observed blast radius; it is not the upstream root but the surface where the failure manifests.",
-        "confidence": 0.18,
+        "cause": "Symptom service showing loss fault; as per TCB-RCA, frontend appears as the initial observed node with no internal anomaly timing, but it is the symptom service rather than root; included as a candidate only due to systemic propagation cues but not the root.",
+        "confidence": 0.38,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed",
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "The TCB-RCA engine identifies frontend as the root with zero temporal evidence, indicating weak alignment. Both log and topology analyses consistently point to an upstream issue (emailservice/checkoutservice) causing the frontend to observe failures downstream. Therefore frontend is unlikely to be the root cause despite agreement in terms of propagation.",
+        "reasoning": "Frontend is the symptom service and is also listed by TCB-RCA as the propagation endpoint in its baseline; however, it is not the root cause given the stronger upstream signals pointing to emailservice/checkoutservice. This candidate is included for completeness but ranked lowest due to being downstream of the true root causes.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -86,7 +86,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "emailservice is unhealthy or unavailable, causing downstream checkoutservice to fail when attempting to deliver order confirmations, which in turn triggers SERVICE_UNAVAILABLE errors observed by the frontend via the checkoutpath.",
+      "cause": "Email delivery service under upstream/downstream failure (downstream email path degraded). Checkoutservice reports failure to contact emailservice with 'no healthy upstream', while downstream impact propagates to frontend; emailservice shows no local errors but is implicated as the degraded upstream dependency causing downstream latency and intermittent unavailability signals.",
       "confidence": 0.6,
       "explanation": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "emailservice"
@@ -122,6 +122,7 @@
         "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
         "Candidate 'emailservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
         "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'checkoutservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
         "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca)."
       ]
     },
@@ -141,8 +142,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing loss fault'. Errors detected in 1 service(s): checkoutservice (1 errors). LLM hypothesis: Checkoutservice failures to deliver order confirmations indicate dependency on emailservice is failing or unhealthy, causing downstream SERVICE_UNAVAILABLE errors for upstream order confirmation flow.",
-        "confidence": 0.42,
+        "summary": "Incident at frontend: 'Service emailservice experiencing loss fault'. Errors detected in 1 service(s): checkoutservice (1 errors). LLM hypothesis: Checkoutservice failed to contact emailservice for order confirmations, causing downstream latency and intermittent unavailability signals; emailservice's downstream mail path or upstream dependency is degraded, propagating load and errors to frontend via checkoutservice.",
+        "confidence": 0.55,
         "evidence": [
           {
             "type": "log",
@@ -222,6 +223,126 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-20T09:16:13.231Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-20T09:16:13.234Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-20T09:16:13.239Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-20T09:16:13.244Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "conversion request successful",
+            "timestamp": "2024-01-20T09:16:13.277Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "env platform is either empty or invalid",
+            "timestamp": "2024-01-20T09:16:13.292Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Detected Google metadata server: [169.254.169.254], setting ENV_PLATFORM to GCP. [path: /]",
+            "timestamp": "2024-01-20T09:16:13.294Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "ENV_PLATFORM is: gcp [path: /]",
+            "timestamp": "2024-01-20T09:16:13.294Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "received ad request (context_words=[])",
             "timestamp": "2024-01-20T09:16:13.296Z",
             "level": "INFO",
@@ -237,8 +358,68 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "request complete [path: /]",
+            "timestamp": "2024-01-20T09:16:13.298Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /product/L9ECAV7KIM]",
+            "timestamp": "2024-01-20T09:16:13.336Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "GetCartAsync called with userId=55e6f7e0-0859-4609-a8a1-cb77b3685bc5",
             "timestamp": "2024-01-20T09:16:13.346Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=bae3e480-1ba9-4721-a463-515d4362fedd",
+            "timestamp": "2024-01-20T09:16:13.352Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=c660f909-2d48-45d4-a8a8-c9deffa5366a",
+            "timestamp": "2024-01-20T09:16:13.385Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -327,12 +508,147 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "AddItemAsync called with userId=55e6f7e0-0859-4609-a8a1-cb77b3685bc5, productId=L9ECAV7KIM, quantity=5",
+            "timestamp": "2024-01-20T09:16:13.417Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=55e6f7e0-0859-4609-a8a1-cb77b3685bc5",
+            "timestamp": "2024-01-20T09:16:13.484Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[])",
+            "timestamp": "2024-01-20T09:16:13.496Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[GetQuote] received request",
+            "timestamp": "2024-01-20T09:16:13.510Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "shippingservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[GetQuote] completed request",
+            "timestamp": "2024-01-20T09:16:13.510Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "shippingservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=fd4c8e42-003c-48d0-aa31-78728e4cd95b",
+            "timestamp": "2024-01-20T09:16:13.585Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[PlaceOrder] user_id=\"55e6f7e0-0859-4609-a8a1-cb77b3685bc5\" user_currency=\"JPY\"",
             "timestamp": "2024-01-20T09:16:13.603Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[footwear])",
+            "timestamp": "2024-01-20T09:16:13.622Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[GetQuote] received request",
+            "timestamp": "2024-01-20T09:16:13.692Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "shippingservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[GetQuote] completed request",
+            "timestamp": "2024-01-20T09:16:13.692Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "shippingservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -387,6 +703,36 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "[ShipOrder] received request",
+            "timestamp": "2024-01-20T09:16:13.708Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "shippingservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[])",
+            "timestamp": "2024-01-20T09:16:13.711Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
             "timestamp": "2024-01-20T09:16:13.720Z",
             "level": "INFO",
@@ -417,12 +763,72 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "received ad request (context_words=[clothing, tops])",
+            "timestamp": "2024-01-20T09:16:13.726Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "received ad request (context_words=[footwear])",
+            "timestamp": "2024-01-20T09:16:13.814Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "adservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[PlaceOrder] user_id=\"4e8e2373-8b34-4b8b-8c40-452c1ae23e4d\" user_currency=\"USD\"",
             "timestamp": "2024-01-20T09:16:14.223Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"USD\",\"units\":\"404\",\"nanos\":920000000},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-20T09:16:14.310Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Transaction processed: visa ending 0454     Amount: USD404.920000000",
+            "timestamp": "2024-01-20T09:16:14.310Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -492,12 +898,57 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"EUR\",\"units\":\"40\",\"nanos\":654577621},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-20T09:16:16.083Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "Transaction processed: visa ending 0454     Amount: EUR40.654577621",
+            "timestamp": "2024-01-20T09:16:16.083Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
             "timestamp": "2024-01-20T09:16:16.097Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "PaymentService#Charge invoked with request {\"amount\":{\"currency_code\":\"JPY\",\"units\":\"9498\",\"nanos\":168952016},\"credit_card\":{\"credit_card_number\":\"4432-8015-6152-0454\",\"credit_card_cvv\":672,\"credit_card_expiration_year\":2039,\"credit_card_expiration_month\":1}}",
+            "timestamp": "2024-01-20T09:16:20.192Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "paymentservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -597,6 +1048,121 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "69:C 20 Jan 2024 09:17:09.033 * DB saved on disk",
+            "timestamp": "2024-01-20T09:17:09.033Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "redis",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "69:C 20 Jan 2024 09:17:09.034 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB",
+            "timestamp": "2024-01-20T09:17:09.034Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "redis",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "1:M 20 Jan 2024 09:17:09.108 * Background saving terminated with success",
+            "timestamp": "2024-01-20T09:17:09.108Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "redis",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "1:M 20 Jan 2024 09:22:10.086 * 100 changes in 300 seconds. Saving...",
+            "timestamp": "2024-01-20T09:22:10.086Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "redis",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "1:M 20 Jan 2024 09:22:10.087 * Background saving started by pid 70",
+            "timestamp": "2024-01-20T09:22:10.087Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "redis",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+116ms",
+            "timestamp": "2024-01-20T09:24:13.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "cpu_spike_zscore": 7.75,
+              "cpu_max": 0.7535,
+              "mem_jump_ratio": -0.0,
+              "p95_delta_ms": -0.29,
+              "p99_delta_ms": -115.86,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 4
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+67ms",
+            "timestamp": "2024-01-20T09:24:13.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 8.64,
+              "cpu_max": 0.2041,
+              "mem_jump_ratio": 0.016,
+              "p95_delta_ms": 15.18,
+              "p99_delta_ms": 67.07,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "failed to send order confirmation to \"someone@example.com\": rpc error: code = Unavailable desc = no healthy upstream",
             "timestamp": "2024-01-20T09:26:39.032Z",
             "level": "WARN",
@@ -611,19 +1177,28 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Checkoutservice failures to deliver order confirmations indicate dependency on emailservice is failing or unhealthy, causing downstream SERVICE_UNAVAILABLE errors for upstream order confirmation flow.",
+          "hypothesis": "Checkoutservice failed to contact emailservice for order confirmations, causing downstream latency and intermittent unavailability signals; emailservice's downstream mail path or upstream dependency is degraded, propagating load and errors to frontend via checkoutservice.",
           "suspected_downstream": "emailservice",
           "anomalous_services": [
-            "checkoutservice"
+            "productcatalogservice",
+            "checkoutservice",
+            "currencyservice",
+            "cartservice",
+            "frontend",
+            "emailservice",
+            "shippingservice",
+            "adservice",
+            "redis",
+            "paymentservice"
           ],
-          "llm_reasoning": "Metric signals show no extreme CPU/memory/delay outliers (no p95/p99 beyond thresholds), but log evidence includes a SERVICE_UNAVAILABLE warning in checkoutservice due to 'no healthy upstream' when contacting the email path. The upstream dependency (emailservice) is the most plausible root cause given the error message context, despite weak metric spikes for emailservice.",
+          "llm_reasoning": "Metric signals show strong anomalies in checkoutservice (high p99 latency and CPU spike) and multi-service elevation (frontend, currency, cart) indicating systemic load/latency. The sample error log from checkoutservice indicates a failed call to an upstream service with 'no healthy upstream' when delivering emails, implicating emailservice (the downstream/upstream target) as the deeper root cause per upstream-field guidance, even though emailservice logs show no errors. This aligns with upstream failure driving downstream symptoms across dependent services.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
-        "confidence": 0.796,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -635,7 +1210,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Frontend calls checkoutservice as part of its downstream dependency set. The computed path frontend -> checkoutservice -> emailservice is plausible if checkoutservice depends on or triggers emailservice. While emailservice is not listed among the direct dependencies of frontend, it can exist deeper in the checkoutpath. No clearly defined alternative path from frontend to emailservice is evident from the top-level dependency list, but other internal paths within checkoutservice could also reach emailservice. Given the topology, the path is structurally plausible, and the blast radius currently centers on frontend due to the symptom origin."
+              "llm_reasoning": "Frontend depends on checkoutservice, which in turn could call emailservice as part of order confirmation/email notification flow per the suspected_downstream hint. The provided propagation path frontend -> checkoutservice -> emailservice is structurally consistent with the documented dependency graph. There is no explicit information about alternative downstreams from checkoutservice to emailservice in the topology, so only this path is supported by the graph structure. The blast radius is limited to frontend per the current description, with checkoutservice as an intermediate critical node in the plausible path."
             }
           }
         ],
@@ -756,7 +1331,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Frontend calls checkoutservice as part of its downstream dependency set. The computed path frontend -> checkoutservice -> emailservice is plausible if checkoutservice depends on or triggers emailservice. While emailservice is not listed among the direct dependencies of frontend, it can exist deeper in the checkoutpath. No clearly defined alternative path from frontend to emailservice is evident from the top-level dependency list, but other internal paths within checkoutservice could also reach emailservice. Given the topology, the path is structurally plausible, and the blast radius currently centers on frontend due to the symptom origin.",
+          "llm_reasoning": "Frontend depends on checkoutservice, which in turn could call emailservice as part of order confirmation/email notification flow per the suspected_downstream hint. The provided propagation path frontend -> checkoutservice -> emailservice is structurally consistent with the documented dependency graph. There is no explicit information about alternative downstreams from checkoutservice to emailservice in the topology, so only this path is supported by the graph structure. The blast radius is limited to frontend per the current description, with checkoutservice as an intermediate critical node in the plausible path.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -767,7 +1342,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "Strong convergence between Log Agent and Topology Agent supports emailservice as the deeper root cause, with checkoutservice acting as a critical downstream consumer that surfaces failures to the frontend. The TCB-RCA result is discordant, ranking frontend as the root due to temporal constraints, but lacks corroborating timing signals and misaligns with the observed failure cascade (frontend → checkoutservice → emailservice). The unobserved nature of emailservice (no logs) aligns with the rule that the true root can be deeper than the measured symptom when upstream monitoring is unavailable. Therefore, the final synthesis prioritizes emailservice as the primary root cause, with checkoutservice as an intermediate failure linkage and frontend as the observed symptom endpoint. If additional data appears (e.g., emailservice logs or health checks), re-evaluate to possibly reinforce emailservice as the sole root.",
+    "synthesis_reasoning": "There is strong agreement between Log Agent and Topology Agent that the propagation path involves checkoutservice and emailservice, with frontend as the symptom. Emailservice emerges as the deepest root cause under the unobserved root cause detection rule, since emailservice shows no direct error logs but is implicated by upstream failure signals to downstream services. Checkoutservice is a strong proximate cause given its latency spike and the specific failure to contact emailservice. TCB-RCA does not support emailservice or checkoutservice as primary root since its deterministic backtracking lands on frontend with zero temporal gap, but this is outweighed by multi-source evidence highlighting upstream degradation. Therefore, the final root cause is emailservice, followed by checkoutservice as a secondary proximate cause, with frontend as the symptom path terminus. If needed, monitor emailservice health in isolation and verify email delivery pipeline to confirm the unobserved root status.",
     "tcb_rca_reference": {
       "candidates": [
         {
