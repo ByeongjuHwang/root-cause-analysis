@@ -68,6 +68,10 @@ async def a2a_endpoint(request: Request):
         if baseline_range and incident_range:
             kwargs["baseline_range"] = tuple(baseline_range)
             kwargs["incident_range"] = tuple(incident_range)
+        # v8: metrics CSV path for metric tool calls
+        metrics_file = metadata.get("metrics_file")
+        if metrics_file:
+            kwargs["metrics_file"] = metrics_file
 
     analysis = await service.analyze(**kwargs)
 

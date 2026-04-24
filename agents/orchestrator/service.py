@@ -80,6 +80,9 @@ class OrchestratorService:
                     # precise baseline vs incident statistics.
                     "baseline_range": _attachments.get("baseline_range"),
                     "incident_range": _attachments.get("incident_range"),
+                    # v8: metrics.csv path — Log Agent feeds this to the
+                    # metric MCP tools (get_metric_summary / latency / retry).
+                    "metrics_file": _attachments.get("metrics_file"),
                 },
             )
             log_result = self._parse_agent_result(log_raw, "log_agent")
