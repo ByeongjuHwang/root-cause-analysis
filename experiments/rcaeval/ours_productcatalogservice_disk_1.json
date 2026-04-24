@@ -4,7 +4,7 @@
   "case": "productcatalogservice_disk_1",
   "gt_service": "productcatalogservice",
   "gt_fault": "disk",
-  "elapsed_seconds": 34.64,
+  "elapsed_seconds": 34.19,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 34.64,
+    "elapsed_seconds": 34.19,
     "gt_fault": "disk"
   },
   "result": {
@@ -36,25 +36,40 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Disk fault in productcatalogservice leading to elevated CPU/memory pressure and degraded performance (high p95/p99 latency), causing downstream degradation observed at frontend.",
+        "cause": "Disk-related resource issues causing latency/slowdowns in productcatalogservice, leading to downstream impact on frontend.",
         "confidence": 0.6,
         "evidence_refs": [
-          "log-agent:confirmed",
-          "topology-agent:confirmed"
+          "log-agent:confirmed"
         ],
         "cause_service": "productcatalogservice",
-        "reasoning": "Both Log Agent and Topology Agent converge on productcatalogservice as the upstream root cause with a plausible propagation path frontend -> productcatalogservice. The TCB-RCA engine, which only detected an anomaly at the frontend, contradicts the other sources. Given the observed metrics for productcatalogservice (cpu, memory, latency increases) and the direct dependency from frontend to productcatalogservice, the disk fault in productcatalogservice is the most credible root cause. The unobserved or weak evidence scenario is not triggered here since productcatalogservice shows explicit anomaly evidence.",
+        "reasoning": "Strong anomaly signals in productcatalogservice metrics (cpu_z +30.7, mem_jump +0.11, p95Δms +4.3, p99Δms +7.5) support a resource fault localized to the deepest observed service. The log agent explicitly points to this service as the root cause with downstream impact on frontend. However, topology suggests a propagation direction from frontend to productcatalogservice (not aligned with a downstream failure path), and the TCB-RCA algorithm identifies frontend as the root due to timing/topology constraints. Given the absence of frontend error logs and the unobserved nature of the upstream service in the topology-observed path, productcatalogservice remains the strongest root-cause candidate when prioritizing metric-based evidence and the explicit log-based hypothesis.",
         "supporting_evidence": {
           "log_agent_agrees": true,
-          "topology_agent_agrees": true,
+          "topology_agent_agrees": false,
           "tcb_rca_agrees": false
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend is symptomatic and shows latency propagation from upstream issues; could be the observed failure point rather than the root cause.",
+        "confidence": 0.33,
+        "evidence_refs": [
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "Frontend is the symptom service with latency impact, and the TCB-RCA algorithm and topology analysis acknowledge frontend as a critical node in the observed cascade. However, there is no direct evidence of an upstream failure originating at frontend; rather, frontend manifests the impact. Since the strongest signal in logs points to productcatalogservice, frontend is a secondary candidate representing the propagated symptom rather than a root cause.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
         }
       }
     ],
     "final_verdict": {
-      "cause": "Disk fault in productcatalogservice leading to elevated CPU/memory pressure and degraded performance (high p95/p99 latency), causing downstream degradation observed at frontend.",
+      "cause": "Disk-related resource issues causing latency/slowdowns in productcatalogservice, leading to downstream impact on frontend.",
       "confidence": 0.6,
-      "explanation": "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
+      "explanation": "Candidate 'productcatalogservice' has 1 LLM source agreement but supported by keyword matching (log + topology).",
       "cause_service": "productcatalogservice"
     },
     "impact_analysis": {
@@ -83,8 +98,9 @@
       "verdict": "revised",
       "final_confidence": 0.6,
       "notes": [
-        "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'productcatalogservice' has 1 LLM source agreement but supported by keyword matching (log + topology).",
+        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -93,18 +109,18 @@
         "received ad request (context_words=[kitchen])",
         "request complete [path: /product/66VCHSJNUP]",
         "request complete [path: /product/LS4PSXUNUM]",
-        "AddItemAsync called with userId=841640f8-d256-44e4-80b1-14a374daa342, productId=9SIQT8TOJO, quantity=4"
+        "request complete [path: /product/9SIQT8TOJO]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
         "propagation path: frontend -> productcatalogservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing disk fault'. No error logs found. LLM hypothesis: Product catalog service is experiencing a disk fault causing high CPU load and tail latency, which propagates degraded availability to the frontend via the dependency chain.",
-        "confidence": 0.75,
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing disk fault'. No error logs found. LLM hypothesis: Productcatalogservice is experiencing disk-related resource issues causing latency/slowdowns, which in turn propagate delays to frontend via direct dependency.",
+        "confidence": 0.78,
         "evidence": [
           {
             "type": "log",
@@ -156,6 +172,81 @@
             "source": "observability-mcp",
             "content": "request complete [path: /product/LS4PSXUNUM]",
             "timestamp": "2024-01-15T23:08:19.002Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/9SIQT8TOJO]",
+            "timestamp": "2024-01-15T23:08:19.005Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/L9ECAV7KIM]",
+            "timestamp": "2024-01-15T23:08:19.005Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/L9ECAV7KIM]",
+            "timestamp": "2024-01-15T23:08:19.008Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /product/6E92ZMYYFZ]",
+            "timestamp": "2024-01-15T23:08:19.009Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-15T23:08:19.010Z",
             "level": "DEBUG",
             "trace_id": null,
             "metadata": {
@@ -409,6 +500,66 @@
           {
             "type": "metric",
             "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+59ms; p99 latency Δ=+277ms",
+            "timestamp": "2024-01-15T23:16:19.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "cpu_spike_zscore": 5.68,
+              "cpu_max": 0.5872,
+              "mem_jump_ratio": 0.005,
+              "p95_delta_ms": -59.34,
+              "p99_delta_ms": -277.38,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 4
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+198ms; p99 latency Δ=+586ms",
+            "timestamp": "2024-01-15T23:16:19.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 10.6,
+              "cpu_max": 0.2228,
+              "mem_jump_ratio": 0.013,
+              "p95_delta_ms": -197.5,
+              "p99_delta_ms": -586.05,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+369ms",
+            "timestamp": "2024-01-15T23:16:19.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "cpu_spike_zscore": 4.91,
+              "cpu_max": 1.3344,
+              "mem_jump_ratio": 0.086,
+              "p95_delta_ms": -37.32,
+              "p99_delta_ms": -369.17,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": 0.0,
+              "sockets_max": 48
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
             "content": "CPU spike z=30.7 (max=4.00); Memory jump +11.62",
             "timestamp": "2024-01-15T23:16:19.000Z",
             "level": "INFO",
@@ -428,31 +579,32 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Product catalog service is experiencing a disk fault causing high CPU load and tail latency, which propagates degraded availability to the frontend via the dependency chain.",
+          "hypothesis": "Productcatalogservice is experiencing disk-related resource issues causing latency/slowdowns, which in turn propagate delays to frontend via direct dependency.",
           "suspected_downstream": "productcatalogservice",
           "anomalous_services": [
-            "productcatalogservice"
+            "productcatalogservice",
+            "frontend"
           ],
-          "llm_reasoning": "The metric summary shows a strong anomaly for productcatalogservice (cpu_z +30.7, mem_jump +11.62, p95_Δms +4.3, p99_Δms +7.5) while frontend shows no direct metric abnormality. Given frontend depends on productcatalogservice, the upstream root cause is likely the disk fault in productcatalogservice driving downstream performance degradation.",
+          "llm_reasoning": "Strong metric anomaly in productcatalogservice (cpu_z +30.7, mem_jump +0.11, p95_Δms +4.3, p99_Δms +7.5) indicates a root-cause resource fault. Frontend shows no notable metric spikes but relies on productcatalogservice, so downstream impact is expected. Log-volume signals do not show large error spikes, but metric anomaly dominates the assessment of root cause; productcatalogservice is the deepest root cause with downstream impact observed in frontend.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.92).",
-        "confidence": 0.856,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: implausible (confidence 0.45).",
+        "confidence": 0.4,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service (frontend) directly depends on productcatalogservice, establishing a straightforward path: frontend -> productcatalogservice. There are no other documented indirect paths from frontend to productcatalogservice in the topology, so alternative routes are unlikely. The blast radius in the provided topology includes only frontend as potentially affected, indicating the fault is contained at the symptom layer, with productcatalogservice as the suspected downstream. Given the service types and criticality (frontend is high criticality), the path is structurally plausible and supported by the topology."
+              "llm_reasoning": "The suspected root cause (productcatalogservice) would propagate to the symptom (frontend) if the propagation direction were from productcatalogservice to frontend. However, the computed path shows frontend -> productcatalogservice, which is the reverse of the expected propagation direction. Based on the topology, there is a direct dependency edge from frontend to productcatalogservice, not from productcatalogservice to frontend. Therefore, the topology does not support the log agent's hypothesis about suspected_downstream causing the frontend symptom via a downstream propagation path. Within the blast radius, only the frontend is directly affected by further propagation, so monitoring focus remains on frontend; productcatalogservice would be the root candidate if the propagation direction were correct, but the topology does not reflect that path."
             }
           }
         ],
@@ -572,18 +724,18 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service (frontend) directly depends on productcatalogservice, establishing a straightforward path: frontend -> productcatalogservice. There are no other documented indirect paths from frontend to productcatalogservice in the topology, so alternative routes are unlikely. The blast radius in the provided topology includes only frontend as potentially affected, indicating the fault is contained at the symptom layer, with productcatalogservice as the suspected downstream. Given the service types and criticality (frontend is high criticality), the path is structurally plausible and supported by the topology.",
-          "path_assessment": "plausible",
+          "llm_reasoning": "The suspected root cause (productcatalogservice) would propagate to the symptom (frontend) if the propagation direction were from productcatalogservice to frontend. However, the computed path shows frontend -> productcatalogservice, which is the reverse of the expected propagation direction. Based on the topology, there is a direct dependency edge from frontend to productcatalogservice, not from productcatalogservice to frontend. Therefore, the topology does not support the log agent's hypothesis about suspected_downstream causing the frontend symptom via a downstream propagation path. Within the blast radius, only the frontend is directly affected by further propagation, so monitoring focus remains on frontend; productcatalogservice would be the root candidate if the propagation direction were correct, but the topology does not reflect that path.",
+          "path_assessment": "implausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": false
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The Log Agent identifies a strong anomaly in productcatalogservice with signs of disk fault driving downstream latency, and the Topology Agent confirms a direct frontend -> productcatalogservice propagation path with a contained blast radius. The TCB-RCA engine does not detect an upstream anomaly (it ranks frontend as the root with zero traversal to other nodes), which conflicts with log/topology. Since log evidence is strong and the topology supports the propagation path, the most credible root cause is productcatalogservice disk fault. The propagation path from root to symptom is: productcatalogservice -> frontend.",
+    "synthesis_reasoning": "The Log Agent provides the strongest direct evidence pointing to productcatalogservice as the root cause due to clear resource-related anomalies and a disk fault hypothesis, implying downstream latency effects on frontend. The Topology Agent contradicts the directional propagation (frontend -> productcatalogservice) and thus weakens the structural support for a productcatalogservice-originated failure if one strictly follows the observed dependency direction. The TCB-RCA Engine highlights frontend as the initial anomaly, which conflicts with the log-driven root cause. Given the unobserved nature of the upstream root in the topology path and the explicit log-based resource fault in productcatalogservice, the synthesis prioritizes productcatalogservice as the primary root-cause candidate, while acknowledging frontend remains a plausible secondary root in a broader view of the cascade. The propagation path is modeled as productcatalogservice -> frontend to reflect the observed symptom location.",
     "tcb_rca_reference": {
       "candidates": [
         {

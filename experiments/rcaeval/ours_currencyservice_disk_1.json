@@ -4,7 +4,7 @@
   "case": "currencyservice_disk_1",
   "gt_service": "currencyservice",
   "gt_fault": "disk",
-  "elapsed_seconds": 30.77,
+  "elapsed_seconds": 28.17,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 30.77,
+    "elapsed_seconds": 28.17,
     "gt_fault": "disk"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Currency service is under resource pressure (CPU/memory) leading to elevated tail latency, observed by metric spikes (CPU, memory, p95/p99 latency) and downstream impact on frontend latency.",
+        "cause": "Currency service flags disk fault leading to degraded performance (high CPU deltas, tail latency spikes, memory jump). This degrades currency processing, causing upstream frontend workloads to slow and cascade latency into dependent services (e.g., cart/checkout), resulting in the observed frontend symptom.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "currencyservice",
-        "reasoning": "All three sources align on currencyservice as the plausible root: the Log Agent detects currencyservice as anomalous with strong resource pressure metrics and downstream latency effects on the frontend; the Topology Agent confirms a direct dependency path currencyservice -> frontend, making a currencyservice fault a structurally plausible root cause; the TCB-RCA engine does not flag currencyservice (due to zero anomalies at the root in its run), but the absence of a TCB-RCA signal here does not override the stronger, convergent evidence from logs and topology. Since there is a clear, deeper root in currencyservice supported by metrics, this remains the strongest candidate despite the TCB-RCA's zero score.",
+        "reasoning": "All sources converge on currencyservice as the primary degraded component. Logs (though sparse) highlight currencyservice as the deepest anomalous node with measurable latency/CPU/memory signals. Topology shows frontend directly depends on currencyservice, making a fault here plausible and aligned with the observed cascade to frontend. The TCB-RCA base ranking does not spotlight currencyservice due to lack of detected anomaly in its run, but this algorithm is constrained by timing/topology and does not supersede concrete log-driven evidence of currencyservice issues. Therefore, currencyservice remains the most credible root cause given the aggregate signals.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Currency service is under resource pressure (CPU/memory) leading to elevated tail latency, observed by metric spikes (CPU, memory, p95/p99 latency) and downstream impact on frontend latency.",
+      "cause": "Currency service flags disk fault leading to degraded performance (high CPU deltas, tail latency spikes, memory jump). This degrades currency processing, causing upstream frontend workloads to slow and cascade latency into dependent services (e.g., cart/checkout), resulting in the observed frontend symptom.",
       "confidence": 0.6,
       "explanation": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "currencyservice"
@@ -96,14 +96,14 @@
         "conversion request successful"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
         "propagation path: frontend -> currencyservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing disk fault'. No error logs found. LLM hypothesis: Currency service is under resource pressure (CPU/mem), causing elevated tail latency which downstream frontend and dependent services observe as latency increases and potential slow paths.",
+        "summary": "Incident at frontend: 'Service currencyservice experiencing disk fault'. No error logs found. LLM hypothesis: Currency service is experiencing degraded performance (high CPU deltas and significant tail latency), likely due to disk fault. This causes upstream frontend workloads to slow down and cascade delays into dependent services (e.g., cart/checkout), amplifying latency across the request path.",
         "confidence": 0.75,
         "evidence": [
           {
@@ -214,6 +214,51 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "request complete [path: /product/OLJCESPC7Z]",
+            "timestamp": "2024-01-16T06:21:09.139Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-16T06:21:09.142Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "adding to cart [path: /cart]",
+            "timestamp": "2024-01-16T06:21:09.143Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "AddItemAsync called with userId=307767a1-c0f5-45fa-830a-d9c4d9753cf2, productId=OLJCESPC7Z, quantity=3",
             "timestamp": "2024-01-16T06:21:09.147Z",
             "level": "INFO",
@@ -229,12 +274,57 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "request complete [path: /cart]",
+            "timestamp": "2024-01-16T06:21:09.150Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /cart]",
+            "timestamp": "2024-01-16T06:21:09.154Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "Getting supported currencies...",
             "timestamp": "2024-01-16T06:21:09.162Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=307767a1-c0f5-45fa-830a-d9c4d9753cf2",
+            "timestamp": "2024-01-16T06:21:09.165Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -334,6 +424,21 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=55973fff-e81e-4a69-a26d-ea729c78536c",
+            "timestamp": "2024-01-16T06:21:09.268Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "[PlaceOrder] user_id=\"307767a1-c0f5-45fa-830a-d9c4d9753cf2\" user_currency=\"JPY\"",
             "timestamp": "2024-01-16T06:21:09.270Z",
             "level": "INFO",
@@ -349,12 +454,57 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=307767a1-c0f5-45fa-830a-d9c4d9753cf2",
+            "timestamp": "2024-01-16T06:21:09.273Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "conversion request successful",
             "timestamp": "2024-01-16T06:21:09.273Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=069dc38d-17c3-49d1-afe8-fbbabf9cb116",
+            "timestamp": "2024-01-16T06:21:09.371Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "GetCartAsync called with userId=f48c884e-6980-45a6-8c0f-b19e719d445d",
+            "timestamp": "2024-01-16T06:21:09.371Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -439,12 +589,87 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "order confirmation email sent to \"someone@example.com\"",
+            "timestamp": "2024-01-16T06:21:09.484Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"e0af662b-b550-4be6-8bc2-5b0e52c29b00\" user_currency=\"JPY\"",
+            "timestamp": "2024-01-16T06:21:10.380Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "payment went through (transaction_id: 62762b41-1b8d-4eef-8113-29724004c349)",
+            "timestamp": "2024-01-16T06:21:10.577Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "A request to send order confirmation email to someone@example.com has been received.",
             "timestamp": "2024-01-16T06:21:10.587Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "emailservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "order confirmation email sent to \"someone@example.com\"",
+            "timestamp": "2024-01-16T06:21:10.589Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "[PlaceOrder] user_id=\"7183fab5-8cbd-4551-8959-34b3d66aff5f\" user_currency=\"USD\"",
+            "timestamp": "2024-01-16T06:21:11.884Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -480,34 +705,117 @@
               "upstream": null,
               "error_type": null
             }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+81ms; p99 latency Δ=+343ms",
+            "timestamp": "2024-01-16T06:29:09.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "cpu_spike_zscore": 7.37,
+              "cpu_max": 0.6642,
+              "mem_jump_ratio": 0.003,
+              "p95_delta_ms": -80.68,
+              "p99_delta_ms": -342.74,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 4
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p95 latency Δ=+76ms; p99 latency Δ=+208ms",
+            "timestamp": "2024-01-16T06:29:09.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 8.92,
+              "cpu_max": 0.1667,
+              "mem_jump_ratio": 0.02,
+              "p95_delta_ms": 76.44,
+              "p99_delta_ms": -208.43,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "Memory jump +2.24; p99 latency Δ=+85ms",
+            "timestamp": "2024-01-16T06:29:09.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "currencyservice",
+              "cpu_spike_zscore": 4.82,
+              "cpu_max": 3.4232,
+              "mem_jump_ratio": 2.236,
+              "p95_delta_ms": 46.68,
+              "p99_delta_ms": 84.63,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": 0.0,
+              "sockets_max": 8
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+141ms",
+            "timestamp": "2024-01-16T06:29:09.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "cpu_spike_zscore": 8.37,
+              "cpu_max": 2.2998,
+              "mem_jump_ratio": 0.027,
+              "p95_delta_ms": 43.28,
+              "p99_delta_ms": -140.76,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": 0.0,
+              "sockets_max": 34
+            }
           }
         ],
         "metadata": {
-          "hypothesis": "Currency service is under resource pressure (CPU/mem), causing elevated tail latency which downstream frontend and dependent services observe as latency increases and potential slow paths.",
+          "hypothesis": "Currency service is experiencing degraded performance (high CPU deltas and significant tail latency), likely due to disk fault. This causes upstream frontend workloads to slow down and cascade delays into dependent services (e.g., cart/checkout), amplifying latency across the request path.",
           "suspected_downstream": "currencyservice",
           "anomalous_services": [
-            "currencyservice"
+            "currencyservice",
+            "frontend",
+            "cartservice",
+            "checkoutservice"
           ],
-          "llm_reasoning": "Metric summary shows strong anomalies for currencyservice: cpu_z +4.8, mem_jump +2.24, p95_Δms +46.7 and p99_Δms +84.6. No logErrors detected, but these metric spikes indicate a resource/delay fault in currencyservice. Other services show less extreme metric signals and only moderate volume_delta changes. Since frontend depends on currencyservice, its latency increases are consistent with downstream impact. Upstream/root-cause is most plausibly currencyservice itself, with currencyservice as the deepest root in this incident.",
+          "llm_reasoning": "Metric summary shows currencyservice with strong anomalies: mem_jump > 0.3 and p95/p99 latency spikes (p99 +84.6ms), indicating a primary performance issue. Other services (frontend, cartservice, checkoutservice) also show CPU spikes and latency increases, suggesting downstream impact from currencyservice. No individual service shows a larger or earlier log-volume anomaly, and currencyservice is the deepest root-cause candidate per metric signals. Upstream links in logs are not provided, so suspected_downstream is inferred from metric onset and dependency topology.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: implausible (confidence 0.20).",
-        "confidence": 0.4,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.65).",
+        "confidence": 0.775,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service (frontend) depends on currencyservice, so the given graph path frontend -> currencyservice is the forward dependency direction. A fault originating in currencyservice would propagate to frontend (upstream impact in fault terms), not from frontend to currencyservice. Therefore, the computed path from frontend to currencyservice is not a plausible root-to-symptom propagation path given the topology. The hypothesis that currencyservice is a suspected downstream aligns with the dependency edge, but as a propagation path to the symptom it is reverse of the typical failure propagation direction."
+              "llm_reasoning": "The symptom service (frontend) directly depends on currencyservice, so a fault in currencyservice can plausibly propagate to frontend. There are no alternative structural paths from frontend to currencyservice within the given topology (only the direct dependency exists). The blast radius is limited to frontend under the provided topology unless additional cross-service interactions are present. The topology clearly shows currencyservice as downstream from frontend, aligning with the log agent's suspected_downstream hypothesis."
             }
           }
         ],
@@ -627,8 +935,8 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service (frontend) depends on currencyservice, so the given graph path frontend -> currencyservice is the forward dependency direction. A fault originating in currencyservice would propagate to frontend (upstream impact in fault terms), not from frontend to currencyservice. Therefore, the computed path from frontend to currencyservice is not a plausible root-to-symptom propagation path given the topology. The hypothesis that currencyservice is a suspected downstream aligns with the dependency edge, but as a propagation path to the symptom it is reverse of the typical failure propagation direction.",
-          "path_assessment": "implausible",
+          "llm_reasoning": "The symptom service (frontend) directly depends on currencyservice, so a fault in currencyservice can plausibly propagate to frontend. There are no alternative structural paths from frontend to currencyservice within the given topology (only the direct dependency exists). The blast radius is limited to frontend under the provided topology unless additional cross-service interactions are present. The topology clearly shows currencyservice as downstream from frontend, aligning with the log agent's suspected_downstream hypothesis.",
+          "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
@@ -638,7 +946,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest convergent signal is that currencyservice shows significant resource pressure with downstream impact on frontend latency, which is consistent with the symptom. The topology confirms currencyservice is a direct dependency of the symptom service path (frontend). The TCB-RCA result is misleading here since it did not observe anomalies at the root, but given the absence of signals there and the clear log/topology support for currencyservice as the root, currencyservice remains the preferred root cause. If currencyservice were to be disproven by future data, the next candidate would need to be a downstream or upstream service in the currencyservice-frontend path, but current evidence does not support that at this time.",
+    "synthesis_reasoning": "The strongest signal comes from the Log Agent indicating currencyservice is the primary degraded component with clear performance anomalies, supported structurally by the Topology Agent which confirms a direct frontend -> currencyservice dependency and plausible propagation path. The TCB-RCA baseline did not align with currencyservice as root, but its constraints should not override strong log-based and topology-based evidence. Therefore, currencyservice is the most credible root cause, with the propagation path currencyservice -> frontend explaining the symptom cascade. If currencyservice remains unhealthy, downstream services like cartservice/checkout would also show impact, consistent with observed anomalies in the broader set.",
     "tcb_rca_reference": {
       "candidates": [
         {

@@ -357,7 +357,24 @@ def build_log_agent_user_prompt(
     if not error_evidence_samples:
         lines.append("- No error-level evidence available.")
     else:
-        for ev in error_evidence_samples[:30]:
+        # v9: re-order samples so distress-keyword logs (timeout/retry/reset)
+        # appear FIRST — they are the highest-precision distress signals even
+        # when buried among dozens of regular errors. Within each priority
+        # group we keep chronological order.
+        def _has_distress_kw(ev):
+            msg = (ev.get("content") or "").lower()
+            return any(kw in msg for kw in (
+                "timeout", "timed out", "deadline exceeded",
+                "retry", "retries", "back-off", "backoff",
+                "reset", "refused", "broken pipe", "econnrefused", "econnreset",
+            ))
+
+        prioritised = sorted(
+            error_evidence_samples,
+            key=lambda ev: (not _has_distress_kw(ev), ev.get("timestamp", "")),
+        )
+
+        for ev in prioritised[:30]:
             meta = ev.get("metadata", {}) or {}
             svc = meta.get("service", "?")
             ts = ev.get("timestamp", "?")
@@ -369,8 +386,10 @@ def build_log_agent_user_prompt(
             status_str = f" [status={status}]" if status else ""
             error_type = meta.get("error_type")
             error_type_str = f" [type={error_type}]" if error_type else ""
+            # v9: annotate distress lines so the LLM can see them at a glance
+            distress_marker = " [DISTRESS]" if _has_distress_kw(ev) else ""
             lines.append(
-                f"- {ts} | {svc} | {level}{upstream_str}{status_str}{error_type_str}\n"
+                f"- {ts} | {svc} | {level}{upstream_str}{status_str}{error_type_str}{distress_marker}\n"
                 f"  {msg}"
             )
     lines.append("")
@@ -480,9 +499,54 @@ class LogAnalysisServiceLLM:
                 r for r in logs
                 if r.level.upper() in ("ERROR", "WARN") or (r.status_code and r.status_code >= 500)
             ]
-            
+
+            # === v9 (7순위): per-service evidence reduction at COLLECTION time ===
+            # Previously we appended EVERY log of EVERY service to all_evidence
+            # (often 10,000+ entries for large cases). This exploded memory and
+            # slowed _select_evidence_for_return downstream.
+            #
+            # New strategy: we only keep the evidence that can plausibly carry
+            # a signal:
+            #   1) ALL error/warn logs (already identified above)
+            #   2) ALL logs whose message contains timeout / retry / reset /
+            #      latency keywords (from v6 patterns)
+            #   3) ALL logs with upstream != None (upstream-reference chain)
+            #   4) UP TO SAMPLE_CAP INFO/DEBUG samples per service (representative)
+            # Everything else is discarded. This preserves the LLM-relevant
+            # signal while bounding memory. service_statistics (computed
+            # separately in Step 2.6) still sees EVERY log because it reads
+            # directly from the cached load_logs() output.
+            from mcp_servers.observability_mcp.app.repository import (
+                _LATENCY_PATTERNS, _TIMEOUT_PATTERNS,
+                _RETRY_PATTERNS, _RESET_PATTERNS,
+            )
+
+            SAMPLE_CAP = 30  # normal INFO/DEBUG samples per service (upper bound)
+            normal_sampled = 0
+
             for log_record in logs:
-                all_evidence.append(self._log_to_evidence(log_record))
+                lvl = (log_record.level or "").upper()
+                msg = log_record.message or ""
+                is_error_warn = (
+                    lvl in ("ERROR", "WARN")
+                    or (log_record.status_code and log_record.status_code >= 500)
+                )
+                has_upstream = bool(log_record.upstream)
+                has_keyword = (
+                    _LATENCY_PATTERNS.search(msg) is not None
+                    or _TIMEOUT_PATTERNS.search(msg) is not None
+                    or _RETRY_PATTERNS.search(msg) is not None
+                    or _RESET_PATTERNS.search(msg) is not None
+                )
+
+                if is_error_warn or has_upstream or has_keyword:
+                    # Signal-bearing: always keep
+                    all_evidence.append(self._log_to_evidence(log_record))
+                elif normal_sampled < SAMPLE_CAP:
+                    # Representative sample cap for normal traffic
+                    all_evidence.append(self._log_to_evidence(log_record))
+                    normal_sampled += 1
+                # else: skip (noise)
             
             # NOTE: v3 (pre-stats) only added to service_summaries when error_logs > 0.
             # That caused CPU/Memory/Loss faults — which produce no ERROR logs —
@@ -705,7 +769,10 @@ class LogAnalysisServiceLLM:
             max_total=200,
         )
 
-        return {
+        # === Phase 3a: Shadow mode — evidence-aware 경로를 병렬 실행 ===
+        # 전적으로 관측 목적. 실패해도 legacy 경로에 전혀 영향 없다.
+        # 결과는 llm_logs/*_log_agent_shadow_*.json 에 저장된다.
+        legacy_result = {
             "summary": summary,
             "confidence": confidence,
             "evidence": evidence_for_return,
@@ -716,9 +783,26 @@ class LogAnalysisServiceLLM:
             "service_statistics": service_statistics,  # v4: RCA Agent가 참고 가능
             "llm_reasoning": reasoning,
             "log_file": log_file,
-            # 신규: upstream 참조 정보 (RCA Agent가 참고 가능)
             "referenced_upstreams": referenced_upstreams if referenced_upstreams else {},
         }
+
+        try:
+            from agents.log_agent.shadow import run_shadow_evidence_collection
+            run_shadow_evidence_collection(
+                legacy_result=legacy_result,
+                incident_id=incident_id,
+                symptom_service=service,
+                start=start, end=end,
+                log_file=log_file, metrics_file=metrics_file,
+                baseline_range=baseline_range,
+                incident_range=incident_range,
+            )
+        except Exception:
+            # Shadow는 절대로 production 경로에 영향 주지 않아야 한다.
+            # 어떤 예외도 여기서 무시한다 (log 기록은 shadow module 내부에서 처리).
+            pass
+
+        return legacy_result
     
     def _log_to_evidence(self, record: LogRecord) -> Dict[str, Any]:
         # v8: modality discriminator — RCA Agent / Verifier use this to
@@ -753,13 +837,23 @@ class LogAnalysisServiceLLM:
         Priority order (higher priority kept first):
             1. ERROR / WARN level — always keep
             2. Logs with upstream field set — always keep
-            3. Logs from anomalous_services / suspected_downstream — up to per_service_cap each
-            4. Other services — up to per_service_cap each
+            3. v9: Logs whose message contains timeout/retry/reset/latency
+               keywords — always keep (these are high-precision distress signals
+               even when level=INFO)
+            4. Logs from anomalous_services / suspected_downstream — up to
+               per_service_cap each
+            5. Other services — up to per_service_cap / 2 each
 
         Total is hard-capped at max_total, chronologically sorted.
         """
         if not all_evidence:
             return []
+
+        # v9: import regex patterns for keyword-based tier-1 promotion
+        from mcp_servers.observability_mcp.app.repository import (
+            _LATENCY_PATTERNS, _TIMEOUT_PATTERNS,
+            _RETRY_PATTERNS, _RESET_PATTERNS,
+        )
 
         priority_services = set(anomalous_services or [])
         if suspected_downstream:
@@ -774,8 +868,25 @@ class LogAnalysisServiceLLM:
         def _has_upstream(ev: Dict[str, Any]) -> bool:
             return bool((ev.get("metadata") or {}).get("upstream"))
 
-        # Tier 1: always keep
-        tier1 = [ev for ev in all_evidence if _level(ev) in ("ERROR", "WARN") or _has_upstream(ev)]
+        def _has_distress_keyword(ev: Dict[str, Any]) -> bool:
+            """v9: distress keyword in message promotes log to tier-1."""
+            msg = ev.get("content") or ""
+            if not msg:
+                return False
+            return (
+                _TIMEOUT_PATTERNS.search(msg) is not None
+                or _RETRY_PATTERNS.search(msg) is not None
+                or _RESET_PATTERNS.search(msg) is not None
+                or _LATENCY_PATTERNS.search(msg) is not None
+            )
+
+        # Tier 1: always keep (error/warn, upstream, or distress keywords)
+        tier1 = [
+            ev for ev in all_evidence
+            if _level(ev) in ("ERROR", "WARN")
+            or _has_upstream(ev)
+            or _has_distress_keyword(ev)
+        ]
         kept_ids = {id(ev) for ev in tier1}
 
         # Tier 2: priority services (cap per service)
@@ -806,7 +917,7 @@ class LogAnalysisServiceLLM:
         combined = tier1 + tier2 + tier3
         # Hard cap
         if len(combined) > max_total:
-            combined = tier1[:max_total]  # prioritize error/warn if over budget
+            combined = tier1[:max_total]  # prioritize error/warn/keyword if over budget
             if len(combined) < max_total:
                 remaining = max_total - len(combined)
                 combined = combined + tier2[:remaining]

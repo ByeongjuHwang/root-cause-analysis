@@ -4,14 +4,14 @@
   "case": "emailservice_delay_1",
   "gt_service": "emailservice",
   "gt_fault": "delay",
-  "elapsed_seconds": 27.85,
+  "elapsed_seconds": 39.04,
   "evaluation": {
     "ac_at_1": false,
     "ac_at_3": false,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.43,
-    "verdict": "weak-evidence",
+    "top_confidence": 0.6,
+    "verdict": "revised",
     "ground_truth_root_cause": "emailservice",
     "predicted_top_cause_service": "frontend",
     "predicted_top_cause_excerpt": "frontend",
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 27.85,
+    "elapsed_seconds": 39.04,
     "gt_fault": "delay"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Frontend service itself exhibits the symptom (delay), with the TCB-RCA algorithm ranking frontend as the primary candidate due to temporal/topology constraints, albeit with zero explicit timing confidence. This treats frontend as the proximal root-cause candidate for the observed delay.",
-        "confidence": 0.43,
+        "cause": "Frontend itself exhibits delay symptoms that could be caused by upstream issues or internal faults; serves as the observed symptom host and potential direct fault source in a zero-hop propagation model.",
+        "confidence": 0.6,
         "evidence_refs": [
           "topology-agent:confirmed",
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "Log analysis shows the symptom is observed in frontend (delay), without strong evidence of upstream triggers. Topology supports a direct frontend involvement via downstream dependency from adservice and other frontend dependencies; TCB-RCA prioritizes frontend as the propagation origin under the given constraints. Given the symptom is frontend, this candidate is plausible as a proximal root cause, though it does not identify a deeper upstream fault.",
+        "reasoning": "TCB-RCA identifies frontend as the propagation target with zero temporal gap, effectively treating frontend as a potential root in a minimal path model. Topology also supports frontend as the blast center in the observed context (though adservice is the clearly defined upstream dependency). The Log Agent provides weak evidence (no clear anomalies in logs), which lowers confidence in frontend as the root but does not rule it out, especially since the symptom is frontend delay. When combining signals, frontend remains a defensible root given the deterministic timing/topology alignment, but it is less favored than adservice due to the explicit downstream propagation path.",
         "supporting_evidence": {
           "log_agent_agrees": false,
           "topology_agent_agrees": true,
@@ -52,13 +52,13 @@
       },
       {
         "rank": 2,
-        "cause": "Downstream adservice suspected as the root cause that propagates to frontend, causing the observed delay in the symptom service. No direct error logs were observed for adservice, making it an unobserved/root-cause candidate deeper in the chain.",
+        "cause": "Downstream service adservice exhibiting delay characteristics that propagate to frontend, causing the observed frontend delay symptom.",
         "confidence": 0.4,
         "evidence_refs": [
           "topology-agent:confirmed"
         ],
         "cause_service": "adservice",
-        "reasoning": "Topology shows a direct frontend -> adservice propagation path, aligning with a plausible downstream fault that could manifest as frontend latency. Log evidence lacks strong signals in frontend or upstream services to pinpoint a clear root cause, and TCB-RCA centers on frontend rather than adservice, making adservice an unobserved deeper root cause that is consistent with the observed symptom if adservice failed quietly.",
+        "reasoning": "Topology identifies a direct propagation path frontend -> adservice, and the blast radius centers on frontend. This makes adservice a plausible root cause for upstream delay visible at the symptom frontend. The Log Agent observed no clear metrics/log anomalies within observed windows, so there is no direct log-based confirmation at adservice; however, the absence of logs does not rule out adservice as the root cause (unobserved). TCB-RCA points to frontend as the initial fault, but given the topology-aligned path and the possibility of an external downstream issue, adservice remains the strongest structurally plausible root cause among candidates. The absence of adservice logs is consistent with the UNOBSERVED_ROOT_CAUSE consideration if adservice monitoring is unavailable or its failure is not logged.",
         "supporting_evidence": {
           "log_agent_agrees": false,
           "topology_agent_agrees": true,
@@ -67,8 +67,8 @@
       }
     ],
     "final_verdict": {
-      "cause": "Frontend service itself exhibits the symptom (delay), with the TCB-RCA algorithm ranking frontend as the primary candidate due to temporal/topology constraints, albeit with zero explicit timing confidence. This treats frontend as the proximal root-cause candidate for the observed delay.",
-      "confidence": 0.43,
+      "cause": "Frontend itself exhibits delay symptoms that could be caused by upstream issues or internal faults; serves as the observed symptom host and potential direct fault source in a zero-hop propagation model.",
+      "confidence": 0.6,
       "explanation": "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca).",
       "cause_service": "frontend"
     },
@@ -95,10 +95,11 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.43,
+      "verdict": "revised",
+      "final_confidence": 0.6,
       "notes": [
         "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca).",
+        "Candidate 'frontend' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
         "Candidate 'adservice' supported by only 1/3 LLM sources (topology)."
       ]
     },
@@ -118,7 +119,7 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: No strong metric anomalies detected across services; log-rate changes are modest and do not clearly point to a single upstream/downstream failure; if a root cause exists, it is not evidenced by metric spikes (cpu/mem/latency) within the observed window.",
+        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: No clear metric or log-based anomaly is evident in the observed windows; the delay fault in emailservice may be due to an external factor or an unseen downstream dependency not captured in the metrics/logs provided.",
         "confidence": 0.25,
         "evidence": [
           {
@@ -420,13 +421,73 @@
               "upstream": null,
               "error_type": null
             }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+149ms",
+            "timestamp": "2024-01-20T06:47:06.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "cartservice",
+              "cpu_spike_zscore": 6.61,
+              "cpu_max": 0.5624,
+              "mem_jump_ratio": 0.0,
+              "p95_delta_ms": -27.65,
+              "p99_delta_ms": -148.64,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 4
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+131ms",
+            "timestamp": "2024-01-20T06:47:06.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "checkoutservice",
+              "cpu_spike_zscore": 4.64,
+              "cpu_max": 0.0836,
+              "mem_jump_ratio": 0.041,
+              "p95_delta_ms": -48.41,
+              "p99_delta_ms": -130.96,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": null,
+              "sockets_max": 9
+            }
+          },
+          {
+            "type": "metric",
+            "source": "observability-mcp/metric_repository",
+            "content": "p99 latency Δ=+111ms",
+            "timestamp": "2024-01-20T06:47:06.000Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "cpu_spike_zscore": 4.76,
+              "cpu_max": 1.517,
+              "mem_jump_ratio": 0.042,
+              "p95_delta_ms": -26.26,
+              "p99_delta_ms": -110.64,
+              "rx_drop_delta": 0.0,
+              "tx_drop_delta": 0.0,
+              "error_delta": 0.0,
+              "sockets_max": 26
+            }
           }
         ],
         "metadata": {
-          "hypothesis": "No strong metric anomalies detected across services; log-rate changes are modest and do not clearly point to a single upstream/downstream failure; if a root cause exists, it is not evidenced by metric spikes (cpu/mem/latency) within the observed window.",
+          "hypothesis": "No clear metric or log-based anomaly is evident in the observed windows; the delay fault in emailservice may be due to an external factor or an unseen downstream dependency not captured in the metrics/logs provided.",
           "suspected_downstream": null,
           "anomalous_services": [],
-          "llm_reasoning": "Metric Summary shows no service with cpu_z > 30, mem_jump > 0.3, or p95_Δms/p99_Δms > 100. Emailservice shows latency increases (p95_Δms +15.7, p99_Δms +18.0) but not to a level that marks it as a strong root cause; other services exhibit only small volume_delta shifts and zero or minimal error indicators. Without upstream error signals or clear cascading failures, the evidence does not identify a definitive root-cause provider. Therefore, the pattern remains inconclusive with low confidence.",
+          "llm_reasoning": "Metric summary shows no strong anomalies (no cpu_z > 30, mem_jump > 0.3, p95_Δms > 100, or rx_drop > 0) and the log-rate table indicates only minor volume changes with zero error/timeout/retry hits across services. Therefore, there is no clear upstream/downstream root-cause identified among the monitored services. The symptom of emailservice delay could be caused by an external factor or a downstream dependency not reflected in the available signals.",
           "referenced_upstreams": {}
         }
       },
@@ -445,7 +506,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service (frontend) directly depends on adservice, so a fault in adservice can propagate to frontend. Alternative plausible root causes exist in other frontend dependencies (cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, shippingservice) since failures there can impact frontend behavior. The blast radius currently limited to frontend per topology, but if the fault propagates further, dependencies of frontend would be affected. The topology explicitly supports adservice as a downstream dependency, aligning with the log agent's suspected_downstream."
+              "llm_reasoning": "Frontend depends directly on adservice, so a fault in adservice can propagate to frontend, matching the suspected_downstream hypothesis. Other dependencies of frontend (cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, shippingservice) represent alternative root causes that would similarly cause frontend to fail if they faltered, hence multiple plausible root paths exist. The blast radius, given the topology, is limited to frontend in this incident context since only frontend consumes adservice (and no downstream callers of frontend are listed). The topology confirms adservice as a plausible root cause path to frontend, and the most critical node within the blast radius is frontend due to its high criticality."
             }
           }
         ],
@@ -565,32 +626,36 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service (frontend) directly depends on adservice, so a fault in adservice can propagate to frontend. Alternative plausible root causes exist in other frontend dependencies (cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, shippingservice) since failures there can impact frontend behavior. The blast radius currently limited to frontend per topology, but if the fault propagates further, dependencies of frontend would be affected. The topology explicitly supports adservice as a downstream dependency, aligning with the log agent's suspected_downstream.",
+          "llm_reasoning": "Frontend depends directly on adservice, so a fault in adservice can propagate to frontend, matching the suspected_downstream hypothesis. Other dependencies of frontend (cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, shippingservice) represent alternative root causes that would similarly cause frontend to fail if they faltered, hence multiple plausible root paths exist. The blast radius, given the topology, is limited to frontend in this incident context since only frontend consumes adservice (and no downstream callers of frontend are listed). The topology confirms adservice as a plausible root cause path to frontend, and the most critical node within the blast radius is frontend due to its high criticality.",
           "path_assessment": "plausible",
           "alternative_paths": [
             [
-              "frontend",
-              "cartservice"
+              "cartservice",
+              "frontend"
             ],
             [
-              "frontend",
-              "productcatalogservice"
+              "productcatalogservice",
+              "frontend"
             ],
             [
-              "frontend",
-              "currencyservice"
+              "currencyservice",
+              "frontend"
             ],
             [
-              "frontend",
-              "recommendationservice"
+              "recommendationservice",
+              "frontend"
             ],
             [
-              "frontend",
-              "checkoutservice"
+              "checkoutservice",
+              "frontend"
             ],
             [
-              "frontend",
-              "shippingservice"
+              "shippingservice",
+              "frontend"
+            ],
+            [
+              "adservice",
+              "frontend"
             ]
           ],
           "critical_services_in_blast": [
@@ -601,7 +666,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "All sources converge on frontend being involved in the observed symptom, but they diverge on the true root cause depth. Topology strongly supports adservice as a plausible deeper upstream fault (downstream to frontend), while Log Agent detects only modest latency changes without clear upstream/downstream cascade, and the TCB-RCA algorithm centers on frontend as the propagation origin. Given the absence of strong log-based signals pointing to a definitive upstream failure and the structural plausibility of an unobserved downstream fault, adservice emerges as a credible unobserved root-cause candidate, with frontend as a valid proximal root-cause candidate. The propagation path from adservice to frontend to the symptom aligns with the structural constraints and observed symptom. If further data becomes available (e.g., adservice logs, latency correlations between adservice and frontend), re-evaluation would be warranted.",
+    "synthesis_reasoning": "All sources agree that the frontend is involved in the observed symptom, and the topology establishes a direct frontend <-> adservice relationship, with adservice being a plausible upstream root. The Log Agent provides weak/no clear log-based confirmation, suggesting either an external factor or an unmonitored downstream dependency; this weakens confidence in frontend as the sole root while reinforcing adservice as a credible root given the structural path. The TCB-RCA baseline emphasizes frontend as the propagation node, but given the structural path frontend <- adservice and the lack of strong log signals at frontend, the more credible root-cause candidate is adservice. Therefore, the final propagation path centers on adservice causing frontend delay, with frontend as the observed symptom endpoint.",
     "tcb_rca_reference": {
       "candidates": [
         {
