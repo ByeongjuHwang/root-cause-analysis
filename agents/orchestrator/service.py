@@ -220,6 +220,33 @@ class OrchestratorService:
             }
 
         # ==============================================================
+        # Phase 4d-2: Adaptive Execution
+        # ==============================================================
+        # If Verifier's completeness_score is too low, re-invoke Log Agent
+        # with focus_services hint (from Verifier's missing_evidence).
+        # Recompute RCA and Verifier with the new Log Agent output.
+        # Repeat up to ADAPTIVE_MAX_ITERATIONS.
+        #
+        # Requires A2A_PARSE_CONTRACTS=on (to read completeness_score from
+        # verifier's _agent_response). If that flag is off, adaptive is a
+        # no-op.
+        adaptive_iterations: List[Dict[str, Any]] = []
+        if (
+            os.getenv("ADAPTIVE_EXECUTION", "off") != "off"
+            and os.getenv("A2A_PARSE_CONTRACTS", "off") != "off"
+        ):
+            log_result, rca_result, verification, adaptive_iterations = (
+                await self._run_adaptive_iterations(
+                    incident=incident,
+                    log_result=log_result,
+                    topology_result=topology_result,
+                    rca_result=rca_result,
+                    verification=verification,
+                    agent_errors=agent_errors,
+                )
+            )
+
+        # ==============================================================
         # Assemble final result
         # ==============================================================
         final_candidates = self._normalize_verified_candidates(
@@ -319,7 +346,263 @@ class OrchestratorService:
             agent_errors=agent_errors if agent_errors else None,
             # Phase 4d-1: contract-based architecture observability
             agent_contracts=agent_contracts,
+            # Phase 4d-2: record any re-invocations triggered by low completeness
+            adaptive_iterations=(
+                adaptive_iterations if adaptive_iterations else None
+            ),
         )
+
+    # ------------------------------------------------------------------
+    # Phase 4d-2: Adaptive Execution helper
+    # ------------------------------------------------------------------
+
+    async def _run_adaptive_iterations(
+        self,
+        incident: IncidentRequest,
+        log_result: AgentResult,
+        topology_result: AgentResult,
+        rca_result: Dict[str, Any],
+        verification: Dict[str, Any],
+        agent_errors: List[Dict[str, str]],
+    ) -> tuple:
+        """Re-invoke Log Agent → RCA → Verifier if completeness_score is low.
+
+        Returns the (possibly updated) (log_result, rca_result, verification,
+        iterations_log) tuple. If the initial pass already has sufficient
+        completeness, this is a no-op and returns an empty iterations_log.
+
+        Topology Agent is NOT re-invoked — its output is purely structural
+        (dependency graph) and doesn't benefit from re-asking.
+        """
+        threshold = float(os.getenv("ADAPTIVE_THRESHOLD", "0.5"))
+        max_iter = int(os.getenv("ADAPTIVE_MAX_ITERATIONS", "3"))
+        iterations: List[Dict[str, Any]] = []
+
+        for iter_num in range(1, max_iter + 1):
+            score = self._extract_completeness_score(verification)
+            if score is None:
+                # No contract available → cannot judge → stop
+                iterations.append({
+                    "iteration": iter_num,
+                    "reason": "no_contract_available",
+                    "completeness_score": None,
+                    "action": "stop",
+                })
+                break
+            if score >= threshold:
+                # Good enough → stop
+                iterations.append({
+                    "iteration": iter_num,
+                    "reason": "completeness_sufficient",
+                    "completeness_score": score,
+                    "threshold": threshold,
+                    "action": "stop",
+                })
+                break
+
+            # Below threshold → extract focus services and re-invoke
+            focus = self._extract_focus_services(verification, top_k=5)
+            if not focus:
+                iterations.append({
+                    "iteration": iter_num,
+                    "reason": "no_focus_services_derivable",
+                    "completeness_score": score,
+                    "threshold": threshold,
+                    "action": "stop",
+                })
+                break
+
+            iter_record: Dict[str, Any] = {
+                "iteration": iter_num,
+                "reason": "completeness_below_threshold",
+                "completeness_score": score,
+                "threshold": threshold,
+                "focus_services": focus,
+                "action": "re_invoke_log_agent",
+            }
+
+            try:
+                # Re-invoke Log Agent with focus_services hint
+                _attachments = incident.attachments or {}
+                log_raw = await self.a2a_client.send_message(
+                    agent_base_url=self.log_agent_url,
+                    text=self._build_log_agent_prompt(incident),
+                    metadata={
+                        "incident_id": incident.incident_id,
+                        "service": incident.service,
+                        "start": incident.time_range.start,
+                        "end": incident.time_range.end,
+                        "trace_id": incident.trace_id,
+                        "symptom": incident.symptom,
+                        "desired_output": "application/json",
+                        "log_file": _attachments.get("log_file"),
+                        "baseline_range": _attachments.get("baseline_range"),
+                        "incident_range": _attachments.get("incident_range"),
+                        "metrics_file": _attachments.get("metrics_file"),
+                        # Phase 4d-2 adaptive hint
+                        "focus_services": focus,
+                    },
+                )
+                log_result = self._parse_agent_result(log_raw, "log_agent")
+            except Exception as exc:
+                iter_record["error"] = f"log_agent_re_invoke_failed: {exc}"
+                iterations.append(iter_record)
+                agent_errors.append({
+                    "agent": f"log_agent_iter_{iter_num}",
+                    "error": str(exc),
+                })
+                break
+
+            # Re-invoke RCA with new log_result
+            try:
+                topo_meta_for_rca = {
+                    "service": incident.service,
+                    "summary": topology_result.summary,
+                    "confidence": topology_result.confidence,
+                    "evidence": [e.model_dump() for e in topology_result.evidence],
+                    **topology_result.metadata,
+                }
+                rca_raw = await self.a2a_client.send_message(
+                    agent_base_url=self.rca_agent_url,
+                    text="Synthesize root cause candidates (adaptive iteration).",
+                    metadata={
+                        "incident_id": incident.incident_id,
+                        "service": incident.service,
+                        "log_result": {
+                            "service": incident.service,
+                            "summary": log_result.summary,
+                            "confidence": log_result.confidence,
+                            "evidence": [e.model_dump() for e in log_result.evidence],
+                            **log_result.metadata,
+                        },
+                        "topology_result": topo_meta_for_rca,
+                        "desired_output": "application/json",
+                    },
+                )
+                rca_result = self._parse_rca_result(rca_raw)
+            except Exception as exc:
+                iter_record["error"] = f"rca_agent_re_invoke_failed: {exc}"
+                iterations.append(iter_record)
+                agent_errors.append({
+                    "agent": f"rca_agent_iter_{iter_num}",
+                    "error": str(exc),
+                })
+                break
+
+            # Re-invoke Verifier
+            try:
+                draft_rca = {
+                    "root_cause_candidates": self._ensure_list(
+                        rca_result.get("root_cause_candidates", [])),
+                    "affected_services": self._ensure_list(
+                        rca_result.get("affected_services", [incident.service])),
+                    "related_services": self._ensure_list(
+                        rca_result.get("related_services", [])),
+                    "propagation_path": self._ensure_list(
+                        rca_result.get(
+                            "propagation_path",
+                            topology_result.metadata.get("propagation_path", []),
+                        )
+                    ),
+                }
+                verifier_raw = await self.a2a_client.send_message(
+                    agent_base_url=self.verifier_agent_url,
+                    text=self._build_verifier_prompt(incident),
+                    metadata={
+                        "incident_id": incident.incident_id,
+                        "service": incident.service,
+                        "draft_rca": draft_rca,
+                        "agent_results": {
+                            "log_agent": {
+                                "summary": log_result.summary,
+                                "confidence": log_result.confidence,
+                                "evidence": [e.model_dump() for e in log_result.evidence],
+                            },
+                            "topology_agent": {
+                                "summary": topology_result.summary,
+                                "confidence": topology_result.confidence,
+                                "propagation_path": self._ensure_list(
+                                    topology_result.metadata.get("propagation_path", [])),
+                                "blast_radius": self._ensure_list(
+                                    topology_result.metadata.get("blast_radius", [])),
+                                "related_services": self._ensure_list(
+                                    topology_result.metadata.get("related_services", [])),
+                            },
+                            "rca_agent": rca_result,
+                        },
+                        "desired_output": "application/json",
+                    },
+                )
+                verification = self._parse_verification(verifier_raw)
+                iter_record["new_completeness_score"] = (
+                    self._extract_completeness_score(verification)
+                )
+            except Exception as exc:
+                iter_record["error"] = f"verifier_re_invoke_failed: {exc}"
+                iterations.append(iter_record)
+                agent_errors.append({
+                    "agent": f"verifier_agent_iter_{iter_num}",
+                    "error": str(exc),
+                })
+                break
+
+            iterations.append(iter_record)
+
+        return log_result, rca_result, verification, iterations
+
+    def _extract_completeness_score(
+        self, verification: Dict[str, Any]
+    ) -> Optional[float]:
+        """Read Verifier's completeness_score from the embedded AgentResponse.
+
+        Returns None if no contract was emitted (A2A_CONTRACT_MODE off)
+        or if parsing fails.
+        """
+        contract = verification.get("_agent_response")
+        if not isinstance(contract, dict):
+            return None
+        score = contract.get("completeness_score")
+        if score is None:
+            return None
+        try:
+            return float(score)
+        except (TypeError, ValueError):
+            return None
+
+    def _extract_focus_services(
+        self, verification: Dict[str, Any], top_k: int = 5,
+    ) -> List[str]:
+        """Pick services that Verifier deems needing more evidence.
+
+        Heuristic:
+          1. Top candidates from Verifier's AgentResponse.candidates (by confidence)
+          2. Plus any services in rejected_candidates list (need more investigation)
+
+        If AgentResponse missing, return [].
+        """
+        contract = verification.get("_agent_response")
+        if not isinstance(contract, dict):
+            return []
+
+        services: List[str] = []
+        seen: set = set()
+
+        # 1. Top candidates — likely suspects that need evidence shoring up
+        for cand in contract.get("candidates", []) or []:
+            if not isinstance(cand, dict):
+                continue
+            svc = cand.get("service")
+            if not svc or svc in seen:
+                continue
+            # Only focus on candidates that have missing_evidence
+            missing = cand.get("missing_evidence", [])
+            if missing:
+                services.append(svc)
+                seen.add(svc)
+            if len(services) >= top_k:
+                break
+
+        return services
 
     # ------------------------------------------------------------------
     # Prompt builders

@@ -72,6 +72,10 @@ async def a2a_endpoint(request: Request):
         metrics_file = metadata.get("metrics_file")
         if metrics_file:
             kwargs["metrics_file"] = metrics_file
+        # Phase 4d-2: adaptive focus_services (from orchestrator re-invocation)
+        focus_services = metadata.get("focus_services")
+        if focus_services and isinstance(focus_services, list):
+            kwargs["focus_services"] = [str(s) for s in focus_services if s]
 
     analysis = await service.analyze(**kwargs)
 

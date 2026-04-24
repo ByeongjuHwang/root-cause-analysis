@@ -116,6 +116,7 @@ def build_log_agent_user_prompt(
     service_statistics: Optional[Dict[str, Any]] = None,
     metric_summaries: Optional[Dict[str, Any]] = None,
     evidence_collection: Optional[Dict[str, Any]] = None,
+    focus_services: Optional[List[str]] = None,
 ) -> str:
     """Log Agent용 user prompt 생성.
 
@@ -143,6 +144,26 @@ def build_log_agent_user_prompt(
     lines.append(f"- Reported symptom: {symptom}")
     lines.append(f"- Time range: {time_range_start} to {time_range_end}")
     lines.append("")
+    
+    # === Phase 4d-2: Adaptive re-invocation focus hint ===
+    # When the Orchestrator re-invokes Log Agent because the previous
+    # iteration's completeness_score was too low, it passes focus_services.
+    # These are the services the Verifier flagged as needing more evidence.
+    if focus_services:
+        lines.append(f"## Adaptive Focus (from previous iteration)")
+        lines.append(
+            f"The previous analysis iteration lacked sufficient evidence "
+            f"for the following services:"
+        )
+        for svc in focus_services[:10]:  # cap for prompt size
+            lines.append(f"  - {svc}")
+        lines.append(
+            "Pay particular attention to these services. Gather all "
+            "available evidence (logs, metrics, timing) for them and "
+            "explicitly mention them in your analysis even if signals "
+            "are subtle."
+        )
+        lines.append("")
     
     # === 토폴로지 제약 (신규) ===
     if symptom_depends_on:
@@ -567,6 +588,7 @@ class LogAnalysisServiceLLM:
         baseline_range: Optional[tuple] = None,
         incident_range: Optional[tuple] = None,
         metrics_file: Optional[str] = None,
+        focus_services: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         # === Step 1: 로그 수집 (결정론적) ===
         all_evidence: List[Dict[str, Any]] = []
@@ -843,6 +865,7 @@ class LogAnalysisServiceLLM:
             service_statistics=service_statistics,
             metric_summaries=metric_summaries,
             evidence_collection=evidence_collection,
+            focus_services=focus_services,
         )
         
         llm_result = await self.llm.call_json(
