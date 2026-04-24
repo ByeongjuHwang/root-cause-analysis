@@ -4,7 +4,7 @@
   "case": "recommendationservice_cpu_1",
   "gt_service": "recommendationservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 23.72,
+  "elapsed_seconds": 20.91,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 23.72,
+    "elapsed_seconds": 20.91,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Recommendationservice is experiencing a severe CPU spike, reducing its throughput and increasing latency, which propagates degraded performance to the frontend via the direct dependency path.",
+        "cause": "CPU fault in the recommendationservice causing increased latency and downstream impact on frontend during recommendation retrieval",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "recommendationservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on a direct frontend → recommendationservice path with a CPU-related degradation signal in the recommendationservice. The TCB-RCA baseline does not indicate any anomaly at frontend, but given the observed CPU spike and the direct dependency path, recommendationservice is the most plausible root cause. Since anomalies are observed in the deeper service and the propagation path is structurally plausible, the deeper root cause (recommendationservice) should be prioritized over the symptom (frontend).",
+        "reasoning": "Both the Log Agent and Topology Agent converge on recommendationservice as the upstream root cause: a severe CPU fault in recommendationservice with elevated latency propagating to frontend. The TCB-RCA result centers on the symptom (frontend) with no deeper anomaly detected, which conflicts with the log-based CPU anomaly in the upstream service. Given stronger evidence from logs (CPU anomaly, tail latency) and a structurally plausible propagation path (frontend depends on recommendationservice), recommendationservice is the most credible root cause. The absence of observed logs for a deeper upstream (unobserved root) is not applicable here since recommendationservice itself shows clear CPU-related signals.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Recommendationservice is experiencing a severe CPU spike, reducing its throughput and increasing latency, which propagates degraded performance to the frontend via the direct dependency path.",
+      "cause": "CPU fault in the recommendationservice causing increased latency and downstream impact on frontend during recommendation retrieval",
       "confidence": 0.6,
       "explanation": "Candidate 'recommendationservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "recommendationservice"
@@ -103,8 +103,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service recommendationservice experiencing cpu fault'. No error logs found. LLM hypothesis: Recommendationservice is experiencing a severe CPU spike which degrades its response/throughput, causing frontend to incur higher latency or retry/load on dependent paths.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service recommendationservice experiencing cpu fault'. No error logs found. LLM hypothesis: Recommendationservice is experiencing a severe CPU fault causing downstream latency impacts in frontend during recommendation retrieval.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -598,20 +598,20 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Recommendationservice is experiencing a severe CPU spike which degrades its response/throughput, causing frontend to incur higher latency or retry/load on dependent paths.",
+          "hypothesis": "Recommendationservice is experiencing a severe CPU fault causing downstream latency impacts in frontend during recommendation retrieval.",
           "suspected_downstream": "recommendationservice",
           "anomalous_services": [
             "recommendationservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric signals show a strong anomaly in recommendationservice (cpu_z > 30, p99/p95 latency increases). Frontend also shows elevated signals but to a lesser extent. With the topology indicating frontend depends on recommendationservice, the deepest root cause is likely the recommendationservice. Upstream/downstream dynamics imply frontend requests are failing to complete promptly due to the degraded recommendationservice, aligning with the observed patterns.",
+          "llm_reasoning": "Metric signals show a strong anomaly in recommendationservice with cpu_z = 74.1 and notable tail latency increases (p95_Δms = 10.4, p99_Δms = 46.0). Frontend also shows elevated activity but with a lower metric anomaly (cpu_z = 16.9). Given frontend depends on recommendationservice, the deepest root cause is likely the CPU fault in recommendationservice propagating to frontend request path.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to recommendationservice: frontend → recommendationservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
-        "confidence": 0.805,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to recommendationservice: frontend → recommendationservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.78).",
+        "confidence": 0.814,
         "evidence": [
           {
             "type": "topology",
@@ -623,7 +623,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend directly depends on recommendationservice, so a fault in recommendationservice can propagate to frontend. There are no indicated alternative paths from frontend to the suspected root in the given topology (only a single outbound dependency path is shown). The blast radius limited to frontend aligns with the topology; if the fault propagates further, the affected set would at least include frontend, and potentially any services that rely on frontend (not specified here). The topology explicitly supports the log agent's suspected downstream being recommendationservice as a plausible direct cause."
+              "llm_reasoning": "The symptom service 'frontend' directly depends on 'recommendationservice'. Therefore, a failure or latency in recommendationservice propagates to frontend, matching the observed downstream. There are no directed paths from frontend to other services that would create alternative propagation routes to the suspected root within the given topology, since dependencies are flat from frontend to its listed services. The blast radius, given the topology, is limited to frontend unless faults propagate from recommendationservice into its own downstream services (not depicted in this topology). Frontend is the highest-importance node in the blast radius due to its critical frontend role."
             }
           }
         ],
@@ -743,7 +743,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend directly depends on recommendationservice, so a fault in recommendationservice can propagate to frontend. There are no indicated alternative paths from frontend to the suspected root in the given topology (only a single outbound dependency path is shown). The blast radius limited to frontend aligns with the topology; if the fault propagates further, the affected set would at least include frontend, and potentially any services that rely on frontend (not specified here). The topology explicitly supports the log agent's suspected downstream being recommendationservice as a plausible direct cause.",
+          "llm_reasoning": "The symptom service 'frontend' directly depends on 'recommendationservice'. Therefore, a failure or latency in recommendationservice propagates to frontend, matching the observed downstream. There are no directed paths from frontend to other services that would create alternative propagation routes to the suspected root within the given topology, since dependencies are flat from frontend to its listed services. The blast radius, given the topology, is limited to frontend unless faults propagate from recommendationservice into its own downstream services (not depicted in this topology). Frontend is the highest-importance node in the blast radius due to its critical frontend role.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -753,8 +753,8 @@
         }
       }
     ],
-    "evidence_convergence": "strong_agreement",
-    "synthesis_reasoning": "The Log Agent identifies a CPU spike and degraded latency in recommendationservice, and the Topology Agent confirms a direct frontend → recommendationservice propagation path with a limited blast radius. The TCB-RCA baseline does not reflect an anomaly at the root in this case, but the combined evidence from logs and topology strongly supports recommendationservice as the root cause. Given the objective is to identify the deepest root cause and the symptom is frontend, prioritizing recommendationservice aligns with both the temporal and structural constraints. If further data shows downstream service logs corroborating cascading effects, this could strengthen or refine the path, but current evidence solidly supports recommendationservice as the root cause.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "The Log Agent and Topology Agent independently support the recommendationservice as the upstream fault; the TCB-RCA result is weaker and points to the symptom frontend with no corroborating timing-based evidence. Given the CPU anomaly (cpu_z and latency increases) observed in recommendationservice and the direct dependency of frontend on recommendationservice, the most plausible root cause is a CPU fault in recommendationservice propagating to frontend. We prioritize deeper, upstream CPU fault evidence over the minimal, symptom-focused timing from TCB-RCA, while still acknowledging the TCB-RCA output as a limited constraint.",
     "tcb_rca_reference": {
       "candidates": [
         {

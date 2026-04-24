@@ -4,7 +4,7 @@
   "case": "checkoutservice_socket_1",
   "gt_service": "checkoutservice",
   "gt_fault": "socket",
-  "elapsed_seconds": 88.54,
+  "elapsed_seconds": 22.21,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 88.54,
+    "elapsed_seconds": 22.21,
     "gt_fault": "socket"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Checkoutservice CPU saturation causing elevated latency and slow processing of checkout operations, leading to propagated latency observed at the frontend.",
+        "cause": "Checkoutservice experiencing resource pressure (extremely high CPU, significant memory growth, elevated p99 latency) leading to degraded downstream call performance and propagated latency to the frontend. The saturation rather than code error is causing upstream delays, which manifest as socket faults at the frontend due to timeouts/congestion.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "Both the Log Agent and the Topology Agent point to checkoutservice as the downstream service directly associated with the frontend symptom and provide plausible propagation path frontend -> checkoutservice. The Log Agent reports extreme CPU spike and latency increases in checkoutservice, which is a strong indicator of a performance/root-cause issue. The Topology Agent confirms the structural path frontend depends on checkoutservice, making the propagation path plausible. The TCB-RCA algorithm does not assign checkoutservice as a candidate due to its zero anomaly visitation (likely timing constraints not met in its backtracking), so its evidence is weaker in this context. Given convergence of Log and Topology evidence and alignment with observed symptom cascade, checkoutservice is the most credible root cause candidate.",
+        "reasoning": "All sources converge on checkoutservice as the proximal upstream factor affecting the frontend. The Log Agent highlights a strong anomaly in checkoutservice with latency and resource metrics, and the Topology Agent confirms a direct propagation path frontend -> checkoutservice. While the TCB-RCA engine imperfectly ranked frontend as the fault without considering the observed saturation, the unobserved-root-cause principle applies here: checkoutservice is the deeper root cause driving the symptom via the known dependency path. Therefore, checkoutservice is the most credible root cause under the observed evidence.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Checkoutservice CPU saturation causing elevated latency and slow processing of checkout operations, leading to propagated latency observed at the frontend.",
+      "cause": "Checkoutservice experiencing resource pressure (extremely high CPU, significant memory growth, elevated p99 latency) leading to degraded downstream call performance and propagated latency to the frontend. The saturation rather than code error is causing upstream delays, which manifest as socket faults at the frontend due to timeouts/congestion.",
       "confidence": 0.6,
       "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "checkoutservice"
@@ -93,7 +93,7 @@
         "received ad request (context_words=[kitchen])",
         "request complete [path: /product/LS4PSXUNUM]",
         "request started [path: /product/L9ECAV7KIM]",
-        "Getting supported currencies..."
+        "serving product page [path: /product/L9ECAV7KIM]"
       ],
       "topology_evidence": [
         "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
@@ -103,8 +103,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service checkoutservice experiencing socket fault'. No error logs found. LLM hypothesis: Checkoutservice is CPU-saturated and consuming excessive CPU resources during incident window, causing slow processing of checkout operations and propagated latency to frontend via downstream calls.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service checkoutservice experiencing socket fault'. No error logs found. LLM hypothesis: Checkoutservice is consuming excessive CPU and memory, causing degraded response times and propagating latency to frontend via downstream calls; frontend sockets failures likely result from upstream checkoutservice delays/timeouts.",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "log",
@@ -169,12 +169,87 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "serving product page [path: /product/L9ECAV7KIM]",
+            "timestamp": "2024-01-19T09:15:13.228Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /setCurrency]",
+            "timestamp": "2024-01-19T09:15:13.230Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "setting currency [path: /setCurrency]",
+            "timestamp": "2024-01-19T09:15:13.230Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request complete [path: /setCurrency]",
+            "timestamp": "2024-01-19T09:15:13.230Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "Getting supported currencies...",
             "timestamp": "2024-01-19T09:15:13.234Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "currencyservice",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "request started [path: /]",
+            "timestamp": "2024-01-19T09:15:13.235Z",
+            "level": "DEBUG",
+            "trace_id": null,
+            "metadata": {
+              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -563,19 +638,20 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Checkoutservice is CPU-saturated and consuming excessive CPU resources during incident window, causing slow processing of checkout operations and propagated latency to frontend via downstream calls.",
+          "hypothesis": "Checkoutservice is consuming excessive CPU and memory, causing degraded response times and propagating latency to frontend via downstream calls; frontend sockets failures likely result from upstream checkoutservice delays/timeouts.",
           "suspected_downstream": "checkoutservice",
           "anomalous_services": [
-            "checkoutservice"
+            "checkoutservice",
+            "frontend"
           ],
-          "llm_reasoning": "Metric summary shows an extreme CPU_z spike for checkoutservice (+289.8) and substantial p95/p99 latency increases, indicating a performance/root-cause issue there. Other services show much smaller anomalies. The frontend depends on checkoutservice; elevated checkout latency likely translates into downstream symptoms in the frontend. No upstream error signals are available, so the deepest root cause inferred from metrics is checkoutservice itself.",
+          "llm_reasoning": "Metric signals show a strong anomaly for checkoutservice (CPU z-score extremely high, mem_jump > 0.3, high p99 latency). Frontend also shows some metric anomaly but far less pronounced. Given frontend depends on checkoutservice, the deepest root cause is likely checkoutservice resource pressure affecting downstream calls; lack of error logs suggests failures are due to saturation rather than application errors. Upstream dependency pattern and timing indicate checkoutservice degradation precedes frontend symptoms.",
           "referenced_upstreams": {}
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
-        "confidence": 0.805,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.65).",
+        "confidence": 0.775,
         "evidence": [
           {
             "type": "topology",
@@ -587,7 +663,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptoms originate at frontend, which directly calls checkoutservice in the dependency graph. The computed path frontend -> checkoutservice is structurally valid given the topology. There are no documented alternative edges from frontend to other services that would form an additional propagation route to the symptom within the provided topology. The log agent’s hint that checkoutservice is a suspected downstream aligns with the known dependency relationship. The blast radius currently includes only frontend (the symptom); if the fault propagates further, it would depend on how checkoutservice and its own downstream services are affected, but within the given topology the immediate plausible propagation path is frontend -> checkoutservice."
+              "llm_reasoning": "The symptom frontend directly calls checkoutservice per the topology. This creates a valid propagation path frontend -> checkoutservice. There are no alternative downstream paths from frontend to the suspected root within the given graph, as the only modeled path from the symptom to the downstream is the direct dependency. The blast radius is limited to the symptom service itself (frontend) given the current topology, so monitoring frontend is most critical. The topology explicitly includes checkoutservice as a dependency, supporting the log agent's hypothesis that checkoutservice could be the suspected downstream affecting the frontend."
             }
           }
         ],
@@ -707,7 +783,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptoms originate at frontend, which directly calls checkoutservice in the dependency graph. The computed path frontend -> checkoutservice is structurally valid given the topology. There are no documented alternative edges from frontend to other services that would form an additional propagation route to the symptom within the provided topology. The log agent’s hint that checkoutservice is a suspected downstream aligns with the known dependency relationship. The blast radius currently includes only frontend (the symptom); if the fault propagates further, it would depend on how checkoutservice and its own downstream services are affected, but within the given topology the immediate plausible propagation path is frontend -> checkoutservice.",
+          "llm_reasoning": "The symptom frontend directly calls checkoutservice per the topology. This creates a valid propagation path frontend -> checkoutservice. There are no alternative downstream paths from frontend to the suspected root within the given graph, as the only modeled path from the symptom to the downstream is the direct dependency. The blast radius is limited to the symptom service itself (frontend) given the current topology, so monitoring frontend is most critical. The topology explicitly includes checkoutservice as a dependency, supporting the log agent's hypothesis that checkoutservice could be the suspected downstream affecting the frontend.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -718,7 +794,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest signals come from the Log Agent (explicit CPU spike and latency in checkoutservice) and the Topology Agent (valid structural path from frontend to checkoutservice). The TCB-RCA algorithm did not identify checkoutservice due to its internal timing/backtracking constraints, representing a conflicting signal that reduces overall convergence. Given the unambiguous performance symptom in the candidate service and the structural plausibility of the propagation path, checkoutservice remains the top root cause candidate. If further data shows a later propagation loop or additional upstream symptoms, we would re-evaluate, but current evidence supports checkoutservice as the primary root cause with medium-high confidence.",
+    "synthesis_reasoning": "There is strong cross-source agreement between the Log Agent and the Topology Agent that checkoutservice is the upstream factor causing frontend symptoms, with checkoutservice showing significant resource-related anomalies and a plausible direct propagation path to frontend. The TCB-RCA result is at odds, ranking frontend as the fault, but given the observed saturation signals and the unobserved-root-cause principle (checkoutservice shows clear degradation with no direct frontend error logs), the conclusion favoring checkoutservice as the root cause is more credible. Therefore, prioritize checkoutservice as the root cause, with propagation path from checkoutservice to frontend explaining the symptom. If needed, monitor checkoutservice metrics and implement saturation mitigation to validate the path.",
     "tcb_rca_reference": {
       "candidates": [
         {

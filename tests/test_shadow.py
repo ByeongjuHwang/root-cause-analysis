@@ -168,6 +168,13 @@ class TestComparison:
 # ---------------------------------------------------------------------------
 
 class TestRunShadow:
+    @pytest.fixture(autouse=True)
+    def _enable_shadow(self, monkeypatch):
+        """Shadow is OFF by default in production; these tests need it ON.
+        The test_disabled_via_env_returns_none / test_enabled_via_env_runs
+        tests override this fixture explicitly."""
+        monkeypatch.setenv("LOG_AGENT_SHADOW_ENABLE", "1")
+
     def _fake_legacy_result(self):
         return {
             "suspected_downstream": "checkoutservice",
@@ -202,7 +209,9 @@ class TestRunShadow:
         assert data["comparison"]["top_matches"] is True
 
     def test_disabled_via_env_returns_none(self, tmp_cwd, monkeypatch):
-        monkeypatch.setenv("LOG_AGENT_SHADOW_DISABLE", "1")
+        """Default-off: no env var means shadow is skipped."""
+        # Override the class-level autouse fixture by explicitly deleting.
+        monkeypatch.delenv("LOG_AGENT_SHADOW_ENABLE", raising=False)
         out = run_shadow_evidence_collection(
             legacy_result=self._fake_legacy_result(),
             incident_id="TEST_INC_001",
@@ -211,6 +220,26 @@ class TestRunShadow:
             end="2026-04-23T13:05:00+09:00",
         )
         assert out is None
+
+    def test_enabled_via_env_runs(self, tmp_cwd, monkeypatch):
+        """With LOG_AGENT_SHADOW_ENABLE=1 the shadow path should execute."""
+        monkeypatch.setenv("LOG_AGENT_SHADOW_ENABLE", "1")
+        fake_payload = _fake_payload([
+            ("checkoutservice", "metric", 0.95, "resource_saturation"),
+        ])
+        with patch(
+            "mcp_servers.observability_mcp.app.evidence_tools.get_evidence_collection_payload",
+            return_value=fake_payload,
+        ):
+            out = run_shadow_evidence_collection(
+                legacy_result=self._fake_legacy_result(),
+                incident_id="TEST_INC_enable",
+                symptom_service="frontend",
+                start="2026-04-23T13:00:00+09:00",
+                end="2026-04-23T13:05:00+09:00",
+            )
+        assert out is not None
+        assert out.exists()
 
     def test_evidence_failure_still_writes_record(self, tmp_cwd):
         """If evidence collection raises, we still log (with error field)."""

@@ -188,8 +188,17 @@ def run_shadow_evidence_collection(
     disabled or an error occurred. The caller should ignore the return
     value; it exists only for tests.
     """
-    # Feature flag — disabled via env for safety drills
-    if os.getenv("LOG_AGENT_SHADOW_DISABLE") == "1":
+    # Feature flag — shadow is OFF by default to protect production performance.
+    # Phase 3a empirical observation showed that running shadow in parallel
+    # with production Log Agent reduces AC@1 by ~10%p (67% vs 78% on the
+    # 30-case smoke). Likely cause: repository cache warm-up, timing shifts,
+    # or LLM-client shared state. Until we understand and fix that, shadow
+    # must be explicitly enabled to run.
+    #
+    # To enable shadow (for observational runs, paper figures, debugging):
+    #   PowerShell: $env:LOG_AGENT_SHADOW_ENABLE = "1"
+    #   bash:       export LOG_AGENT_SHADOW_ENABLE=1
+    if os.getenv("LOG_AGENT_SHADOW_ENABLE") != "1":
         return None
 
     t0 = time.time()
