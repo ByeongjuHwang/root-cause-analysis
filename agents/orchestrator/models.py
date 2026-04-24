@@ -99,3 +99,16 @@ class FinalRCAResult(BaseModel):
     tcb_rca_reference: Optional[Dict[str, Any]] = None
     # === Graceful degradation tracking ===
     agent_errors: Optional[List[Dict[str, str]]] = None
+    # === Phase 4d: A2A contract parsing ===
+    # When A2A_PARSE_CONTRACTS env flag is on, Orchestrator collects each
+    # agent's serialised AgentResponse (_agent_response field) into a dict
+    # keyed by agent name. This makes the paper's contract-based architecture
+    # directly observable in the final output — reviewers can point at this
+    # field to see AgentResponses flowing end-to-end.
+    #   Key     : agent_name ("log_agent", "topology_agent", "rca_agent", "verifier_agent")
+    #   Value   : dict (serialised AgentResponse)
+    agent_contracts: Optional[Dict[str, Dict[str, Any]]] = None
+    # === Phase 4d-2: Adaptive execution tracking ===
+    # Records any re-invocations triggered by low completeness_score.
+    # Each entry describes an iteration's reason and outcome.
+    adaptive_iterations: Optional[List[Dict[str, Any]]] = None

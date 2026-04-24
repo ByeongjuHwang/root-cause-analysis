@@ -12,6 +12,7 @@ Paper artifact enhancements:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from .a2a_client import A2AClient
@@ -270,6 +271,33 @@ class OrchestratorService:
             topology_evidence=evidence_summary_dict["topology_evidence"],
         )
 
+        # ==============================================================
+        # Phase 4d-1: Collect _agent_response from each agent (contracts)
+        # ==============================================================
+        # When A2A_PARSE_CONTRACTS is on, we assemble a dict of every agent's
+        # structured AgentResponse so it appears as a first-class field in
+        # FinalRCAResult. This makes the paper's A2A-as-contract claim
+        # directly inspectable in the final output. No runtime behaviour
+        # changes — the contract parsing is additive.
+        agent_contracts: Optional[Dict[str, Dict[str, Any]]] = None
+        if os.getenv("A2A_PARSE_CONTRACTS", "off") != "off":
+            agent_contracts = {}
+            log_contract = log_result.metadata.get("_agent_response")
+            if isinstance(log_contract, dict):
+                agent_contracts["log_agent"] = log_contract
+            topo_contract = topology_result.metadata.get("_agent_response")
+            if isinstance(topo_contract, dict):
+                agent_contracts["topology_agent"] = topo_contract
+            rca_contract = rca_result.get("_agent_response")
+            if isinstance(rca_contract, dict):
+                agent_contracts["rca_agent"] = rca_contract
+            verifier_contract = verification.get("_agent_response")
+            if isinstance(verifier_contract, dict):
+                agent_contracts["verifier_agent"] = verifier_contract
+            if not agent_contracts:
+                # No contracts seen — likely A2A_CONTRACT_MODE is off
+                agent_contracts = None
+
         return FinalRCAResult(
             incident_id=incident.incident_id,
             incident_summary=IncidentSummary(
@@ -289,6 +317,8 @@ class OrchestratorService:
             tcb_rca_reference=rca_result.get("tcb_rca_reference"),
             # Degradation tracking
             agent_errors=agent_errors if agent_errors else None,
+            # Phase 4d-1: contract-based architecture observability
+            agent_contracts=agent_contracts,
         )
 
     # ------------------------------------------------------------------
@@ -409,6 +439,10 @@ Return JSON with:
             "critical_services_in_blast",
             "topology_supports_hypothesis",
             "referenced_upstreams",
+            # Phase 3b: evidence_collection for downstream agents
+            "evidence_collection",
+            # Phase 4b: structured AgentResponse (when A2A_CONTRACT_MODE is on)
+            "_agent_response",
         ):
             if key in data:
                 metadata[key] = data[key]
@@ -461,6 +495,8 @@ Return JSON with:
                             "revised_root_cause_candidates": data.get("revised_root_cause_candidates", []),
                             "final_confidence": data.get("final_confidence", 0.0),
                             "explanation": data.get("explanation", ""),
+                            # Phase 4b: carry through AgentResponse when present
+                            "_agent_response": data.get("_agent_response"),
                         }
 
         return {
