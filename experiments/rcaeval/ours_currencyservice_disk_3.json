@@ -4,7 +4,7 @@
   "case": "currencyservice_disk_3",
   "gt_service": "currencyservice",
   "gt_fault": "disk",
-  "elapsed_seconds": 25.65,
+  "elapsed_seconds": 32.94,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 25.65,
+    "elapsed_seconds": 32.94,
     "gt_fault": "disk"
   },
   "result": {
@@ -36,23 +36,39 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Currency service experiencing resource saturation (memory and CPU) leading to degraded performance, causing upstream latency and downstream impact on the frontend.",
+        "cause": "CurrencyService experiencing resource saturation (memory/CPU) leading to increased latency and downstream slowdown/failures observed at the frontend.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "currencyservice",
-        "reasoning": "Strong signals from the Log Agent indicate currencyservice resource anomalies (mem_jump > 0.3, cpu_z > 0) with frontend latency as a downstream effect. The Topology Agent confirms a direct frontend -> currencyservice propagation path, matching the observed impact. The TCB-RCA baseline does not mark currencyservice as an anomaly (it reports frontend as the only node with no anomalies), but given the explicit resource anomalies in currencyservice and the structurally valid propagation path, currencyservice is the most plausible root cause. The absence of currencyservice logs in TCB-RCA is outweighed by the convergent log and topology signals and by the UNOBSERVED root-cause detection principle, which would only apply if currencyservice showed upstream references but lacked any observable indicators, which is not the case here.",
+        "reasoning": "Two independent sources (Log Agent and Topology Agent) align on currencyservice as the upstream root cause affecting the frontend. The Log Agent notes mem_jump > 0.3 for currencyservice with downstream impact on frontend performance, while the Topology Agent confirms a direct frontend <- currencyservice propagation path. The TCB-RCA engine, however, identifies frontend as the root in its traversal, which contradicts the combined structural and log-based signals. Given the convergence of the Log and Topology evidence on currencyservice and the absence of a stronger TCB-RCA signal supporting frontend as the root, currencyservice is favored as the primary root cause, with currencyservice being a deeper service than frontend.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend observed as the symptom consumer with potential upstream currencyservice-induced latency; considered as root by the TCB-RCA engine due to temporal/topology backtracking.",
+        "confidence": 0.33,
+        "evidence_refs": [
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "TCB-RCA places frontend as the root due to temporal/topology constraints, and the Topology Agent notes a direct propagation path frontend <- currencyservice (which aligns with a currencyservice upstream issue impacting frontend). However, the Log Agent does not observe explicit frontend-only faults or logs indicating a root-cause at frontend itself, and the primary anomaly is associated with currencyservice. Because of the conflict with the TCB-RCA result and lack of direct frontend-only fault signals, this candidate is considered secondary.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "Currency service experiencing resource saturation (memory and CPU) leading to degraded performance, causing upstream latency and downstream impact on the frontend.",
+      "cause": "CurrencyService experiencing resource saturation (memory/CPU) leading to increased latency and downstream slowdown/failures observed at the frontend.",
       "confidence": 0.6,
       "explanation": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "currencyservice"
@@ -84,7 +100,8 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'currencyservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'currencyservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -96,15 +113,15 @@
         "conversion request successful"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
         "propagation path: frontend -> currencyservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing disk fault'. No error logs found. LLM hypothesis: Currency service is experiencing resource saturation (CPU/memory) leading to degraded performance; downstream frontend requests propagate latency and functional impact through dependency on currencyservice.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing disk fault'. No error logs found. LLM hypothesis: Currencyservice is experiencing resource saturation (memory/CPU) which likely propagates latency to its dependents, causing upstream frontend requests to slow down or fail intermittently.",
+        "confidence": 0.6,
         "evidence": [
           {
             "type": "log",
@@ -214,51 +231,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "request complete [path: /product/1YMWWN1N4O]",
-            "timestamp": "2024-01-19T19:57:13.260Z",
-            "level": "DEBUG",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "request started [path: /]",
-            "timestamp": "2024-01-19T19:57:13.398Z",
-            "level": "DEBUG",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "home [path: /]",
-            "timestamp": "2024-01-19T19:57:13.398Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "Getting supported currencies...",
             "timestamp": "2024-01-19T19:57:13.401Z",
             "level": "INFO",
@@ -340,36 +312,6 @@
             "trace_id": null,
             "metadata": {
               "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "env platform is either empty or invalid",
-            "timestamp": "2024-01-19T19:57:13.489Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "Detected Google metadata server: [169.254.169.254], setting ENV_PLATFORM to GCP. [path: /]",
-            "timestamp": "2024-01-19T19:57:13.490Z",
-            "level": "DEBUG",
-            "trace_id": null,
-            "metadata": {
-              "service": "frontend",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -618,32 +560,122 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Currency service is experiencing resource saturation (CPU/memory) leading to degraded performance; downstream frontend requests propagate latency and functional impact through dependency on currencyservice.",
+          "hypothesis": "Currencyservice is experiencing resource saturation (memory/CPU) which likely propagates latency to its dependents, causing upstream frontend requests to slow down or fail intermittently.",
           "suspected_downstream": "currencyservice",
           "anomalous_services": [
-            "currencyservice",
-            "frontend"
+            "currencyservice"
           ],
-          "llm_reasoning": "Metric Summary shows currencyservice with strong resource anomaly (mem_jump > 0.3 and cpu_z > 0), indicating a root-cause bottleneck. Frontend also shows anomalies (CPU spike) likely due to dependency on currencyservice. Log-volume analysis does not show explicit errors, but the metric-based signal points to currencyservice as the primary fault, with frontend as a downstream consumer affected by the degraded currency service.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric summary flags currencyservice with mem_jump > 0.3 (strong root-cause candidate). No other services show comparable metric anomalies. Frontend shows only moderate metric signal and no direct log errors. Given topology, frontend depends on currencyservice; thus currencyservice is the deepest likely root cause affecting downstream frontend behavior.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 1,
+            "services_covered": [
+              "currencyservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_44a2f43c",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T20:05:13.000Z",
+                  "end": "2024-01-19T20:07:43.000Z"
+                },
+                "services": [
+                  "currencyservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.9999999087977438,
+                "observation": {
+                  "cpu_spike_zscore": 4.56,
+                  "cpu_max": 6.1743,
+                  "mem_jump_ratio": 5.071,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-CURRENCYSERVICE_DISK_3",
+            "candidates": [
+              {
+                "service": "currencyservice",
+                "confidence": 0.6,
+                "supporting_evidence": [
+                  "ev_metric_44a2f43c"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Currencyservice is experiencing resource saturation (memory/CPU) which likely propagates latency to its dependents, causing upstream frontend requests to slow down or fail intermittently.",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_44a2f43c",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T20:05:13.000Z",
+                    "end": "2024-01-19T20:07:43.000Z"
+                  },
+                  "services": [
+                    "currencyservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.9999999087977438,
+                  "observation": {
+                    "cpu_spike_zscore": 4.56,
+                    "cpu_max": 6.1743,
+                    "mem_jump_ratio": 5.071,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 0.9,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric summary flags currencyservice with mem_jump > 0.3 (strong root-cause candidate). No other services show comparable metric anomalies. Frontend shows only moderate metric signal and no direct log errors. Given topology, frontend depends on currencyservice; thus currencyservice is the deepest likely root cause affecting downstream frontend behavior."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
-        "confidence": 0.835,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.65).",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Frontend directly depends on currencyservice; the computed propagation path frontend -> currencyservice is structurally valid. There are no alternative directed paths from frontend to currencyservice given the listed dependencies. The blast radius is limited to frontend in the provided topology, and the log agent's downstream hypothesis (currencyservice) aligns with the explicit dependency."
+              "llm_reasoning": "The symptom is frontend, which directly depends on currencyservice. A fault in currencyservice would propagate to frontend (currencyservice -> frontend), which is the plausible root-to-symptom path. The provided computed path frontend -> currencyservice is reverse of a propagation path. No alternative indirect paths exist within the given topology. The blast radius is limited to the symptom frontend since no other downstream consumers are listed, but the currencyservice fault would still impact frontend's behavior. The topology and the log agent's suspected_downstream align with currencyservice being the root cause for frontend's symptom."
             }
           }
         ],
@@ -763,18 +795,38 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Frontend directly depends on currencyservice; the computed propagation path frontend -> currencyservice is structurally valid. There are no alternative directed paths from frontend to currencyservice given the listed dependencies. The blast radius is limited to frontend in the provided topology, and the log agent's downstream hypothesis (currencyservice) aligns with the explicit dependency.",
-          "path_assessment": "plausible",
-          "alternative_paths": [],
+          "llm_reasoning": "The symptom is frontend, which directly depends on currencyservice. A fault in currencyservice would propagate to frontend (currencyservice -> frontend), which is the plausible root-to-symptom path. The provided computed path frontend -> currencyservice is reverse of a propagation path. No alternative indirect paths exist within the given topology. The blast radius is limited to the symptom frontend since no other downstream consumers are listed, but the currencyservice fault would still impact frontend's behavior. The topology and the log agent's suspected_downstream align with currencyservice being the root cause for frontend's symptom.",
+          "path_assessment": "alternative_exists",
+          "alternative_paths": [
+            [
+              "currencyservice",
+              "frontend"
+            ]
+          ],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-CURRENCYSERVICE_DISK_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest convergence across sources is that currencyservice is the upstream fault driving frontend impact. Log Agent identifies currencyservice resource saturation as the root issue with frontend as downstream consumer. Topology confirms a direct, plausible propagation path from currencyservice to frontend. The TCB-RCA baseline does not flag currencyservice (it shows frontend with no anomalies), which reduces the overall agreement. Given the explicit resource anomaly signals and structurally valid dependency path, currencyservice is the best-supported root cause. Because one source (TCB-RCA) disagrees, evidence convergence is labeled as partial_agreement; the root cause determination favors deeper root cause (currencyservice) rather than the symptom (frontend).",
+    "synthesis_reasoning": "The strongest convergence across sources is that currencyservice is upstream to the frontend with a plausible propagation path currencyservice -> frontend. Both the Log Agent and Topology Agent concurrently point to currencyservice as the root cause and describe a direct dependency link to frontend, validating structural plausibility. The TCB-RCA engine, in contrast, designates frontend as the root, which conflicts with the log/topology signals. In accordance with the principles, we give higher weight to corroborated log and topology evidence and treat frontend as a secondary, contested candidate. The unobserved logs for currencyservice are not present; instead, resource saturation signals in currencyservice provide a credible, deeper-root cause explanation. Therefore, currencyservice is ranked highest, with frontend as a plausible alternative only if currencyservice faults are ruled out. The propagation path is currencyservice -> frontend, aligning with the observed symptom at frontend.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -788,6 +840,245 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-CURRENCYSERVICE_DISK_3",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_44a2f43c"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Currencyservice is experiencing resource saturation (memory/CPU) which likely propagates latency to its dependents, causing upstream frontend requests to slow down or fail intermittently.",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_44a2f43c",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T20:05:13.000Z",
+                "end": "2024-01-19T20:07:43.000Z"
+              },
+              "services": [
+                "currencyservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999087977438,
+              "observation": {
+                "cpu_spike_zscore": 4.56,
+                "cpu_max": 6.1743,
+                "mem_jump_ratio": 5.071,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.9,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric summary flags currencyservice with mem_jump > 0.3 (strong root-cause candidate). No other services show comparable metric anomalies. Frontend shows only moderate metric signal and no direct log errors. Given topology, frontend depends on currencyservice; thus currencyservice is the deepest likely root cause affecting downstream frontend behavior."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-CURRENCYSERVICE_DISK_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-CURRENCYSERVICE_DISK_3",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.72,
+            "supporting_evidence": [
+              "ev_metric_44a2f43c"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Two independent sources (Log Agent and Topology Agent) align on currencyservice as the upstream root cause affecting the frontend. The Log Agent notes mem_jump > 0.3 for currencyservice with downstream impact on frontend performance, while the Topology Agent confirms a direct frontend <- currencyser",
+            "topology_path": [
+              "currencyservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.25,
+            "supporting_evidence": [],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "TCB-RCA places frontend as the root due to temporal/topology constraints, and the Topology Agent notes a direct propagation path frontend <- currencyservice (which aligns with a currencyservice upstream issue impacting frontend). However, the Log Agent does not observe explicit frontend-only faults ",
+            "topology_path": [
+              "currencyservice",
+              "frontend"
+            ],
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_44a2f43c",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T20:05:13.000Z",
+                "end": "2024-01-19T20:07:43.000Z"
+              },
+              "services": [
+                "currencyservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999087977438,
+              "observation": {
+                "cpu_spike_zscore": 4.56,
+                "cpu_max": 6.1743,
+                "mem_jump_ratio": 5.071,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.65,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "The strongest convergence across sources is that currencyservice is upstream to the frontend with a plausible propagation path currencyservice -> frontend. Both the Log Agent and Topology Agent concurrently point to currencyservice as the root cause and describe a direct dependency link to frontend, validating structural plausibility. The TCB-RCA engine, in contrast, designates frontend as the root, which conflicts with the log/topology signals. In accordance with the principles, we give higher weight to corroborated log and topology evidence and treat frontend as a secondary, contested candid"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-CURRENCYSERVICE_DISK_3",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_44a2f43c"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Two independent sources (Log Agent and Topology Agent) align on currencyservice as the upstream root cause affecting the frontend. The Log Agent notes mem_jump > 0.3 for currencyservice with downstream impact on frontend performance, while the Topology Agent confirms a direct frontend <- currencyser",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.33,
+            "supporting_evidence": [],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=NA",
+              "verifier_rank=2"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "TCB-RCA places frontend as the root due to temporal/topology constraints, and the Topology Agent notes a direct propagation path frontend <- currencyservice (which aligns with a currencyservice upstream issue impacting frontend). However, the Log Agent does not observe explicit frontend-only faults ",
+            "topology_path": null,
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_44a2f43c",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T20:05:13.000Z",
+                "end": "2024-01-19T20:07:43.000Z"
+              },
+              "services": [
+                "currencyservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999087977438,
+              "observation": {
+                "cpu_spike_zscore": 4.56,
+                "cpu_max": 6.1743,
+                "mem_jump_ratio": 5.071,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.65,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.65,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

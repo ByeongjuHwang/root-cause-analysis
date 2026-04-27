@@ -4,23 +4,24 @@
   "case": "currencyservice_cpu_1",
   "gt_service": "currencyservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 29.73,
+  "elapsed_seconds": 31.67,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
     "top_confidence": 0.6,
     "verdict": "revised",
     "ground_truth_root_cause": "currencyservice",
-    "predicted_top_cause_service": "cartservice",
-    "predicted_top_cause_excerpt": "cartservice",
+    "predicted_top_cause_service": "redis",
+    "predicted_top_cause_excerpt": "redis",
     "predicted_path": [
+      "redis",
       "cartservice",
       "frontend"
     ],
-    "predicted_path_length": 2,
-    "elapsed_seconds": 29.73,
+    "predicted_path_length": 3,
+    "elapsed_seconds": 31.67,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,14 +37,30 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Cart service experiencing resource pressure (high CPU) causing increased load and cascading effects on dependent services, including frontend. The strongest metric deviation is in cartservice (cpu_z 13.2) and Redis (11.7), with no explicit error logs, indicating a resource-based bottleneck rather than a crash. This upstream bottleneck plausibly propagates load to the frontend, aligning with topology that frontend depends on cartservice.",
+        "cause": "Redis CPU saturation causing global datastore resource contention, driving load across dependent services (e.g., cartservice, currencyservice, adservice, shippingservice, productcatalogservice) and manifesting as frontend latency without explicit frontend errors.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
+        "cause_service": "redis",
+        "reasoning": "All sources converge on Redis as a downstream datastore whose saturation can cascade performance degradation to multiple backend services, which in turn impact the frontend. Logs indicate CPU anomalies across Redis and downstream services; topology supports multiple Redis-to-backend-to-frontend propagation paths. The TCB-RCA baseline is inconclusive here (frontend-centric), but given the absence of frontend error logs and the temporal/structural signals pointing to Redis as the shared resource, Redis is the most plausible root cause (unobserved roots allowed by evidence).",
+        "supporting_evidence": {
+          "log_agent_agrees": true,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": false
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Cartservice experiencing extreme CPU strain (earliest high anomaly) likely as the first downstream consumer of Redis saturation, amplifying load and contributing to frontend latency; serves as a plausible near-root intermediate if Redis is the deeper root cause.",
+        "confidence": 0.48,
+        "evidence_refs": [
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
+        ],
         "cause_service": "cartservice",
-        "reasoning": "All sources point toward cartservice as an upstream source of pressure. The Log Agent highlights cartservice as the strongest anomaly and downstream impact on frontend. The Topology Agent confirms a plausible propagation path from frontend to cartservice as the upstream root cause, consistent with a fault propagating from an upstream service to the symptom surface. The TCB-RCA engine, however, assigns zero confidence to any upstream root within its current traversal, effectively not recognizing cartservice due to timing constraints. Given the convergence of log and topology evidence and the clear timing/structural support, cartservice remains the most credible root-cause candidate despite the TCB-RCA result.",
+        "reasoning": "Cartservice shows the strongest CPU anomaly among downstream services and is directly impacted by Redis-backed workload, aligning with the propagation path Redis -> cartservice -> frontend. While cartservice is not independently proven as the original fault, it remains a credible proximate root cause given the observed timing and dependency chain. In the absence of explicit frontend errors, cartservice is a plausible intermediary in the cascade.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,13 +69,14 @@
       }
     ],
     "final_verdict": {
-      "cause": "Cart service experiencing resource pressure (high CPU) causing increased load and cascading effects on dependent services, including frontend. The strongest metric deviation is in cartservice (cpu_z 13.2) and Redis (11.7), with no explicit error logs, indicating a resource-based bottleneck rather than a crash. This upstream bottleneck plausibly propagates load to the frontend, aligning with topology that frontend depends on cartservice.",
+      "cause": "Redis CPU saturation causing global datastore resource contention, driving load across dependent services (e.g., cartservice, currencyservice, adservice, shippingservice, productcatalogservice) and manifesting as frontend latency without explicit frontend errors.",
       "confidence": 0.6,
-      "explanation": "Candidate 'cartservice' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "cartservice"
+      "explanation": "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "redis"
     },
     "impact_analysis": {
       "affected_services": [
+        "redis",
         "cartservice",
         "frontend"
       ],
@@ -72,6 +90,7 @@
         "shippingservice"
       ],
       "propagation_path": [
+        "redis",
         "cartservice",
         "frontend"
       ],
@@ -83,8 +102,9 @@
       "verdict": "revised",
       "final_confidence": 0.6,
       "notes": [
-        "Candidate 'cartservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'cartservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'redis' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'cartservice' confirmed by 2/3 sources (log, topology)."
       ]
     },
     "evidence_summary": {
@@ -96,15 +116,14 @@
         "setting currency [path: /setCurrency]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
-        "propagation path: frontend -> cartservice"
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible."
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Cart service (and related upstream cache layer) experienced resource pressure (CPU) leading to cascading load on dependent services, including frontend, causing widespread CPU anomalies across the service graph.",
-        "confidence": 0.62,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Redis CPU saturation is driving resource contention and cascading load, causing high CPU in cartservice and other dependent services, which manifests as latency/spike in frontend without explicit error logs.",
+        "confidence": 0.55,
         "evidence": [
           {
             "type": "log",
@@ -918,8 +937,8 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Cart service (and related upstream cache layer) experienced resource pressure (CPU) leading to cascading load on dependent services, including frontend, causing widespread CPU anomalies across the service graph.",
-          "suspected_downstream": "cartservice",
+          "hypothesis": "Redis CPU saturation is driving resource contention and cascading load, causing high CPU in cartservice and other dependent services, which manifests as latency/spike in frontend without explicit error logs.",
+          "suspected_downstream": "redis",
           "anomalous_services": [
             "cartservice",
             "redis",
@@ -929,7 +948,7 @@
             "currencyservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric signals show the strongest anomaly in cartservice (cpu_z 13.2) and redis (11.7), followed by several other services. No error logs are present, but substantial CPU anomalies across multiple direct dependencies of frontend suggest an upstream bottleneck (likely cartservice) propagating load. Upstream relationships indicate frontend depends on cartservice and other services; the deepest root-cause candidate with the most extreme metric deviation is cartservice. Without explicit upstream error traces, metric anomalies guide the root-cause hypothesis.",
+          "llm_reasoning": "Metric signals show strong CPU anomalies (cpu_z) for multiple services, with the most extreme being cartservice (13.2) and redis (11.7). Because frontend depends directly on cartservice and currencyservice, a deep-root cause in Redis (a core datastore) could propagates workload and latency upward. No error logs are present, so metrics are primary indicators. Redis being a common shared resource could drive upstream contention across several services, including cartservice, adservice, shippingservice, productcatalogservice, and currencyservice, all showing elevated CPU. The earliest high anomaly appears in cartservice, suggesting it as the initial stress point, with Redis likely the deeper root cause in this cascade.",
           "referenced_upstreams": {},
           "evidence_collection": {
             "count": 2,
@@ -995,8 +1014,24 @@
             "request_id": "INC-CURRENCYSERVICE_CPU_1",
             "candidates": [
               {
+                "service": "redis",
+                "confidence": 0.55,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Redis CPU saturation is driving resource contention and cascading load, causing high CPU in cartservice and other dependent services, which manifests as latency/spike in frontend without explicit error logs.",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
                 "service": "cartservice",
-                "confidence": 0.62,
+                "confidence": 0.31784670761434275,
                 "supporting_evidence": [
                   "ev_metric_cfcc3551",
                   "ev_metric_c6871757"
@@ -1009,29 +1044,13 @@
                   "log_evidence_units",
                   "trace_evidence_units"
                 ],
-                "reasoning": "Cart service (and related upstream cache layer) experienced resource pressure (CPU) leading to cascading load on dependent services, including frontend, causing widespread CPU anomalies across the service graph.",
+                "reasoning": "secondary candidate (anomalous_services rank)",
                 "topology_path": null,
                 "failure_mode": "resource_exhaustion"
               },
               {
-                "service": "redis",
-                "confidence": 0.31,
-                "supporting_evidence": [],
-                "assumptions": [
-                  "dual_window: baseline=480.0s, incident=150.0s",
-                  "stats_mode=dual"
-                ],
-                "missing_evidence": [
-                  "log_evidence_units",
-                  "trace_evidence_units"
-                ],
-                "reasoning": "secondary candidate (anomalous_services rank)",
-                "topology_path": null,
-                "failure_mode": null
-              },
-              {
                 "service": "adservice",
-                "confidence": 0.31,
+                "confidence": 0.275,
                 "supporting_evidence": [],
                 "assumptions": [
                   "dual_window: baseline=480.0s, incident=150.0s",
@@ -1047,7 +1066,7 @@
               },
               {
                 "service": "shippingservice",
-                "confidence": 0.31,
+                "confidence": 0.275,
                 "supporting_evidence": [],
                 "assumptions": [
                   "dual_window: baseline=480.0s, incident=150.0s",
@@ -1063,7 +1082,7 @@
               },
               {
                 "service": "productcatalogservice",
-                "confidence": 0.31,
+                "confidence": 0.275,
                 "supporting_evidence": [],
                 "assumptions": [
                   "dual_window: baseline=480.0s, incident=150.0s",
@@ -1079,7 +1098,7 @@
               },
               {
                 "service": "currencyservice",
-                "confidence": 0.31,
+                "confidence": 0.275,
                 "supporting_evidence": [],
                 "assumptions": [
                   "dual_window: baseline=480.0s, incident=150.0s",
@@ -1095,7 +1114,7 @@
               },
               {
                 "service": "frontend",
-                "confidence": 0.31,
+                "confidence": 0.275,
                 "supporting_evidence": [],
                 "assumptions": [
                   "dual_window: baseline=480.0s, incident=150.0s",
@@ -1165,34 +1184,31 @@
             "completeness_score": 0.4857,
             "consistency_checks": null,
             "recommended_next_actions": [],
-            "reasoning": "Metric signals show the strongest anomaly in cartservice (cpu_z 13.2) and redis (11.7), followed by several other services. No error logs are present, but substantial CPU anomalies across multiple direct dependencies of frontend suggest an upstream bottleneck (likely cartservice) propagating load. Upstream relationships indicate frontend depends on cartservice and other services; the deepest root-cause candidate with the most extreme metric deviation is cartservice. Without explicit upstream error traces, metric anomalies guide the root-cause hypothesis."
+            "reasoning": "Metric signals show strong CPU anomalies (cpu_z) for multiple services, with the most extreme being cartservice (13.2) and redis (11.7). Because frontend depends directly on cartservice and currencyservice, a deep-root cause in Redis (a core datastore) could propagates workload and latency upward. No error logs are present, so metrics are primary indicators. Redis being a common shared resource could drive upstream contention across several services, including cartservice, adservice, shippingservice, productcatalogservice, and currencyservice, all showing elevated CPU. The earliest high anomal"
           }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to cartservice: frontend → cartservice. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.65).",
-        "confidence": 0.65,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
+        "confidence": 0.796,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The given computed path frontend → cartservice represents a downstream call from the symptom service to a dependent service. However, in typical fault propagation, a root cause located upstream of the symptom would be cartservice leading to frontend being affected. The topology shows frontend depends on cartservice, making cartservice the plausible root cause relative to the symptom. Therefore the alternative path cartservice → frontend is structurally more consistent with a root-cause-to-symptom propagation, while the provided path is the reverse direction. The blast radius remains centered on frontend, with potential expansion limited to services that frontend depends on if the fault propagates further, but the current data indicates only frontend is flagged as the immediate symptom surface. The topology supports the log agent’s hypothesis that cartservice could be the suspected downstream (i.e., upstream cause for frontend issue) given the dependency relationship."
+              "llm_reasoning": "Frontend depends directly on a set of backend services. If Redis is the suspected downstream, a plausible fault path is Redis -> any of these backend services (which rely on Redis) -> frontend. Therefore the symptom can propagate from Redis through one or more dependent services to the frontend. The blast radius includes all frontend dependencies, since failures in any of these services can impact frontend availability or latency. Alternative paths exist through any of the listed dependencies, since multiple services may consume Redis. The topology shows frontend as high criticality and dependent on several services, making monitoring of all dependencies important. The hypothesis is supported by the topology, given a downstream datastore (Redis) is often shared across multiple services in the dependency subgraph."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [
-            "frontend",
-            "cartservice"
-          ],
+          "propagation_path": [],
           "blast_radius": [
             "frontend"
           ],
@@ -1304,15 +1320,53 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The given computed path frontend → cartservice represents a downstream call from the symptom service to a dependent service. However, in typical fault propagation, a root cause located upstream of the symptom would be cartservice leading to frontend being affected. The topology shows frontend depends on cartservice, making cartservice the plausible root cause relative to the symptom. Therefore the alternative path cartservice → frontend is structurally more consistent with a root-cause-to-symptom propagation, while the provided path is the reverse direction. The blast radius remains centered on frontend, with potential expansion limited to services that frontend depends on if the fault propagates further, but the current data indicates only frontend is flagged as the immediate symptom surface. The topology supports the log agent’s hypothesis that cartservice could be the suspected downstream (i.e., upstream cause for frontend issue) given the dependency relationship.",
-          "path_assessment": "alternative_exists",
+          "llm_reasoning": "Frontend depends directly on a set of backend services. If Redis is the suspected downstream, a plausible fault path is Redis -> any of these backend services (which rely on Redis) -> frontend. Therefore the symptom can propagate from Redis through one or more dependent services to the frontend. The blast radius includes all frontend dependencies, since failures in any of these services can impact frontend availability or latency. Alternative paths exist through any of the listed dependencies, since multiple services may consume Redis. The topology shows frontend as high criticality and dependent on several services, making monitoring of all dependencies important. The hypothesis is supported by the topology, given a downstream datastore (Redis) is often shared across multiple services in the dependency subgraph.",
+          "path_assessment": "plausible",
           "alternative_paths": [
             [
+              "redis",
               "cartservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "productcatalogservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "currencyservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "recommendationservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "checkoutservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "adservice",
+              "frontend"
+            ],
+            [
+              "redis",
+              "shippingservice",
               "frontend"
             ]
           ],
           "critical_services_in_blast": [
+            "cartservice",
+            "productcatalogservice",
+            "currencyservice",
+            "recommendationservice",
+            "checkoutservice",
+            "adservice",
+            "shippingservice",
             "frontend"
           ],
           "topology_supports_hypothesis": true,
@@ -1335,7 +1389,7 @@
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "Strong signal from Log Agent identifying cartservice as the deepest CPU anomaly with cascading implications to frontend, plus Topology Agent's confirmation of a plausible upstream-to-symptom path (cartservice → frontend). The TCB-RCA result is weak/uninformative for this scenario, failing to surface the upstream root. Therefore, the final determination prioritizes CPU-induced upstream bottleneck (cartservice) supported by both log and topology evidence; absence of explicit Redis or other errors reduces likelihood of alternate root causes. If further data reveals explicit upstream errors in cartservice or cache layer, consider reinforcing cartservice as the root with additional corroboration.",
+    "synthesis_reasoning": "The Log Agent and Topology Agent independently converge on Redis as the deeper root cause, with Redis CPU saturation causing cascading load into multiple backend services (including cartservice) and producing frontend latency without errors. The TCB-RCA baseline, constrained by topology and timing, points to frontend as the fault but provides no temporal evidence; therefore it is weaker in this context. Given the observed high CPU anomalies in Redis and downstream services, along with the plausible propagation path through Redis -> cartservice -> frontend, Redis is prioritized as the primary root cause. Cartservice is considered a secondary root candidate as a potential proximate cause or critical intermediary, but not as the deepest root without stronger isolated timing evidence. The final path respects the constraint that the path ends at the symptom service (frontend) and begins at the root cause (redis).",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -1356,8 +1410,24 @@
         "request_id": "INC-CURRENCYSERVICE_CPU_1",
         "candidates": [
           {
+            "service": "redis",
+            "confidence": 0.55,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Redis CPU saturation is driving resource contention and cascading load, causing high CPU in cartservice and other dependent services, which manifests as latency/spike in frontend without explicit error logs.",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
             "service": "cartservice",
-            "confidence": 0.62,
+            "confidence": 0.31784670761434275,
             "supporting_evidence": [
               "ev_metric_cfcc3551",
               "ev_metric_c6871757"
@@ -1370,29 +1440,13 @@
               "log_evidence_units",
               "trace_evidence_units"
             ],
-            "reasoning": "Cart service (and related upstream cache layer) experienced resource pressure (CPU) leading to cascading load on dependent services, including frontend, causing widespread CPU anomalies across the service graph.",
+            "reasoning": "secondary candidate (anomalous_services rank)",
             "topology_path": null,
             "failure_mode": "resource_exhaustion"
           },
           {
-            "service": "redis",
-            "confidence": 0.31,
-            "supporting_evidence": [],
-            "assumptions": [
-              "dual_window: baseline=480.0s, incident=150.0s",
-              "stats_mode=dual"
-            ],
-            "missing_evidence": [
-              "log_evidence_units",
-              "trace_evidence_units"
-            ],
-            "reasoning": "secondary candidate (anomalous_services rank)",
-            "topology_path": null,
-            "failure_mode": null
-          },
-          {
             "service": "adservice",
-            "confidence": 0.31,
+            "confidence": 0.275,
             "supporting_evidence": [],
             "assumptions": [
               "dual_window: baseline=480.0s, incident=150.0s",
@@ -1408,7 +1462,7 @@
           },
           {
             "service": "shippingservice",
-            "confidence": 0.31,
+            "confidence": 0.275,
             "supporting_evidence": [],
             "assumptions": [
               "dual_window: baseline=480.0s, incident=150.0s",
@@ -1424,7 +1478,7 @@
           },
           {
             "service": "productcatalogservice",
-            "confidence": 0.31,
+            "confidence": 0.275,
             "supporting_evidence": [],
             "assumptions": [
               "dual_window: baseline=480.0s, incident=150.0s",
@@ -1440,7 +1494,7 @@
           },
           {
             "service": "currencyservice",
-            "confidence": 0.31,
+            "confidence": 0.275,
             "supporting_evidence": [],
             "assumptions": [
               "dual_window: baseline=480.0s, incident=150.0s",
@@ -1456,7 +1510,7 @@
           },
           {
             "service": "frontend",
-            "confidence": 0.31,
+            "confidence": 0.275,
             "supporting_evidence": [],
             "assumptions": [
               "dual_window: baseline=480.0s, incident=150.0s",
@@ -1526,7 +1580,7 @@
         "completeness_score": 0.4857,
         "consistency_checks": null,
         "recommended_next_actions": [],
-        "reasoning": "Metric signals show the strongest anomaly in cartservice (cpu_z 13.2) and redis (11.7), followed by several other services. No error logs are present, but substantial CPU anomalies across multiple direct dependencies of frontend suggest an upstream bottleneck (likely cartservice) propagating load. Upstream relationships indicate frontend depends on cartservice and other services; the deepest root-cause candidate with the most extreme metric deviation is cartservice. Without explicit upstream error traces, metric anomalies guide the root-cause hypothesis."
+        "reasoning": "Metric signals show strong CPU anomalies (cpu_z) for multiple services, with the most extreme being cartservice (13.2) and redis (11.7). Because frontend depends directly on cartservice and currencyservice, a deep-root cause in Redis (a core datastore) could propagates workload and latency upward. No error logs are present, so metrics are primary indicators. Redis being a common shared resource could drive upstream contention across several services, including cartservice, adservice, shippingservice, productcatalogservice, and currencyservice, all showing elevated CPU. The earliest high anomal"
       },
       "topology_agent": {
         "agent_name": "topology_agent",
@@ -1548,8 +1602,27 @@
         "request_id": "INC-CURRENCYSERVICE_CPU_1",
         "candidates": [
           {
+            "service": "redis",
+            "confidence": 0.68,
+            "supporting_evidence": [],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "All sources converge on Redis as a downstream datastore whose saturation can cascade performance degradation to multiple backend services, which in turn impact the frontend. Logs indicate CPU anomalies across Redis and downstream services; topology supports multiple Redis-to-backend-to-frontend prop",
+            "topology_path": [
+              "redis",
+              "cartservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          },
+          {
             "service": "cartservice",
-            "confidence": 0.75,
+            "confidence": 0.4,
             "supporting_evidence": [
               "ev_metric_cfcc3551",
               "ev_metric_c6871757"
@@ -1561,8 +1634,9 @@
             "missing_evidence": [
               "log_evidence_units"
             ],
-            "reasoning": "All sources point toward cartservice as an upstream source of pressure. The Log Agent highlights cartservice as the strongest anomaly and downstream impact on frontend. The Topology Agent confirms a plausible propagation path from frontend to cartservice as the upstream root cause, consistent with a",
+            "reasoning": "Cartservice shows the strongest CPU anomaly among downstream services and is directly impacted by Redis-backed workload, aligning with the propagation path Redis -> cartservice -> frontend. While cartservice is not independently proven as the original fault, it remains a credible proximate root caus",
             "topology_path": [
+              "redis",
               "cartservice",
               "frontend"
             ],
@@ -1621,18 +1695,36 @@
             }
           ]
         },
-        "completeness_score": 1.0,
+        "completeness_score": 0.7,
         "consistency_checks": null,
         "recommended_next_actions": [],
-        "reasoning": "Strong signal from Log Agent identifying cartservice as the deepest CPU anomaly with cascading implications to frontend, plus Topology Agent's confirmation of a plausible upstream-to-symptom path (cartservice → frontend). The TCB-RCA result is weak/uninformative for this scenario, failing to surface the upstream root. Therefore, the final determination prioritizes CPU-induced upstream bottleneck (cartservice) supported by both log and topology evidence; absence of explicit Redis or other errors reduces likelihood of alternate root causes. If further data reveals explicit upstream errors in car"
+        "reasoning": "The Log Agent and Topology Agent independently converge on Redis as the deeper root cause, with Redis CPU saturation causing cascading load into multiple backend services (including cartservice) and producing frontend latency without errors. The TCB-RCA baseline, constrained by topology and timing, points to frontend as the fault but provides no temporal evidence; therefore it is weaker in this context. Given the observed high CPU anomalies in Redis and downstream services, along with the plausible propagation path through Redis -> cartservice -> frontend, Redis is prioritized as the primary r"
       },
       "verifier_agent": {
         "agent_name": "verifier_agent",
         "request_id": "INC-CURRENCYSERVICE_CPU_1",
         "candidates": [
           {
-            "service": "cartservice",
+            "service": "redis",
             "confidence": 0.6,
+            "supporting_evidence": [],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=NA",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "All sources converge on Redis as a downstream datastore whose saturation can cascade performance degradation to multiple backend services, which in turn impact the frontend. Logs indicate CPU anomalies across Redis and downstream services; topology supports multiple Redis-to-backend-to-frontend prop",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "cartservice",
+            "confidence": 0.48,
             "supporting_evidence": [
               "ev_metric_cfcc3551",
               "ev_metric_c6871757"
@@ -1641,13 +1733,13 @@
               "verifier_mode=hybrid (5-signal + consistency_checks)",
               "verdict=revised",
               "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
-              "verifier_rank=1"
+              "verifier_rank=2"
             ],
             "missing_evidence": [
               "log_evidence_units",
               "trace_evidence_units"
             ],
-            "reasoning": "All sources point toward cartservice as an upstream source of pressure. The Log Agent highlights cartservice as the strongest anomaly and downstream impact on frontend. The Topology Agent confirms a plausible propagation path from frontend to cartservice as the upstream root cause, consistent with a",
+            "reasoning": "Cartservice shows the strongest CPU anomaly among downstream services and is directly impacted by Redis-backed workload, aligning with the propagation path Redis -> cartservice -> frontend. While cartservice is not independently proven as the original fault, it remains a credible proximate root caus",
             "topology_path": null,
             "failure_mode": "resource_exhaustion"
           }
@@ -1704,22 +1796,22 @@
             }
           ]
         },
-        "completeness_score": 1.0,
+        "completeness_score": 0.7,
         "consistency_checks": {
           "temporal": true,
           "topological": true,
           "modality": false,
-          "counter_evidence": true
+          "counter_evidence": null
         },
         "recommended_next_actions": [],
-        "reasoning": "Candidate 'cartservice' confirmed by 2/3 sources (log, topology)."
+        "reasoning": "Candidate 'redis' confirmed by 2/3 sources (log, topology)."
       }
     },
     "adaptive_iterations": [
       {
         "iteration": 1,
         "reason": "completeness_sufficient",
-        "completeness_score": 1.0,
+        "completeness_score": 0.7,
         "threshold": 0.4,
         "action": "stop"
       }

@@ -4,13 +4,13 @@
   "case": "currencyservice_cpu_2",
   "gt_service": "currencyservice",
   "gt_fault": "cpu",
-  "elapsed_seconds": 28.35,
+  "elapsed_seconds": 28.13,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.56,
+    "top_confidence": 0.6,
     "verdict": "revised",
     "ground_truth_root_cause": "currencyservice",
     "predicted_top_cause_service": "currencyservice",
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 28.35,
+    "elapsed_seconds": 28.13,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Currency service is under CPU pressure, acting as the upstream stressor that propagates latency to frontend. CPU spike observed in currencyservice with latency impact downstream to frontend, consistent with dependency path frontend -> currencyservice.",
-        "confidence": 0.56,
+        "cause": "Currency service experiencing CPU stress leading to degraded throughput/latency, propagating load to dependent services (notably frontend). Strong CPU anomaly signals in currencyservice, corroborated by shippingservice, with frontend affected downstream.",
+        "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "currencyservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on currencyservice as the plausible upstream stressor given CPU spikes in currencyservice and direct dependency path to frontend. The TCB-RCA engine did not identify a concrete root cause (rank 1 frontend with zero confidence), so while it does not corroborate currencyservice as root, the structural and temporal signals from the other sources outweigh this. The absence of explicit errors in currencyservice does not preclude it being the deeper unobserved root cause because logs show CPU stress rather than failures.",
+        "reasoning": "Both the Log Agent and Topology Agent converge on currencyservice as the upstream cause: currencyservice shows strong CPU anomalies and is structurally upstream of the symptom frontend. The TCB-RCA baseline does not flag currencyservice (it prioritizes frontend based on timing/topology but finds no anomaly), which is a weak signal relative to the other sources. Given the agreement between logs (CPU stress in currencyservice) and topology (frontend depends on currencyservice), currencyservice is the most plausible root cause. The presence of elevated load in shippingservice supports a systemic stress scenario but does not overshadow currencyservice as the primary upstream fault.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,8 +52,8 @@
       }
     ],
     "final_verdict": {
-      "cause": "Currency service is under CPU pressure, acting as the upstream stressor that propagates latency to frontend. CPU spike observed in currencyservice with latency impact downstream to frontend, consistent with dependency path frontend -> currencyservice.",
-      "confidence": 0.56,
+      "cause": "Currency service experiencing CPU stress leading to degraded throughput/latency, propagating load to dependent services (notably frontend). Strong CPU anomaly signals in currencyservice, corroborated by shippingservice, with frontend affected downstream.",
+      "confidence": 0.6,
       "explanation": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "currencyservice"
     },
@@ -81,9 +81,10 @@
     },
     "verification": {
       "verdict": "revised",
-      "final_confidence": 0.56,
+      "final_confidence": 0.6,
       "notes": [
-        "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology)."
+        "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'currencyservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -102,8 +103,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Currency service is under CPU pressure causing downstream latency in frontend; frontend latency spikes reflect dependency on currencyservice with currencyservice being the stressor.",
-        "confidence": 0.55,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing cpu fault'. No error logs found. LLM hypothesis: Currency service experienced CPU stress during the incident window, propagating load and latency to dependents (e.g., frontend), with shippingservice also under elevated load, indicating the currency service as the likely root cause.",
+        "confidence": 0.58,
         "evidence": [
           {
             "type": "log",
@@ -652,21 +653,91 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Currency service is under CPU pressure causing downstream latency in frontend; frontend latency spikes reflect dependency on currencyservice with currencyservice being the stressor.",
+          "hypothesis": "Currency service experienced CPU stress during the incident window, propagating load and latency to dependents (e.g., frontend), with shippingservice also under elevated load, indicating the currency service as the likely root cause.",
           "suspected_downstream": "currencyservice",
           "anomalous_services": [
             "currencyservice",
             "shippingservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric signals show notable CPU spike for currencyservice (cpu_z 11.4) and shippingservice (cpu_z 11.6) along with frontend tail latency (p99_Δms +56.9, p95_Δms +14.3). No service exhibits extreme metric outliers (no cpu_z >30, mem_jump >0.3, or p95/p99 >100), so root cause is not unambiguously pinpointed. Given frontend directly depends on currencyservice, currencyservice is the most plausible upstream stressor, with frontend latency reflecting downstream impact. Lack of explicit upstream error fields reduces certainty, but the strongest signal aligns with currencyservice as the upstream contributor to the observed degradation.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show currencyservice and shippingservice as the strongest anomalies (cpu_z ~11.4 and 11.6 respectively, with currency also showing notable p95/p99 increases). Frontend also shows a CPU spike but lacks clear log-based error signals; log-rate deltas are modest and there are no error/timeout keywords. Given frontend depends on currencyservice, the currencyservice’s elevated metrics are the most plausible upstream root cause, with frontend responding to upstream pressure. Shippingservice corroborates systemic load, but currencyservice is the more central upstream candidate.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 0,
+            "services_covered": [],
+            "modalities_present": [],
+            "units": []
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-CURRENCYSERVICE_CPU_2",
+            "candidates": [
+              {
+                "service": "currencyservice",
+                "confidence": 0.58,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Currency service experienced CPU stress during the incident window, propagating load and latency to dependents (e.g., frontend), with shippingservice also under elevated load, indicating the currency service as the likely root cause.",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "shippingservice",
+                "confidence": 0.29,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.29,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              }
+            ],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.4,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show currencyservice and shippingservice as the strongest anomalies (cpu_z ~11.4 and 11.6 respectively, with currency also showing notable p95/p99 increases). Frontend also shows a CPU spike but lacks clear log-based error signals; log-rate deltas are modest and there are no error/timeout keywords. Given frontend depends on currencyservice, the currencyservice’s elevated metrics are the most plausible upstream root cause, with frontend responding to upstream pressure. Shippingservice corroborates systemic load, but currencyservice is the more central upstream candidate."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.80).",
-        "confidence": 0.82,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
+        "confidence": 0.835,
         "evidence": [
           {
             "type": "topology",
@@ -678,7 +749,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom service frontend directly depends on currencyservice, making frontend -> currencyservice a plausible propagation path. No alternative known paths from frontend to the suspected root (currencyservice) are provided in the topology, and the blast radius is limited to frontend given the current graph. The hypothesis that the suspected downstream is currencyservice is supported by the explicit dependency edge."
+              "llm_reasoning": "Frontend directly depends on currencyservice, so a fault in currencyservice can propagate to frontend. The symptom path frontend -> currencyservice aligns with the given topology, and no alternative transitive path from the symptom to the root cause is indicated by the graph. The blast radius is limited to the frontend as per the provided structure, with currencyservice being the most relevant downstream service to monitor alongside the symptom service."
             }
           }
         ],
@@ -798,18 +869,34 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom service frontend directly depends on currencyservice, making frontend -> currencyservice a plausible propagation path. No alternative known paths from frontend to the suspected root (currencyservice) are provided in the topology, and the blast radius is limited to frontend given the current graph. The hypothesis that the suspected downstream is currencyservice is supported by the explicit dependency edge.",
+          "llm_reasoning": "Frontend directly depends on currencyservice, so a fault in currencyservice can propagate to frontend. The symptom path frontend -> currencyservice aligns with the given topology, and no alternative transitive path from the symptom to the root cause is indicated by the graph. The blast radius is limited to the frontend as per the provided structure, with currencyservice being the most relevant downstream service to monitor alongside the symptom service.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "frontend"
+            "frontend",
+            "currencyservice"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-CURRENCYSERVICE_CPU_2",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "There is strong agreement between Log Agent and Topology Agent that currencyservice is the upstream stressor impacting frontend. The TCB-RCA tool does not extract a root-cause candidate, but its topology-temporal constraints do not contradict currencyservice as upstream. Therefore, currencyservice is the most plausible root cause given the convergent signals on upstream CPU stress and the explicit dependency path. The modest overall confidence reflects reliance on CPU metrics without explicit errors and the lack of a TCB-RCA corroboration, plus the possibility of a broader stressor affecting multiple services (shippingservice CPU spike), though currencyservice remains the most direct upstream candidate affecting the symptom frontend.",
+    "synthesis_reasoning": "Two sources (Log Agent and Topology Agent) align on currencyservice as the upstream root due to direct dependency and observed CPU stress propagating to frontend. The TCB-RCA baseline did not identify a candidate with anomalies, indicating a weak signal from that method. The UNOBSERVED root-cause detection is not triggered here since currencyservice shows observable CPU stress rather than an unlogged upstream. Therefore, currencyservice is selected as the final root cause. The propagation path is currencyservice -> frontend, reflecting the structural path confirmed by topology and the observed symptom cascade in logs.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -823,6 +910,161 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-CURRENCYSERVICE_CPU_2",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.58,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Currency service experienced CPU stress during the incident window, propagating load and latency to dependents (e.g., frontend), with shippingservice also under elevated load, indicating the currency service as the likely root cause.",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "shippingservice",
+            "confidence": 0.29,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.29,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          }
+        ],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.4,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show currencyservice and shippingservice as the strongest anomalies (cpu_z ~11.4 and 11.6 respectively, with currency also showing notable p95/p99 increases). Frontend also shows a CPU spike but lacks clear log-based error signals; log-rate deltas are modest and there are no error/timeout keywords. Given frontend depends on currencyservice, the currencyservice’s elevated metrics are the most plausible upstream root cause, with frontend responding to upstream pressure. Shippingservice corroborates systemic load, but currencyservice is the more central upstream candidate."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-CURRENCYSERVICE_CPU_2",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-CURRENCYSERVICE_CPU_2",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.75,
+            "supporting_evidence": [],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on currencyservice as the upstream cause: currencyservice shows strong CPU anomalies and is structurally upstream of the symptom frontend. The TCB-RCA baseline does not flag currencyservice (it prioritizes frontend based on timing/topology but finds no ",
+            "topology_path": [
+              "currencyservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.75,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Two sources (Log Agent and Topology Agent) align on currencyservice as the upstream root due to direct dependency and observed CPU stress propagating to frontend. The TCB-RCA baseline did not identify a candidate with anomalies, indicating a weak signal from that method. The UNOBSERVED root-cause detection is not triggered here since currencyservice shows observable CPU stress rather than an unlogged upstream. Therefore, currencyservice is selected as the final root cause. The propagation path is currencyservice -> frontend, reflecting the structural path confirmed by topology and the observed"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-CURRENCYSERVICE_CPU_2",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.6,
+            "supporting_evidence": [],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=NA",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [],
+            "reasoning": "Both the Log Agent and Topology Agent converge on currencyservice as the upstream cause: currencyservice shows strong CPU anomalies and is structurally upstream of the symptom frontend. The TCB-RCA baseline does not flag currencyservice (it prioritizes frontend based on timing/topology but finds no ",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.6,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": null
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.6,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

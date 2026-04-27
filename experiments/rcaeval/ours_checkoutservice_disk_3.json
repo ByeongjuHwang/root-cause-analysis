@@ -4,7 +4,7 @@
   "case": "checkoutservice_disk_3",
   "gt_service": "checkoutservice",
   "gt_fault": "disk",
-  "elapsed_seconds": 35.73,
+  "elapsed_seconds": 25.78,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 35.73,
+    "elapsed_seconds": 25.78,
     "gt_fault": "disk"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Checkoutservice is undergoing severe resource saturation with a disk fault implication (high CPU spike, large memory jump, high load) leading to increased latency and cascading impact on the checkout flow, which propagates to the frontend symptom.",
+        "cause": "Disk fault on checkoutservice causing high CPU usage and degraded performance, propagating impact to dependent frontend (checkoutworkflow slowdown).",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "Both the Log Agent and the Topology Agent converge on checkoutservice as the plausible root cause: checkoutservice shows the strongest anomaly signal (CPU spike and memory jump) with no direct error logs, aligning with a disk fault hypothesis affecting downstream latency. The topology supports a checkoutservice-to-frontend propagation path, making checkoutservice a structurally plausible root cause. The TCB-RCA algorithm does not identify any anomaly at checkoutservice (rank 1 is frontend with 0 confidence), so it does not corroborate this root cause. Given the absence of errors but clear performance anomalies and the structural propagation path, checkoutservice is the most credible root cause candidate among the three sources.",
+        "reasoning": "Log Agent strongly flags checkoutservice as the deep root with disk fault and resource spikes; Topology Agent confirms a direct propagation path from frontend to checkoutservice and plausible blast radius. Although the TCB-RCA baseline ranks frontend as the initial anomaly, there are no logs indicating frontend problems and the upstream checkoutservice disk fault aligns with the observed downstream impact. Given the explicit disk fault context and strong structural plausibility, checkoutservice is the most credible root cause, with frontend being downstream affected service.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Checkoutservice is undergoing severe resource saturation with a disk fault implication (high CPU spike, large memory jump, high load) leading to increased latency and cascading impact on the checkout flow, which propagates to the frontend symptom.",
+      "cause": "Disk fault on checkoutservice causing high CPU usage and degraded performance, propagating impact to dependent frontend (checkoutworkflow slowdown).",
       "confidence": 0.6,
       "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "checkoutservice"
@@ -96,15 +96,15 @@
         "[Recv ListRecommendations] product_ids=['9SIQT8TOJO', 'OLJCESPC7Z', '6E92ZMYYFZ', 'L9ECAV7KIM', '2ZYFJ3GM2N']"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
         "propagation path: frontend -> checkoutservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service checkoutservice experiencing disk fault'. No error logs found. LLM hypothesis: Checkoutservice is experiencing severe resource saturation (CPU spike and high load) likely due to a disk fault, causing latency and cascading impact on downstream services including frontend.",
-        "confidence": 0.85,
+        "summary": "Incident at frontend: 'Service checkoutservice experiencing disk fault'. No error logs found. LLM hypothesis: Checkoutservice is the deep root cause with a disk fault causing high CPU usage and degraded performance; frontend is affected through its dependency on checkoutservice, leading to downstream impact on the checkout workflow.",
+        "confidence": 0.72,
         "evidence": [
           {
             "type": "log",
@@ -543,31 +543,122 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Checkoutservice is experiencing severe resource saturation (CPU spike and high load) likely due to a disk fault, causing latency and cascading impact on downstream services including frontend.",
+          "hypothesis": "Checkoutservice is the deep root cause with a disk fault causing high CPU usage and degraded performance; frontend is affected through its dependency on checkoutservice, leading to downstream impact on the checkout workflow.",
           "suspected_downstream": "checkoutservice",
           "anomalous_services": [
             "checkoutservice"
           ],
-          "llm_reasoning": "Metric signals show a strong anomaly in checkoutservice (cpu_z=329.2, mem_jump=22.89). No error logs are present, but the pronounced resource anomaly in checkoutservice is the strongest signal and aligns with the symptom of disk fault impacting checkout flow. Frontend and other dependents show less severe metric deviations and no log-rate errors, suggesting checkoutservice is the primary root cause rather than a downstream issue.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show a severe CPU spike (cpu_z > 30) and significant mem impact for checkoutservice, making it the strongest anomaly. Other services show only modest metric deviations. No explicit error logs are present, but the disk fault context aligns with the elevated resource usage in checkoutservice. Since frontend depends on checkoutservice, upstream-to-downstream propagation is plausible, making checkoutservice the likely root cause rather than frontend.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 1,
+            "services_covered": [
+              "checkoutservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_dba974b8",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T16:21:45.000Z",
+                  "end": "2024-01-20T16:24:15.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 1.0,
+                "observation": {
+                  "cpu_spike_zscore": 329.2,
+                  "cpu_max": 5.8781,
+                  "mem_jump_ratio": 22.885,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-CHECKOUTSERVICE_DISK_3",
+            "candidates": [
+              {
+                "service": "checkoutservice",
+                "confidence": 0.72,
+                "supporting_evidence": [
+                  "ev_metric_dba974b8"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Checkoutservice is the deep root cause with a disk fault causing high CPU usage and degraded performance; frontend is affected through its dependency on checkoutservice, leading to downstream impact on the checkout workflow.",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_dba974b8",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T16:21:45.000Z",
+                    "end": "2024-01-20T16:24:15.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 1.0,
+                  "observation": {
+                    "cpu_spike_zscore": 329.2,
+                    "cpu_max": 5.8781,
+                    "mem_jump_ratio": 22.885,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 0.9,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show a severe CPU spike (cpu_z > 30) and significant mem impact for checkoutservice, making it the strongest anomaly. Other services show only modest metric deviations. No explicit error logs are present, but the disk fault context aligns with the elevated resource usage in checkoutservice. Since frontend depends on checkoutservice, upstream-to-downstream propagation is plausible, making checkoutservice the likely root cause rather than frontend."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.40).",
-        "confidence": 0.65,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
+        "confidence": 0.835,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The topology shows frontend depends on checkoutservice. A fault in checkoutservice would propagate to frontend (checkoutservice -> frontend), which is the plausible root-to-symptom path given the dependency direction. The observed symptom path frontend -> checkoutservice is less consistent with typical propagation directions (downstream to caller) and therefore should be considered an alternative interpretation. The blast radius currently centers on frontend; if the fault originates in checkoutservice, frontend is the most immediate critical service to monitor, with potential further impact to other frontend-dependent flows."
+              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, providing a straightforward propagation path frontend -> checkoutservice. No multi-hop alternative paths exist from frontend to checkoutservice within the given topology. The blast radius is currently limited to frontend, aligning with the observation that only frontend is implicated at this stage; if propagation widens, it would likely involve the other dependent services, but as per topology, frontend is the critical node driving the observed symptom."
             }
           }
         ],
@@ -687,23 +778,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The topology shows frontend depends on checkoutservice. A fault in checkoutservice would propagate to frontend (checkoutservice -> frontend), which is the plausible root-to-symptom path given the dependency direction. The observed symptom path frontend -> checkoutservice is less consistent with typical propagation directions (downstream to caller) and therefore should be considered an alternative interpretation. The blast radius currently centers on frontend; if the fault originates in checkoutservice, frontend is the most immediate critical service to monitor, with potential further impact to other frontend-dependent flows.",
-          "path_assessment": "alternative_exists",
-          "alternative_paths": [
-            [
-              "checkoutservice",
-              "frontend"
-            ]
-          ],
+          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, providing a straightforward propagation path frontend -> checkoutservice. No multi-hop alternative paths exist from frontend to checkoutservice within the given topology. The blast radius is currently limited to frontend, aligning with the observation that only frontend is implicated at this stage; if propagation widens, it would likely involve the other dependent services, but as per topology, frontend is the critical node driving the observed symptom.",
+          "path_assessment": "plausible",
+          "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-CHECKOUTSERVICE_DISK_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest convergence comes from the Log Agent and Topology Agent: checkoutservice exhibits the most compelling anomaly signal and the topology supports a checkoutservice-to-frontend propagation. The absence of explicit error logs aligns with a disk fault or resource saturation scenario rather than a conventional failure log. The TCB-RCA result does not corroborate checkoutservice as root cause, instead ranking frontend as the initial anomaly with zero confidence. Because two sources agree on checkoutservice as the root cause while the third source remains inconclusive, we weight the log and topology evidence more heavily for establishing the root cause. This leads to prioritizing checkoutservice as the primary root cause candidate, with the propagation path from checkoutservice to frontend matching the observed symptom service. If further data reveals upstream disk-related anomalies or disk I/O bottlenecks, this would reinforce the root cause attribution to checkoutservice and may extend the propagation path accordingly.",
+    "synthesis_reasoning": "There is clear agreement between Log Agent and Topology Agent that checkoutservice is the root cause and that frontend is affected downstream. The TCB-RCA baseline conflicts by ranking frontend as the initial anomaly, but there is no observed frontend anomaly in logs; the disk fault in checkoutservice provides a more compelling causal chain. Therefore, the root cause is best represented as checkoutservice with a direct path to frontend. Since one source (TCB-RCA) disagrees, we weighted log-derived evidence and topology structure higher, and treated TCB-RCA as a weaker signal in this case.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -717,6 +818,209 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-CHECKOUTSERVICE_DISK_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.72,
+            "supporting_evidence": [
+              "ev_metric_dba974b8"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Checkoutservice is the deep root cause with a disk fault causing high CPU usage and degraded performance; frontend is affected through its dependency on checkoutservice, leading to downstream impact on the checkout workflow.",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_dba974b8",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T16:21:45.000Z",
+                "end": "2024-01-20T16:24:15.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 1.0,
+              "observation": {
+                "cpu_spike_zscore": 329.2,
+                "cpu_max": 5.8781,
+                "mem_jump_ratio": 22.885,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.9,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show a severe CPU spike (cpu_z > 30) and significant mem impact for checkoutservice, making it the strongest anomaly. Other services show only modest metric deviations. No explicit error logs are present, but the disk fault context aligns with the elevated resource usage in checkoutservice. Since frontend depends on checkoutservice, upstream-to-downstream propagation is plausible, making checkoutservice the likely root cause rather than frontend."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-CHECKOUTSERVICE_DISK_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-CHECKOUTSERVICE_DISK_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.78,
+            "supporting_evidence": [
+              "ev_metric_dba974b8"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Log Agent strongly flags checkoutservice as the deep root with disk fault and resource spikes; Topology Agent confirms a direct propagation path from frontend to checkoutservice and plausible blast radius. Although the TCB-RCA baseline ranks frontend as the initial anomaly, there are no logs indicat",
+            "topology_path": [
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_dba974b8",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T16:21:45.000Z",
+                "end": "2024-01-20T16:24:15.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 1.0,
+              "observation": {
+                "cpu_spike_zscore": 329.2,
+                "cpu_max": 5.8781,
+                "mem_jump_ratio": 22.885,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.9,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "There is clear agreement between Log Agent and Topology Agent that checkoutservice is the root cause and that frontend is affected downstream. The TCB-RCA baseline conflicts by ranking frontend as the initial anomaly, but there is no observed frontend anomaly in logs; the disk fault in checkoutservice provides a more compelling causal chain. Therefore, the root cause is best represented as checkoutservice with a direct path to frontend. Since one source (TCB-RCA) disagrees, we weighted log-derived evidence and topology structure higher, and treated TCB-RCA as a weaker signal in this case."
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-CHECKOUTSERVICE_DISK_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_dba974b8"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Log Agent strongly flags checkoutservice as the deep root with disk fault and resource spikes; Topology Agent confirms a direct propagation path from frontend to checkoutservice and plausible blast radius. Although the TCB-RCA baseline ranks frontend as the initial anomaly, there are no logs indicat",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_dba974b8",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T16:21:45.000Z",
+                "end": "2024-01-20T16:24:15.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 1.0,
+              "observation": {
+                "cpu_spike_zscore": 329.2,
+                "cpu_max": 5.8781,
+                "mem_jump_ratio": 22.885,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.9,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.9,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

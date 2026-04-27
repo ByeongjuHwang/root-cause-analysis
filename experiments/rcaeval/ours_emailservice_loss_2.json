@@ -4,24 +4,23 @@
   "case": "emailservice_loss_2",
   "gt_service": "emailservice",
   "gt_fault": "loss",
-  "elapsed_seconds": 39.59,
+  "elapsed_seconds": 31.79,
   "evaluation": {
     "ac_at_1": false,
     "ac_at_3": false,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.45,
-    "verdict": "weak-evidence",
+    "top_confidence": 0.6,
+    "verdict": "revised",
     "ground_truth_root_cause": "emailservice",
-    "predicted_top_cause_service": "redis",
-    "predicted_top_cause_excerpt": "redis",
+    "predicted_top_cause_service": "checkoutservice",
+    "predicted_top_cause_excerpt": "checkoutservice",
     "predicted_path": [
-      "redis",
       "checkoutservice",
       "frontend"
     ],
-    "predicted_path_length": 3,
-    "elapsed_seconds": 39.59,
+    "predicted_path_length": 2,
+    "elapsed_seconds": 31.79,
     "gt_fault": "loss"
   },
   "result": {
@@ -37,29 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Upstream cache layer pressure on Redis causing increased miss rates and load across dependent services, leading to cascading latency and activity spikes that propagate to the frontend and its downstream services.",
-        "confidence": 0.45,
-        "evidence_refs": [
-          "log-agent:confirmed"
-        ],
-        "cause_service": "redis",
-        "reasoning": "Log Agent explicitly identifies Redis as the top anomalous service and posits cache pressure as the triggering factor for downstream load. Topology does not model Redis as a direct downstream within the observed dependency graph, and the TCB-RCA baseline does not elevate Redis as a root cause due to lack of timing/testable propagation. Given the unobserved root-cause rule (Redis referenced as upstream with no logs of its own), Redis is a plausible deeper root cause, with frontend serving as the symptom. The evidence converges strongest on Redis being the initiating factor rather than an internal frontend fault.",
-        "supporting_evidence": {
-          "log_agent_agrees": true,
-          "topology_agent_agrees": false,
-          "tcb_rca_agrees": false
-        }
-      },
-      {
-        "rank": 2,
-        "cause": "Checkout service experiences or exhibits increased load or latency that propagates to the frontend, potentially acting as the immediate upstream cause within the frontend’s dependency chain.",
-        "confidence": 0.36,
+        "cause": "Checkoutservice experiencing CPU saturation leading to increased latency and cascading impact to dependent services, including frontend.",
+        "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "Log Agent lists several downstream services including checkoutservice as anomalous, and the topology path assessment allows propagation from checkoutservice to frontend. However, there is no explicit error trace within checkoutservice itself in the logs, and the TCB-RCA baseline centers on frontend with minimal timing evidence. This candidate is plausible as a secondary root cause given the structural plausibility and corroborating log/topology signals, but lacks stronger direct temporal evidence.",
+        "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the upstream fault that propagates to frontend. The Log Agent identifies CPU saturation in checkoutservice as the likely root cause given the high cpu_z and observed downstream latency, while the Topology Agent confirms a direct propagation path from frontend to checkoutservice. The TCB-RCA, constrained by topology, ranks frontend as the root (likely due to minimal observed propagation within the window), which is a weaker signal compared to the CPU saturation hypothesis in checkoutservice. Given the stronger convergence of log patterns and structural propagation, checkoutservice is the most plausible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -68,14 +52,13 @@
       }
     ],
     "final_verdict": {
-      "cause": "Upstream cache layer pressure on Redis causing increased miss rates and load across dependent services, leading to cascading latency and activity spikes that propagate to the frontend and its downstream services.",
-      "confidence": 0.45,
-      "explanation": "Candidate 'redis' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-      "cause_service": "redis"
+      "cause": "Checkoutservice experiencing CPU saturation leading to increased latency and cascading impact to dependent services, including frontend.",
+      "confidence": 0.6,
+      "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "checkoutservice"
     },
     "impact_analysis": {
       "affected_services": [
-        "redis",
         "checkoutservice",
         "frontend"
       ],
@@ -89,7 +72,6 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "redis",
         "checkoutservice",
         "frontend"
       ],
@@ -98,11 +80,11 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.45,
+      "verdict": "revised",
+      "final_confidence": 0.6,
       "notes": [
-        "Candidate 'redis' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-        "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology)."
+        "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'checkoutservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -114,14 +96,15 @@
         "serving product page [path: /product/L9ECAV7KIM]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists."
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+        "propagation path: frontend -> checkoutservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing loss fault'. No error logs found. LLM hypothesis: Cache layer pressure on Redis caused upstream services to experience increased load and latency, propagating through frontend dependencies and resulting in elevated activity across the downstream services.",
-        "confidence": 0.45,
+        "summary": "Incident at frontend: 'Service emailservice experiencing loss fault'. No error logs found. LLM hypothesis: Checkoutservice is experiencing CPU saturation, causing increased latencies and cascading impact to frontend and dependent services.",
+        "confidence": 0.62,
         "evidence": [
           {
             "type": "log",
@@ -1195,45 +1178,300 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Cache layer pressure on Redis caused upstream services to experience increased load and latency, propagating through frontend dependencies and resulting in elevated activity across the downstream services.",
-          "suspected_downstream": "redis",
+          "hypothesis": "Checkoutservice is experiencing CPU saturation, causing increased latencies and cascading impact to frontend and dependent services.",
+          "suspected_downstream": "checkoutservice",
           "anomalous_services": [
-            "redis",
             "checkoutservice",
-            "paymentservice",
+            "frontend",
+            "redis",
             "emailservice",
             "shippingservice",
             "currencyservice",
             "cartservice",
-            "frontend",
+            "paymentservice",
+            "recommendationservice",
             "adservice",
-            "recommendationservice"
+            "productcatalogservice"
           ],
-          "llm_reasoning": "Metric summary shows Redis has the highest volume_delta (+0.60) among services, indicating a significant change in request/log rate. Other services show smaller but positive deltas. No service hits CPU/memory/delay thresholds (>30% CPU, >0.3 mem_jump, p95/p99>100 ms, or rx_drop>0), but Redis stands out as the most extreme metric abnormality and is a common upstream cache layer. Given frontend depends on several downstream services, Redis-induced cache misses could increase load on checkout/payment/shipping/currency/service paths, leading to the observed multi-service signal. Lack of explicit upstream error entries means we infer root cause from upstream metric anomaly in a transitive dependency.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric Summary shows checkoutservice with the highest cpu_z (+12.7) among services, indicating a strong resource strain. Other services also show elevated cpu but to lesser extents; no error logs are present across services. Since frontend depends on checkoutservice, the upstream resource contention in checkoutservice likely propagates latency and load to frontend and downstream calls. This aligns with the incident window where frontend observed degradation while log-based errors are absent.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 1,
+            "services_covered": [
+              "checkoutservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_def1ddfd",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T08:44:54.000Z",
+                  "end": "2024-01-20T08:47:24.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.3072446617990079,
+                "observation": {
+                  "cpu_spike_zscore": 12.7,
+                  "cpu_max": 0.2487,
+                  "mem_jump_ratio": 0.01,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-EMAILSERVICE_LOSS_2",
+            "candidates": [
+              {
+                "service": "checkoutservice",
+                "confidence": 0.62,
+                "supporting_evidence": [
+                  "ev_metric_def1ddfd"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Checkoutservice is experiencing CPU saturation, causing increased latencies and cascading impact to frontend and dependent services.",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "redis",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "emailservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "shippingservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "currencyservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "cartservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "paymentservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "recommendationservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "adservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "productcatalogservice",
+                "confidence": 0.31,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_def1ddfd",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T08:44:54.000Z",
+                    "end": "2024-01-20T08:47:24.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.3072446617990079,
+                  "observation": {
+                    "cpu_spike_zscore": 12.7,
+                    "cpu_max": 0.2487,
+                    "mem_jump_ratio": 0.01,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 0.4455,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric Summary shows checkoutservice with the highest cpu_z (+12.7) among services, indicating a strong resource strain. Other services also show elevated cpu but to lesser extents; no error logs are present across services. Since frontend depends on checkoutservice, the upstream resource contention in checkoutservice likely propagates latency and load to frontend and downstream calls. This aligns with the incident window where frontend observed degradation while log-based errors are absent."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.60).",
-        "confidence": 0.65,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.86).",
+        "confidence": 0.838,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom frontend depends on multiple downstream services; a fault in any of these dependencies could propagate to frontend. While the log agent suspects redis downstream, redis is not explicit in the topology. The plausible propagation requires a root in one of the frontend's dependencies (or an upstream cache layer) propagating through that dependency to frontend. The listed dependency edges support alternative plausible paths to frontend, but the topology does not explicitly model Redis as a downstream provider, so the hypothesis is plausible but not explicitly confirmed by the topology alone."
+              "llm_reasoning": "The symptom service (frontend) directly depends on checkoutservice, so a fault in checkoutservice can propagate to frontend, causing the observed symptom. The provided propagation path frontend -> checkoutservice is structurally plausible for a downstream failure to affect the symptom. There are no alternative structural paths from the symptom to the suspected root cause within the given topology, since frontend's only direct dependency for outward calls is checkoutservice, and the graph does not indicate upstream services that feed into frontend in a way that would create another propagation path. The blast radius remains limited to frontend under this topology, so monitoring the frontend service is most critical within the affected set. The topology supports the log agent's hypothesis that checkoutservice could be the downstream fault source affecting frontend."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [],
+          "propagation_path": [
+            "frontend",
+            "checkoutservice"
+          ],
           "blast_radius": [
             "frontend"
           ],
@@ -1345,47 +1583,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom frontend depends on multiple downstream services; a fault in any of these dependencies could propagate to frontend. While the log agent suspects redis downstream, redis is not explicit in the topology. The plausible propagation requires a root in one of the frontend's dependencies (or an upstream cache layer) propagating through that dependency to frontend. The listed dependency edges support alternative plausible paths to frontend, but the topology does not explicitly model Redis as a downstream provider, so the hypothesis is plausible but not explicitly confirmed by the topology alone.",
-          "path_assessment": "alternative_exists",
-          "alternative_paths": [
-            [
-              "cartservice",
-              "frontend"
-            ],
-            [
-              "productcatalogservice",
-              "frontend"
-            ],
-            [
-              "currencyservice",
-              "frontend"
-            ],
-            [
-              "recommendationservice",
-              "frontend"
-            ],
-            [
-              "checkoutservice",
-              "frontend"
-            ],
-            [
-              "adservice",
-              "frontend"
-            ],
-            [
-              "shippingservice",
-              "frontend"
-            ]
-          ],
+          "llm_reasoning": "The symptom service (frontend) directly depends on checkoutservice, so a fault in checkoutservice can propagate to frontend, causing the observed symptom. The provided propagation path frontend -> checkoutservice is structurally plausible for a downstream failure to affect the symptom. There are no alternative structural paths from the symptom to the suspected root cause within the given topology, since frontend's only direct dependency for outward calls is checkoutservice, and the graph does not indicate upstream services that feed into frontend in a way that would create another propagation path. The blast radius remains limited to frontend under this topology, so monitoring the frontend service is most critical within the affected set. The topology supports the log agent's hypothesis that checkoutservice could be the downstream fault source affecting frontend.",
+          "path_assessment": "plausible",
+          "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-EMAILSERVICE_LOSS_2",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest signal points to Redis as the initial trigger due to the clear anomalous signal and the unobserved root-cause criterion, which elevates Redis as a deeper root cause despite the topology not explicitly modeling Redis in the dependency graph. The topology analysis supports a propagation path from downstream services such as checkoutservice to frontend, aligning with Redis-induced load cascading through dependent services; however, Redis itself is not represented in the topology. TCB-RCA does not identify Redis or provide a timing-based root cause for Redis, instead highlighting frontend as the minimal element with no observed anomalies, which weakens its standalone credibility as the primary root. Therefore, Redis is the strongest candidate with partial support from topology, while checkoutservice remains a plausible secondary root cause given corroborating log/topology signals. The final propagation path from Redis through CheckoutService to Frontend is constructed to reflect the most coherent chain consistent with the evidence, while acknowledging potential alternative paths through other frontend dependencies.",
+    "synthesis_reasoning": "The strongest and most consistent signals come from Log Agent (CPU saturation in checkoutservice) and Topology Agent (direct, structurally plausible path frontend <- checkoutservice). The TCB-RCA result conflicts by prioritizing frontend as the root, which is less supported by the log data and topology. Because two independent sources align on checkoutservice as the upstream fault, and there is a plausible propagation path to the symptom frontend, checkoutservice is the most credible root cause. The absence of explicit error logs in frontend is consistent with a latency/throughput bottleneck rather than a frontend crash, reinforcing a deeper upstream issue in checkoutservice rather than a symptom on frontend. ",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -1399,6 +1623,369 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-EMAILSERVICE_LOSS_2",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.62,
+            "supporting_evidence": [
+              "ev_metric_def1ddfd"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Checkoutservice is experiencing CPU saturation, causing increased latencies and cascading impact to frontend and dependent services.",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "redis",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "emailservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "shippingservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "currencyservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "cartservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "paymentservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "recommendationservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "adservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "productcatalogservice",
+            "confidence": 0.31,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_def1ddfd",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T08:44:54.000Z",
+                "end": "2024-01-20T08:47:24.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.3072446617990079,
+              "observation": {
+                "cpu_spike_zscore": 12.7,
+                "cpu_max": 0.2487,
+                "mem_jump_ratio": 0.01,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.4455,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric Summary shows checkoutservice with the highest cpu_z (+12.7) among services, indicating a strong resource strain. Other services also show elevated cpu but to lesser extents; no error logs are present across services. Since frontend depends on checkoutservice, the upstream resource contention in checkoutservice likely propagates latency and load to frontend and downstream calls. This aligns with the incident window where frontend observed degradation while log-based errors are absent."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-EMAILSERVICE_LOSS_2",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-EMAILSERVICE_LOSS_2",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.75,
+            "supporting_evidence": [
+              "ev_metric_def1ddfd"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the upstream fault that propagates to frontend. The Log Agent identifies CPU saturation in checkoutservice as the likely root cause given the high cpu_z and observed downstream latency, while the Topology Agent confirms a direct propag",
+            "topology_path": [
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_def1ddfd",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T08:44:54.000Z",
+                "end": "2024-01-20T08:47:24.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.3072446617990079,
+              "observation": {
+                "cpu_spike_zscore": 12.7,
+                "cpu_max": 0.2487,
+                "mem_jump_ratio": 0.01,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.9,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "The strongest and most consistent signals come from Log Agent (CPU saturation in checkoutservice) and Topology Agent (direct, structurally plausible path frontend <- checkoutservice). The TCB-RCA result conflicts by prioritizing frontend as the root, which is less supported by the log data and topology. Because two independent sources align on checkoutservice as the upstream fault, and there is a plausible propagation path to the symptom frontend, checkoutservice is the most credible root cause. The absence of explicit error logs in frontend is consistent with a latency/throughput bottleneck r"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-EMAILSERVICE_LOSS_2",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_def1ddfd"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the upstream fault that propagates to frontend. The Log Agent identifies CPU saturation in checkoutservice as the likely root cause given the high cpu_z and observed downstream latency, while the Topology Agent confirms a direct propag",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_def1ddfd",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T08:44:54.000Z",
+                "end": "2024-01-20T08:47:24.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.3072446617990079,
+              "observation": {
+                "cpu_spike_zscore": 12.7,
+                "cpu_max": 0.2487,
+                "mem_jump_ratio": 0.01,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.9,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.9,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

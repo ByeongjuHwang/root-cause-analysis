@@ -4,7 +4,7 @@
   "case": "emailservice_disk_2",
   "gt_service": "emailservice",
   "gt_fault": "disk",
-  "elapsed_seconds": 35.61,
+  "elapsed_seconds": 27.9,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -21,7 +21,7 @@
       "frontend"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 35.61,
+    "elapsed_seconds": 27.9,
     "gt_fault": "disk"
   },
   "result": {
@@ -37,38 +37,23 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Disk fault leading to resource saturation (CPU/memory), elevated latencies, and downstream impact on services relying on emailservice (as evidenced by anomalous metrics for emailservice and its placement in the propagation path).",
+        "cause": "Email service experiencing extreme resource pressure consistent with a disk fault, driving degraded throughput/latency for downstream email-related workflows and causing broader latency observed at the symptom frontend.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "emailservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on emailservice being the downstream component experiencing a fault that can propagate to frontend. The Log Agent reports strong signals of disk fault and resource saturation for emailservice with downstream latency impact. The Topology Agent confirms a structurally plausible path frontend -> checkoutservice -> emailservice, aligning with the observed symptom cascade. The TCB-RCA algorithm does not flag emailservice (it assigns zero anomaly to frontend with no observed timing corroboration), hence it disagrees. Given the observed abnormality in emailservice and its validated path to frontend, emailservice is treated as the primary root-cause candidate.",
+        "reasoning": "Strong signal from the Log Agent identifies emailservice as exhibiting dramatic CPU/memory pressure and disk-fault-like symptoms, with no competing persistent anomalies elsewhere. The Topology Agent corroborates a plausible propagation path involving emailservice in a downstream chain from frontend via checkoutservice, aligning with the symptom onset seen at frontend. The TCB-RCA engine, constrained by topology in its run, ranks frontend as the root with zero temporal evidence, which conflicts with the log-based diagnosis. Given the explicit disk/pressure indicators and the structural path that would allow emailservice to drive frontend latency via checkoutservice, emailservice is the more credible root cause, even though the exact timing chain is not captured by the TCB-RCA output.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
-      },
-      {
-        "rank": 2,
-        "cause": "Frontend observed latency degradation; no direct logs show a fault in frontend itself, but it is the symptom service and could be the initiator if upstream issues exist. Considered only due to TCB-RCA placing frontend as root in its isolated traversal.",
-        "confidence": 0.28,
-        "evidence_refs": [
-          "tcb-rca:confirmed"
-        ],
-        "cause_service": "frontend",
-        "reasoning": "The TC-RCA result ranks frontend as the root with zero observed anomalies, which conflicts with the log and topology findings. While frontend is the symptom service, there is no independent log evidence of a fault in frontend itself, and its role as root is not supported by the observed metrics. This candidate serves as a secondary consideration only due to the deterministic but conflicting TCB-RCA result.",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
-          "topology_agent_agrees": false,
-          "tcb_rca_agrees": true
-        }
       }
     ],
     "final_verdict": {
-      "cause": "Disk fault leading to resource saturation (CPU/memory), elevated latencies, and downstream impact on services relying on emailservice (as evidenced by anomalous metrics for emailservice and its placement in the propagation path).",
+      "cause": "Email service experiencing extreme resource pressure consistent with a disk fault, driving degraded throughput/latency for downstream email-related workflows and causing broader latency observed at the symptom frontend.",
       "confidence": 0.6,
       "explanation": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "emailservice"
@@ -102,8 +87,7 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'emailservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
-        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "Candidate 'emailservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -122,8 +106,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing disk fault'. No error logs found. LLM hypothesis: emailservice is experiencing disk fault leading to extreme resource saturation (CPU/memory) and latency degradation, causing downstream impact on dependent frontend paths.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service emailservice experiencing disk fault'. No error logs found. LLM hypothesis: Email service is experiencing extreme resource pressure (CPU spike and memory load) consistent with a disk fault, likely causing degraded throughput and latency for downstream operations that depend on email-related workflows; this upstream resource constraint appears to drive broader service latency observed in the system.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -562,19 +546,257 @@
           }
         ],
         "metadata": {
-          "hypothesis": "emailservice is experiencing disk fault leading to extreme resource saturation (CPU/memory) and latency degradation, causing downstream impact on dependent frontend paths.",
+          "hypothesis": "Email service is experiencing extreme resource pressure (CPU spike and memory load) consistent with a disk fault, likely causing degraded throughput and latency for downstream operations that depend on email-related workflows; this upstream resource constraint appears to drive broader service latency observed in the system.",
           "suspected_downstream": "emailservice",
           "anomalous_services": [
             "emailservice"
           ],
-          "llm_reasoning": "Metric signals show extreme anomaly for emailservice (cpu_z > 30, mem_jump > 0.3, p95_Δms and p99_Δms elevated). This makes emailservice the strongest root-cause candidate. Frontend exhibits latency degradation but does not reach metric anomaly levels; log-rate signals show non-zero activity but do not pinpoint a different upstream. Since emailservice is a key service in the system and a potential downstream dependency of frontend, a disk fault causing resource saturation is the most plausible primary fault, with frontend latency as a downstream effect.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show a dramatic CPU spike (cpu_z), large memory jump, and tail latency increases for emailservice, marking it as the strongest root-cause candidate. There are no higher-mersistence metric anomalies in other services. Given topology, emailservice could be a downstream consumer of other services or an upstream component for notification flows; however, its own strong anomaly and lack of compensating log keywords indicate it is the likely root cause. Without evidence of upstream log errors, we treat emailservice as the primary root and deepest cause.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 4,
+            "services_covered": [
+              "cartservice",
+              "checkoutservice",
+              "emailservice",
+              "frontend"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_f9528dc8",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-18T18:34:04.000Z",
+                  "end": "2024-01-18T18:36:34.000Z"
+                },
+                "services": [
+                  "cartservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.5419412491064071,
+                "observation": {
+                  "p95_delta_ms": -0.33,
+                  "p99_delta_ms": 121.38,
+                  "p50_ms": 3.1,
+                  "p95_ms": 5.49
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_01d56616",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-18T18:34:04.000Z",
+                  "end": "2024-01-18T18:36:34.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.9923044114931916,
+                "observation": {
+                  "p95_delta_ms": 273.31,
+                  "p99_delta_ms": 555.64,
+                  "p50_ms": 101.0,
+                  "p95_ms": 507.13
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_283c1cec",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-18T18:34:04.000Z",
+                  "end": "2024-01-18T18:36:34.000Z"
+                },
+                "services": [
+                  "emailservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.9999999999914522,
+                "observation": {
+                  "cpu_spike_zscore": 523.57,
+                  "cpu_max": 5.7413,
+                  "mem_jump_ratio": 5.335,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_7256be99",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-18T18:34:04.000Z",
+                  "end": "2024-01-18T18:36:34.000Z"
+                },
+                "services": [
+                  "frontend"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.3624903370706196,
+                "observation": {
+                  "p95_delta_ms": -3.67,
+                  "p99_delta_ms": 75.95,
+                  "p50_ms": 44.37,
+                  "p95_ms": 213.0
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-EMAILSERVICE_DISK_2",
+            "candidates": [
+              {
+                "service": "emailservice",
+                "confidence": 0.75,
+                "supporting_evidence": [
+                  "ev_metric_283c1cec"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Email service is experiencing extreme resource pressure (CPU spike and memory load) consistent with a disk fault, likely causing degraded throughput and latency for downstream operations that depend on email-related workflows; this upstream resource constraint appears to drive broader service latenc",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_f9528dc8",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-18T18:34:04.000Z",
+                    "end": "2024-01-18T18:36:34.000Z"
+                  },
+                  "services": [
+                    "cartservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.5419412491064071,
+                  "observation": {
+                    "p95_delta_ms": -0.33,
+                    "p99_delta_ms": 121.38,
+                    "p50_ms": 3.1,
+                    "p95_ms": 5.49
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_01d56616",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-18T18:34:04.000Z",
+                    "end": "2024-01-18T18:36:34.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.9923044114931916,
+                  "observation": {
+                    "p95_delta_ms": 273.31,
+                    "p99_delta_ms": 555.64,
+                    "p50_ms": 101.0,
+                    "p95_ms": 507.13
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_283c1cec",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-18T18:34:04.000Z",
+                    "end": "2024-01-18T18:36:34.000Z"
+                  },
+                  "services": [
+                    "emailservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.9999999999914522,
+                  "observation": {
+                    "cpu_spike_zscore": 523.57,
+                    "cpu_max": 5.7413,
+                    "mem_jump_ratio": 5.335,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_7256be99",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-18T18:34:04.000Z",
+                    "end": "2024-01-18T18:36:34.000Z"
+                  },
+                  "services": [
+                    "frontend"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.3624903370706196,
+                  "observation": {
+                    "p95_delta_ms": -3.67,
+                    "p99_delta_ms": 75.95,
+                    "p50_ms": 44.37,
+                    "p95_ms": 213.0
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 1.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show a dramatic CPU spike (cpu_z), large memory jump, and tail latency increases for emailservice, marking it as the strongest root-cause candidate. There are no higher-mersistence metric anomalies in other services. Given topology, emailservice could be a downstream consumer of other services or an upstream component for notification flows; however, its own strong anomaly and lack of compensating log keywords indicate it is the likely root cause. Without evidence of upstream log errors, we treat emailservice as the primary root and deepest cause."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
-        "confidence": 0.796,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
+        "confidence": 0.835,
         "evidence": [
           {
             "type": "topology",
@@ -586,7 +808,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom frontend depends directly on checkoutservice, which in turn can invoke emailservice as a downstream component (e.g., for sending order confirmation emails). This creates a structurally plausible chain: frontend -> checkoutservice -> emailservice. No other listed dependencies clearly route to emailservice, making this the primary path. The blast radius remains small (primarily frontend, with potential propagation to checkoutservice and emailservice if the fault propagates), and the topology supports the log agent’s hypothesis that emailservice is the suspected downstream."
+              "llm_reasoning": "The topology shows frontend depends on checkoutservice, and the computed path frontend -> checkoutservice -> emailservice is consistent with a downstream call chain. No alternative downstream paths to emailservice are evidenced in the provided dependency graph, so the path is plausible and the blast radius remains limited to frontend with potential escalation through checkoutservice. The log agent’s suspected_downstream (emailservice) is supported by the structural path via checkoutservice."
             }
           }
         ],
@@ -707,20 +929,34 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom frontend depends directly on checkoutservice, which in turn can invoke emailservice as a downstream component (e.g., for sending order confirmation emails). This creates a structurally plausible chain: frontend -> checkoutservice -> emailservice. No other listed dependencies clearly route to emailservice, making this the primary path. The blast radius remains small (primarily frontend, with potential propagation to checkoutservice and emailservice if the fault propagates), and the topology supports the log agent’s hypothesis that emailservice is the suspected downstream.",
+          "llm_reasoning": "The topology shows frontend depends on checkoutservice, and the computed path frontend -> checkoutservice -> emailservice is consistent with a downstream call chain. No alternative downstream paths to emailservice are evidenced in the provided dependency graph, so the path is plausible and the blast radius remains limited to frontend with potential escalation through checkoutservice. The log agent’s suspected_downstream (emailservice) is supported by the structural path via checkoutservice.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend",
-            "checkoutservice",
-            "emailservice"
+            "checkoutservice"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-EMAILSERVICE_DISK_2",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest convergence comes from Log and Topology: emailservice exhibits clear disk fault/resource saturation signals, and topology shows a valid propagation path from emailservice through checkoutservice to frontend. This supports emailservice as the primary root cause. The TC-RCA result conflicts, ranking frontend as the root without observed anomalies; however, there is no timing-based or topology-based evidence from TC-RCA to support frontend as the initiating fault, while both other sources explicitly implicate emailservice. Given the evidence, we prioritize emailservice as the root cause with high confidence, acknowledge TC-RCA’s contradictory result as weak corroboration for an alternative path, and maintain a conservative propagation path from emailservice through checkoutservice to frontend. The unobserved-root-cause rule does not apply here since emailservice shows anomalies in logs. Weak-evidence scenarios are not present; the evidence is substantial enough to avoid guessing a different root cause.",
+    "synthesis_reasoning": "All three sources agree that emailservice is involved and plausibly upstream of the symptom frontend through checkoutservice, with the Log Agent providing the strongest signal for root-cause, supported structurally by the Topology Agent. The TCB-RCA result is not aligned with this; it points to frontend as the root due to its timing constraints, but lacks corroborating log timing evidence. Given the absence of logs indicating upstream issues and a strong resource/disk-fault signature within emailservice, the emailservice root cause is preferred. If needed, further investigation should collect time-synced metrics across emailservice, checkoutservice, and frontend to confirm the temporal cascade and solidify the precise timing chain.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -734,6 +970,426 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-EMAILSERVICE_DISK_2",
+        "candidates": [
+          {
+            "service": "emailservice",
+            "confidence": 0.75,
+            "supporting_evidence": [
+              "ev_metric_283c1cec"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Email service is experiencing extreme resource pressure (CPU spike and memory load) consistent with a disk fault, likely causing degraded throughput and latency for downstream operations that depend on email-related workflows; this upstream resource constraint appears to drive broader service latenc",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_f9528dc8",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.5419412491064071,
+              "observation": {
+                "p95_delta_ms": -0.33,
+                "p99_delta_ms": 121.38,
+                "p50_ms": 3.1,
+                "p95_ms": 5.49
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_01d56616",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9923044114931916,
+              "observation": {
+                "p95_delta_ms": 273.31,
+                "p99_delta_ms": 555.64,
+                "p50_ms": 101.0,
+                "p95_ms": 507.13
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_283c1cec",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "emailservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999999914522,
+              "observation": {
+                "cpu_spike_zscore": 523.57,
+                "cpu_max": 5.7413,
+                "mem_jump_ratio": 5.335,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_7256be99",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.3624903370706196,
+              "observation": {
+                "p95_delta_ms": -3.67,
+                "p99_delta_ms": 75.95,
+                "p50_ms": 44.37,
+                "p95_ms": 213.0
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show a dramatic CPU spike (cpu_z), large memory jump, and tail latency increases for emailservice, marking it as the strongest root-cause candidate. There are no higher-mersistence metric anomalies in other services. Given topology, emailservice could be a downstream consumer of other services or an upstream component for notification flows; however, its own strong anomaly and lack of compensating log keywords indicate it is the likely root cause. Without evidence of upstream log errors, we treat emailservice as the primary root and deepest cause."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-EMAILSERVICE_DISK_2",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-EMAILSERVICE_DISK_2",
+        "candidates": [
+          {
+            "service": "emailservice",
+            "confidence": 0.72,
+            "supporting_evidence": [
+              "ev_metric_283c1cec"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Strong signal from the Log Agent identifies emailservice as exhibiting dramatic CPU/memory pressure and disk-fault-like symptoms, with no competing persistent anomalies elsewhere. The Topology Agent corroborates a plausible propagation path involving emailservice in a downstream chain from frontend ",
+            "topology_path": [
+              "emailservice",
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_f9528dc8",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.5419412491064071,
+              "observation": {
+                "p95_delta_ms": -0.33,
+                "p99_delta_ms": 121.38,
+                "p50_ms": 3.1,
+                "p95_ms": 5.49
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_01d56616",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9923044114931916,
+              "observation": {
+                "p95_delta_ms": 273.31,
+                "p99_delta_ms": 555.64,
+                "p50_ms": 101.0,
+                "p95_ms": 507.13
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_283c1cec",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "emailservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999999914522,
+              "observation": {
+                "cpu_spike_zscore": 523.57,
+                "cpu_max": 5.7413,
+                "mem_jump_ratio": 5.335,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_7256be99",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.3624903370706196,
+              "observation": {
+                "p95_delta_ms": -3.67,
+                "p99_delta_ms": 75.95,
+                "p50_ms": 44.37,
+                "p95_ms": 213.0
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "All three sources agree that emailservice is involved and plausibly upstream of the symptom frontend through checkoutservice, with the Log Agent providing the strongest signal for root-cause, supported structurally by the Topology Agent. The TCB-RCA result is not aligned with this; it points to frontend as the root due to its timing constraints, but lacks corroborating log timing evidence. Given the absence of logs indicating upstream issues and a strong resource/disk-fault signature within emailservice, the emailservice root cause is preferred. If needed, further investigation should collect "
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-EMAILSERVICE_DISK_2",
+        "candidates": [
+          {
+            "service": "emailservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_283c1cec"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Strong signal from the Log Agent identifies emailservice as exhibiting dramatic CPU/memory pressure and disk-fault-like symptoms, with no competing persistent anomalies elsewhere. The Topology Agent corroborates a plausible propagation path involving emailservice in a downstream chain from frontend ",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_f9528dc8",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.5419412491064071,
+              "observation": {
+                "p95_delta_ms": -0.33,
+                "p99_delta_ms": 121.38,
+                "p50_ms": 3.1,
+                "p95_ms": 5.49
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_01d56616",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9923044114931916,
+              "observation": {
+                "p95_delta_ms": 273.31,
+                "p99_delta_ms": 555.64,
+                "p50_ms": 101.0,
+                "p95_ms": 507.13
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_283c1cec",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "emailservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999999914522,
+              "observation": {
+                "cpu_spike_zscore": 523.57,
+                "cpu_max": 5.7413,
+                "mem_jump_ratio": 5.335,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_7256be99",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-18T18:34:04.000Z",
+                "end": "2024-01-18T18:36:34.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.3624903370706196,
+              "observation": {
+                "p95_delta_ms": -3.67,
+                "p99_delta_ms": 75.95,
+                "p50_ms": 44.37,
+                "p95_ms": 213.0
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 1.0,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

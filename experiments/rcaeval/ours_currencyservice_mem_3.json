@@ -4,7 +4,7 @@
   "case": "currencyservice_mem_3",
   "gt_service": "currencyservice",
   "gt_fault": "mem",
-  "elapsed_seconds": 28.8,
+  "elapsed_seconds": 29.02,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 28.8,
+    "elapsed_seconds": 29.02,
     "gt_fault": "mem"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Memory pressure on currencyservice leading to degraded response times and downstream latency impacting frontend, causing timeouts/deadline exceedances observed by frontend.",
+        "cause": "Currency service experiencing memory pressure and degraded performance (high memory/CPU signals, elevated latencies) causing downstream frontend calls to currencyservice to time out or slow, propagating latency to the frontend path.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "currencyservice",
-        "reasoning": "Both Log Agent and Topology Agent converge on currencyservice as the upstream root cause: mem_jump and latency increases in currencyservice align with downstream latency and frontend timeouts, and the dependency graph from frontend to currencyservice is direct. TCB-RCA ranks frontend as the root, but that is less plausible given strong upstream signals and the unobserved-but-log-supported upstream anomaly. Currencyservice represents a deeper root cause consistent with the unobserved-root-cause principle and observed propagation path.",
+        "reasoning": "All three sources converge on currencyservice as the upstream fault: Log Agent identifies strong anomalies in currencyservice (mem_jump, CPU) with downstream latency observed in frontend; Topology shows a direct frontend → currencyservice path with plausible propagation; TCB-RCA ranks frontend as the initial fault, but the timing/topology alignment and the explicit currencyservice anomalies indicate currencyservice is the deeper root cause. Given the unobserved root-cause principle, currencyservice is the deeper service likely responsible for the observed symptom at frontend.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,24 +52,23 @@
       },
       {
         "rank": 2,
-        "cause": "Symptom service where failures manifest (ads retrieval timeouts/deadlines) and which exhibits degraded performance due to upstream currencyservice pressure; not a deeper root cause but the observed faulting node.",
-        "confidence": 0.5,
+        "cause": "Frontend shows latency and timeout symptoms (DeadlineExceeded when fetching ads) consistent with downstream upstream issues but is the service actually reporting the root fault rather than being the root itself.",
+        "confidence": 0.48,
         "evidence_refs": [
-          "log-agent:confirmed",
           "topology-agent:confirmed",
           "tcb-rca:confirmed"
         ],
         "cause_service": "frontend",
-        "reasoning": "Frontend is the symptom service where the failure is observed. While there is strong evidence that currencyservice is upstream, frontend’s errors reflect the propagation of upstream degradation. TCB-RCA places frontend as the root due to temporal propagation constraints; however, given the clear upstream mem pressure in currencyservice and the topology path, frontend is better described as the downstream recipient rather than the root cause.",
+        "reasoning": "Frontend is the symptom service and exhibits failure symptoms; however, the cause appears to be upstream currencyservice per log and topology analyses. TCB-RCA also points to frontend as a propagation node with timing, but the consensus from log and topology makes frontend a secondary root-cause candidate only if currencyservice cannot be diagnosed further. Given the synthesis, frontend is a secondary candidate with lower confidence.",
         "supporting_evidence": {
-          "log_agent_agrees": true,
+          "log_agent_agrees": false,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": true
         }
       }
     ],
     "final_verdict": {
-      "cause": "Memory pressure on currencyservice leading to degraded response times and downstream latency impacting frontend, causing timeouts/deadline exceedances observed by frontend.",
+      "cause": "Currency service experiencing memory pressure and degraded performance (high memory/CPU signals, elevated latencies) causing downstream frontend calls to currencyservice to time out or slow, propagating latency to the frontend path.",
       "confidence": 0.6,
       "explanation": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "currencyservice"
@@ -102,7 +101,7 @@
       "notes": [
         "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology).",
         "Candidate 'currencyservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
-        "Candidate 'frontend' confirmed by 3/3 sources (log, topology, tcb-rca)."
+        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -121,8 +120,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service currencyservice experiencing mem fault'. Errors detected in 1 service(s): frontend (2 errors). LLM hypothesis: Currencyservice experienced memory-related resource pressure leading to degraded performance (latency/throughput) and downstream frontend requests timed out or hit deadlines, causing cascading latency and occasional DEADLINE_EXCEEDED/TIMEOUT errors.",
-        "confidence": 0.65,
+        "summary": "Incident at frontend: 'Service currencyservice experiencing mem fault'. Errors detected in 1 service(s): frontend (2 errors). LLM hypothesis: Currency service is under resource pressure (memory/CPU) causing slower responses; frontend experiences downstream latency/timeouts when calling ads and other dependent services, leading to propagated failures within the frontend path.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -666,20 +665,281 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Currencyservice experienced memory-related resource pressure leading to degraded performance (latency/throughput) and downstream frontend requests timed out or hit deadlines, causing cascading latency and occasional DEADLINE_EXCEEDED/TIMEOUT errors.",
-          "suspected_downstream": "frontend",
+          "hypothesis": "Currency service is under resource pressure (memory/CPU) causing slower responses; frontend experiences downstream latency/timeouts when calling ads and other dependent services, leading to propagated failures within the frontend path.",
+          "suspected_downstream": "currencyservice",
           "anomalous_services": [
             "currencyservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric signals show currencyservice with mem_jump > 0.3 and substantial p95/p99 latency increases, indicating a strong root-cause candidate. Frontend exhibits latency degradation and a couple of timeout/deadline events, likely due to upstream currencyservice slowness affecting downstream calls (e.g., ads retrieval). Other services lack comparable metric anomalies. The topology indicates frontend depends on currencyservice, reinforcing currencyservice as the upstream root cause.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show strong anomaly for currencyservice (mem_jump > 0.3, cpu_z > 0, p95_Δms > 100, p99_Δms > 50). Frontend shows latency degradation and a couple of timeout/deadline events while downstream adservice shows no explicit errors. Given frontend depends on currencyservice, currencyservice likely sits upstream as the root cause, with frontend reflecting latency and occasional timeouts as a downstream effect.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 4,
+            "services_covered": [
+              "frontend",
+              "currencyservice",
+              "paymentservice"
+            ],
+            "modalities_present": [
+              "log",
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_log_7630c556",
+                "modality": "log",
+                "time_range": {
+                  "start": "2024-01-19T18:45:37.000Z",
+                  "end": "2024-01-19T18:48:07.000Z"
+                },
+                "services": [
+                  "frontend"
+                ],
+                "anomaly_type": "keyword_distress",
+                "severity": 0.3,
+                "observation": {
+                  "keyword_hits": {
+                    "timeout": 2,
+                    "retry": 0,
+                    "reset": 0,
+                    "latency": 0
+                  },
+                  "total_logs": 27784
+                },
+                "source": "observability_mcp/log_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_8745c3d1",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T18:45:37.000Z",
+                  "end": "2024-01-19T18:48:07.000Z"
+                },
+                "services": [
+                  "currencyservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.9999966398373124,
+                "observation": {
+                  "cpu_spike_zscore": 14.19,
+                  "cpu_max": 15.8875,
+                  "mem_jump_ratio": 3.989,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_5b1d88a5",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T18:45:37.000Z",
+                  "end": "2024-01-19T18:48:07.000Z"
+                },
+                "services": [
+                  "frontend"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.37049781631747347,
+                "observation": {
+                  "p95_delta_ms": 39.52,
+                  "p99_delta_ms": 77.8,
+                  "p50_ms": 54.11,
+                  "p95_ms": 303.15
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_8b285f17",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T18:45:37.000Z",
+                  "end": "2024-01-19T18:48:07.000Z"
+                },
+                "services": [
+                  "paymentservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.3614040945014143,
+                "observation": {
+                  "cpu_spike_zscore": 15.14,
+                  "cpu_max": 0.4576,
+                  "mem_jump_ratio": 0.005,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-CURRENCYSERVICE_MEM_3",
+            "candidates": [
+              {
+                "service": "currencyservice",
+                "confidence": 0.75,
+                "supporting_evidence": [
+                  "ev_metric_8745c3d1"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Currency service is under resource pressure (memory/CPU) causing slower responses; frontend experiences downstream latency/timeouts when calling ads and other dependent services, leading to propagated failures within the frontend path.",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.37049781631747347,
+                "supporting_evidence": [
+                  "ev_log_7630c556",
+                  "ev_metric_5b1d88a5"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_log_7630c556",
+                  "modality": "log",
+                  "time_range": {
+                    "start": "2024-01-19T18:45:37.000Z",
+                    "end": "2024-01-19T18:48:07.000Z"
+                  },
+                  "services": [
+                    "frontend"
+                  ],
+                  "anomaly_type": "keyword_distress",
+                  "severity": 0.3,
+                  "observation": {
+                    "keyword_hits": {
+                      "timeout": 2,
+                      "retry": 0,
+                      "reset": 0,
+                      "latency": 0
+                    },
+                    "total_logs": 27784
+                  },
+                  "source": "observability_mcp/log_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_8745c3d1",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T18:45:37.000Z",
+                    "end": "2024-01-19T18:48:07.000Z"
+                  },
+                  "services": [
+                    "currencyservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.9999966398373124,
+                  "observation": {
+                    "cpu_spike_zscore": 14.19,
+                    "cpu_max": 15.8875,
+                    "mem_jump_ratio": 3.989,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_5b1d88a5",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T18:45:37.000Z",
+                    "end": "2024-01-19T18:48:07.000Z"
+                  },
+                  "services": [
+                    "frontend"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.37049781631747347,
+                  "observation": {
+                    "p95_delta_ms": 39.52,
+                    "p99_delta_ms": 77.8,
+                    "p50_ms": 54.11,
+                    "p95_ms": 303.15
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_8b285f17",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T18:45:37.000Z",
+                    "end": "2024-01-19T18:48:07.000Z"
+                  },
+                  "services": [
+                    "paymentservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.3614040945014143,
+                  "observation": {
+                    "cpu_spike_zscore": 15.14,
+                    "cpu_max": 0.4576,
+                    "mem_jump_ratio": 0.005,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 1.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show strong anomaly for currencyservice (mem_jump > 0.3, cpu_z > 0, p95_Δms > 100, p99_Δms > 50). Frontend shows latency degradation and a couple of timeout/deadline events while downstream adservice shows no explicit errors. Given frontend depends on currencyservice, currencyservice likely sits upstream as the root cause, with frontend reflecting latency and occasional timeouts as a downstream effect."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
-        "confidence": 0.835,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -691,7 +951,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend directly depends on currencyservice. The computed propagation path frontend -> currencyservice matches the topology. There are no documented alternative upstream or indirect paths from frontend to currencyservice in the given graph, so alternative propagation paths are unlikely. The blast radius currently includes only frontend, consistent with the provided propagation path and topology. The hypothesis that currencyservice is the suspected downstream aligns with the explicit dependency edge."
+              "llm_reasoning": "The symptom frontend directly depends on currencyservice. A fault in currencyservice could manifest as frontend issues when calling currencyservice, aligning with a root-to-symptom propagation path of frontend -> currencyservice. With the provided topology, currencyservice is a downstream dependency, making currencyservice a plausible root cause for the observed symptom. The blast radius within the given topology remains limited to frontend (and any other services that might be affected by currencyservice in the observed dependency set; none are listed beyond frontend). Alternative propagation paths are not evident from the described topology, so the primary path is the most structurally consistent one."
             }
           }
         ],
@@ -811,18 +1071,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend directly depends on currencyservice. The computed propagation path frontend -> currencyservice matches the topology. There are no documented alternative upstream or indirect paths from frontend to currencyservice in the given graph, so alternative propagation paths are unlikely. The blast radius currently includes only frontend, consistent with the provided propagation path and topology. The hypothesis that currencyservice is the suspected downstream aligns with the explicit dependency edge.",
+          "llm_reasoning": "The symptom frontend directly depends on currencyservice. A fault in currencyservice could manifest as frontend issues when calling currencyservice, aligning with a root-to-symptom propagation path of frontend -> currencyservice. With the provided topology, currencyservice is a downstream dependency, making currencyservice a plausible root cause for the observed symptom. The blast radius within the given topology remains limited to frontend (and any other services that might be affected by currencyservice in the observed dependency set; none are listed beyond frontend). Alternative propagation paths are not evident from the described topology, so the primary path is the most structurally consistent one.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-CURRENCYSERVICE_MEM_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "Log findings identify currencyservice memory pressure as the likely upstream cause, with latency spikes and downstream effects observed in frontend. Topology confirms a direct frontend -> currencyservice path, supporting currencyservice as the upstream root. The TCB-RCA result conflicts by assigning the root to frontend, likely due to its timing/backtracking constraints and the symptom-oriented view. Given the stronger, corroborated signals from logs and topology about an upstream bottleneck in currencyservice, currencyservice is ranked as the primary root cause. Frontend remains the observed symptom/service, though it could also act as a downstream propagator in this cascade.",
+    "synthesis_reasoning": "Log Agent and Topology Agent independently support currencyservice as the upstream root cause: currencyservice shows strong mem/CPU anomalies and high downstream latency, and frontend directly depends on currencyservice with a plausible propagation path. The TCB-RCA Engine contradicts this by ranking frontend as the initial fault based on temporal backtracking, but this seems less credible given the stronger, direct evidence of currencyservice anomalies and the explicit upstream/downstream relationship. Therefore, currencyservice is favored as the primary root cause, with frontend as a plausible symptom/secondary candidate. The propagation path is currencyservice -> frontend, matching the topology and observed symptom at the frontend.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -836,6 +1111,487 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-CURRENCYSERVICE_MEM_3",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.75,
+            "supporting_evidence": [
+              "ev_metric_8745c3d1"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "trace_evidence_units"
+            ],
+            "reasoning": "Currency service is under resource pressure (memory/CPU) causing slower responses; frontend experiences downstream latency/timeouts when calling ads and other dependent services, leading to propagated failures within the frontend path.",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.37049781631747347,
+            "supporting_evidence": [
+              "ev_log_7630c556",
+              "ev_metric_5b1d88a5"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_log_7630c556",
+              "modality": "log",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "keyword_distress",
+              "severity": 0.3,
+              "observation": {
+                "keyword_hits": {
+                  "timeout": 2,
+                  "retry": 0,
+                  "reset": 0,
+                  "latency": 0
+                },
+                "total_logs": 27784
+              },
+              "source": "observability_mcp/log_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_8745c3d1",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "currencyservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999966398373124,
+              "observation": {
+                "cpu_spike_zscore": 14.19,
+                "cpu_max": 15.8875,
+                "mem_jump_ratio": 3.989,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_5b1d88a5",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.37049781631747347,
+              "observation": {
+                "p95_delta_ms": 39.52,
+                "p99_delta_ms": 77.8,
+                "p50_ms": 54.11,
+                "p95_ms": 303.15
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_8b285f17",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "paymentservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.3614040945014143,
+              "observation": {
+                "cpu_spike_zscore": 15.14,
+                "cpu_max": 0.4576,
+                "mem_jump_ratio": 0.005,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show strong anomaly for currencyservice (mem_jump > 0.3, cpu_z > 0, p95_Δms > 100, p99_Δms > 50). Frontend shows latency degradation and a couple of timeout/deadline events while downstream adservice shows no explicit errors. Given frontend depends on currencyservice, currencyservice likely sits upstream as the root cause, with frontend reflecting latency and occasional timeouts as a downstream effect."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-CURRENCYSERVICE_MEM_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-CURRENCYSERVICE_MEM_3",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.78,
+            "supporting_evidence": [
+              "ev_metric_8745c3d1"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [],
+            "reasoning": "All three sources converge on currencyservice as the upstream fault: Log Agent identifies strong anomalies in currencyservice (mem_jump, CPU) with downstream latency observed in frontend; Topology shows a direct frontend → currencyservice path with plausible propagation; TCB-RCA ranks frontend as th",
+            "topology_path": [
+              "currencyservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.4,
+            "supporting_evidence": [
+              "ev_log_7630c556",
+              "ev_metric_5b1d88a5"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [],
+            "reasoning": "Frontend is the symptom service and exhibits failure symptoms; however, the cause appears to be upstream currencyservice per log and topology analyses. TCB-RCA also points to frontend as a propagation node with timing, but the consensus from log and topology makes frontend a secondary root-cause can",
+            "topology_path": [
+              "currencyservice",
+              "frontend"
+            ],
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_log_7630c556",
+              "modality": "log",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "keyword_distress",
+              "severity": 0.3,
+              "observation": {
+                "keyword_hits": {
+                  "timeout": 2,
+                  "retry": 0,
+                  "reset": 0,
+                  "latency": 0
+                },
+                "total_logs": 27784
+              },
+              "source": "observability_mcp/log_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_8745c3d1",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "currencyservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999966398373124,
+              "observation": {
+                "cpu_spike_zscore": 14.19,
+                "cpu_max": 15.8875,
+                "mem_jump_ratio": 3.989,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_5b1d88a5",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.37049781631747347,
+              "observation": {
+                "p95_delta_ms": 39.52,
+                "p99_delta_ms": 77.8,
+                "p50_ms": 54.11,
+                "p95_ms": 303.15
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_8b285f17",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "paymentservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.3614040945014143,
+              "observation": {
+                "cpu_spike_zscore": 15.14,
+                "cpu_max": 0.4576,
+                "mem_jump_ratio": 0.005,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Log Agent and Topology Agent independently support currencyservice as the upstream root cause: currencyservice shows strong mem/CPU anomalies and high downstream latency, and frontend directly depends on currencyservice with a plausible propagation path. The TCB-RCA Engine contradicts this by ranking frontend as the initial fault based on temporal backtracking, but this seems less credible given the stronger, direct evidence of currencyservice anomalies and the explicit upstream/downstream relationship. Therefore, currencyservice is favored as the primary root cause, with frontend as a plausib"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-CURRENCYSERVICE_MEM_3",
+        "candidates": [
+          {
+            "service": "currencyservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_8745c3d1"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "trace_evidence_units"
+            ],
+            "reasoning": "All three sources converge on currencyservice as the upstream fault: Log Agent identifies strong anomalies in currencyservice (mem_jump, CPU) with downstream latency observed in frontend; Topology shows a direct frontend → currencyservice path with plausible propagation; TCB-RCA ranks frontend as th",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.48,
+            "supporting_evidence": [
+              "ev_log_7630c556",
+              "ev_metric_5b1d88a5"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=2"
+            ],
+            "missing_evidence": [
+              "trace_evidence_units"
+            ],
+            "reasoning": "Frontend is the symptom service and exhibits failure symptoms; however, the cause appears to be upstream currencyservice per log and topology analyses. TCB-RCA also points to frontend as a propagation node with timing, but the consensus from log and topology makes frontend a secondary root-cause can",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_log_7630c556",
+              "modality": "log",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "keyword_distress",
+              "severity": 0.3,
+              "observation": {
+                "keyword_hits": {
+                  "timeout": 2,
+                  "retry": 0,
+                  "reset": 0,
+                  "latency": 0
+                },
+                "total_logs": 27784
+              },
+              "source": "observability_mcp/log_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_8745c3d1",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "currencyservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999966398373124,
+              "observation": {
+                "cpu_spike_zscore": 14.19,
+                "cpu_max": 15.8875,
+                "mem_jump_ratio": 3.989,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_5b1d88a5",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.37049781631747347,
+              "observation": {
+                "p95_delta_ms": 39.52,
+                "p99_delta_ms": 77.8,
+                "p50_ms": 54.11,
+                "p95_ms": 303.15
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_8b285f17",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T18:45:37.000Z",
+                "end": "2024-01-19T18:48:07.000Z"
+              },
+              "services": [
+                "paymentservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.3614040945014143,
+              "observation": {
+                "cpu_spike_zscore": 15.14,
+                "cpu_max": 0.4576,
+                "mem_jump_ratio": 0.005,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'currencyservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 1.0,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

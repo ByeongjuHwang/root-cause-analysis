@@ -4,7 +4,7 @@
   "case": "checkoutservice_mem_3",
   "gt_service": "checkoutservice",
   "gt_fault": "mem",
-  "elapsed_seconds": 33.95,
+  "elapsed_seconds": 25.56,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 33.95,
+    "elapsed_seconds": 25.56,
     "gt_fault": "mem"
   },
   "result": {
@@ -36,14 +36,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Checkoutservice experiencing CPU/memory resource saturation leading to high tail latency, causing frontend latency degradation due to direct dependency on checkoutservice.",
+        "cause": "Checkoutservice exhibits significant resource and latency anomalies (CPU spike, memory jump, and high p95/p99 latency) indicating it is the upstream fault. Its degradation propagates downstream to the frontend, causing observed latency without visible errors in the frontend logs.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "All three sources converge on checkoutservice as the proximate fault source: Log Agent highlights extreme CPU spike and memory jump with rising p95/p99 latency in checkoutservice, and frontend latency degrades as a downstream consequence. Topology confirms a direct dependency edge between frontend and checkoutservice, making a checkoutservice-originated fault structurally plausible. The TCB-RCA ranking places frontend as root, but its reasoning conflicts with the observed resource saturation and the direct dependency path; given the strong operational signals in checkoutservice and the structural plausibility, checkoutservice is the most credible root cause, with frontend being the observed symptom.",
+        "reasoning": "Both the Log Agent and Topology Agent converge on checkoutservice as the upstream fault with a direct frontend dependency path (frontend → checkoutservice). The TCB-RCA output prioritizes frontend, but that is contradicted by the stronger metric/causal signals at checkoutservice and the direct dependency path. Given the observed metrics and structural propagation, checkoutservice is the most plausible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -52,7 +52,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "Checkoutservice experiencing CPU/memory resource saturation leading to high tail latency, causing frontend latency degradation due to direct dependency on checkoutservice.",
+      "cause": "Checkoutservice exhibits significant resource and latency anomalies (CPU spike, memory jump, and high p95/p99 latency) indicating it is the upstream fault. Its degradation propagates downstream to the frontend, causing observed latency without visible errors in the frontend logs.",
       "confidence": 0.6,
       "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "checkoutservice"
@@ -96,15 +96,15 @@
         "home [path: /]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
         "propagation path: frontend -> checkoutservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service checkoutservice experiencing mem fault'. No error logs found. LLM hypothesis: Checkoutservice is experiencing CPU/memory resource saturation causing increased tail latency; frontend latency degradation arises as it depends on checkoutservice, propagating the fault upstream.",
-        "confidence": 0.78,
+        "summary": "Incident at frontend: 'Service checkoutservice experiencing mem fault'. No error logs found. LLM hypothesis: Checkoutservice exhibits strong metric anomalies (CPU spike, mem jump, and latency increase) indicating it is the primary fault; its degraded availability/latency propagates downstream to frontend, causing overall service latency without visible errors.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -618,32 +618,288 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Checkoutservice is experiencing CPU/memory resource saturation causing increased tail latency; frontend latency degradation arises as it depends on checkoutservice, propagating the fault upstream.",
+          "hypothesis": "Checkoutservice exhibits strong metric anomalies (CPU spike, mem jump, and latency increase) indicating it is the primary fault; its degraded availability/latency propagates downstream to frontend, causing overall service latency without visible errors.",
           "suspected_downstream": "checkoutservice",
           "anomalous_services": [
             "checkoutservice",
             "frontend"
           ],
-          "llm_reasoning": "Metric summary shows checkoutservice with extreme CPU spike (cpu_z 233.3) and mem_jump > 0.3, plus substantial p95/p99 latency increases, indicating a strong root-cause. Frontend shows latency degradation consistent with cascading effects, while other services show no comparable metric anomalies. Without logs indicating downstream upstream errors, the deepest root is checkoutservice, which frontend relies on directly. This aligns with the topology where frontend depends on checkoutservice.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric summary shows checkoutservice with extreme CPU spike (cpu_z > 30), mem_jump > 0.3, and large p95/p99 latency increases, making it the strongest root-cause signal. Frontend also shows latency degradation but without metric-level anomalies. Given frontend directly depends on checkoutservice, checkoutservice faults are the most plausible upstream culprit. Volume-based signals are weaker and do not outweigh the clear metric anomalies in checkoutservice.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 4,
+            "services_covered": [
+              "cartservice",
+              "checkoutservice",
+              "frontend"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_37ea79fa",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T01:28:56.000Z",
+                  "end": "2024-01-19T01:31:26.000Z"
+                },
+                "services": [
+                  "cartservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.523174018121664,
+                "observation": {
+                  "p95_delta_ms": 0.36,
+                  "p99_delta_ms": 116.14,
+                  "p50_ms": 3.11,
+                  "p95_ms": 5.92
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_0bc8dcdc",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T01:28:56.000Z",
+                  "end": "2024-01-19T01:31:26.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 1.0,
+                "observation": {
+                  "cpu_spike_zscore": 233.32,
+                  "cpu_max": 3.9321,
+                  "mem_jump_ratio": 23.249,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_c00a3846",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T01:28:56.000Z",
+                  "end": "2024-01-19T01:31:26.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.5471819257502257,
+                "observation": {
+                  "p95_delta_ms": 122.87,
+                  "p99_delta_ms": 70.87,
+                  "p50_ms": 92.31,
+                  "p95_ms": 379.97
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_038d401f",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-19T01:28:56.000Z",
+                  "end": "2024-01-19T01:31:26.000Z"
+                },
+                "services": [
+                  "frontend"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.4156318212684955,
+                "observation": {
+                  "p95_delta_ms": 0.31,
+                  "p99_delta_ms": 88.48,
+                  "p50_ms": 45.18,
+                  "p95_ms": 217.39
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-CHECKOUTSERVICE_MEM_3",
+            "candidates": [
+              {
+                "service": "checkoutservice",
+                "confidence": 0.75,
+                "supporting_evidence": [
+                  "ev_metric_0bc8dcdc",
+                  "ev_metric_c00a3846"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Checkoutservice exhibits strong metric anomalies (CPU spike, mem jump, and latency increase) indicating it is the primary fault; its degraded availability/latency propagates downstream to frontend, causing overall service latency without visible errors.",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.4156318212684955,
+                "supporting_evidence": [
+                  "ev_metric_038d401f"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_37ea79fa",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T01:28:56.000Z",
+                    "end": "2024-01-19T01:31:26.000Z"
+                  },
+                  "services": [
+                    "cartservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.523174018121664,
+                  "observation": {
+                    "p95_delta_ms": 0.36,
+                    "p99_delta_ms": 116.14,
+                    "p50_ms": 3.11,
+                    "p95_ms": 5.92
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_0bc8dcdc",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T01:28:56.000Z",
+                    "end": "2024-01-19T01:31:26.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 1.0,
+                  "observation": {
+                    "cpu_spike_zscore": 233.32,
+                    "cpu_max": 3.9321,
+                    "mem_jump_ratio": 23.249,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_c00a3846",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T01:28:56.000Z",
+                    "end": "2024-01-19T01:31:26.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.5471819257502257,
+                  "observation": {
+                    "p95_delta_ms": 122.87,
+                    "p99_delta_ms": 70.87,
+                    "p50_ms": 92.31,
+                    "p95_ms": 379.97
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_038d401f",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-19T01:28:56.000Z",
+                    "end": "2024-01-19T01:31:26.000Z"
+                  },
+                  "services": [
+                    "frontend"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.4156318212684955,
+                  "observation": {
+                    "p95_delta_ms": 0.31,
+                    "p99_delta_ms": 88.48,
+                    "p50_ms": 45.18,
+                    "p95_ms": 217.39
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 1.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric summary shows checkoutservice with extreme CPU spike (cpu_z > 30), mem_jump > 0.3, and large p95/p99 latency increases, making it the strongest root-cause signal. Frontend also shows latency degradation but without metric-level anomalies. Given frontend directly depends on checkoutservice, checkoutservice faults are the most plausible upstream culprit. Volume-based signals are weaker and do not outweigh the clear metric anomalies in checkoutservice."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.52).",
-        "confidence": 0.65,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to checkoutservice: frontend → checkoutservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.85).",
+        "confidence": 0.835,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom is frontend, which directly depends on checkoutservice. A fault in checkoutservice would propagate to frontend (checkoutservice → frontend). The computed path frontend → checkoutservice represents the dependency direction, not the fault propagation direction from root cause to symptom. Therefore, while the topology confirms a plausible dependency edge between the two, the more likely propagation path for a fault originating in checkoutservice (the suspected downstream) is reverse to frontend. The blast radius within this topology centers on the symptom service (frontend) and its immediate dependency set; checkoutservice is a plausible downstream contributor, but the primary impact is on frontend."
+              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, creating a straightforward propagation path frontend -> checkoutservice. With the given topology, no alternative transitive path from frontend to checkoutservice exists, and the blast radius is limited to frontend unless checkoutservice failures cascade outward. The log agent's suspected downstream (checkoutservice) aligns with this direct dependency, and the topology indicates frontend is the primary service at risk."
             }
           }
         ],
@@ -763,23 +1019,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom is frontend, which directly depends on checkoutservice. A fault in checkoutservice would propagate to frontend (checkoutservice → frontend). The computed path frontend → checkoutservice represents the dependency direction, not the fault propagation direction from root cause to symptom. Therefore, while the topology confirms a plausible dependency edge between the two, the more likely propagation path for a fault originating in checkoutservice (the suspected downstream) is reverse to frontend. The blast radius within this topology centers on the symptom service (frontend) and its immediate dependency set; checkoutservice is a plausible downstream contributor, but the primary impact is on frontend.",
-          "path_assessment": "alternative_exists",
-          "alternative_paths": [
-            [
-              "checkoutservice",
-              "frontend"
-            ]
-          ],
+          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, creating a straightforward propagation path frontend -> checkoutservice. With the given topology, no alternative transitive path from frontend to checkoutservice exists, and the blast radius is limited to frontend unless checkoutservice failures cascade outward. The log agent's suspected downstream (checkoutservice) aligns with this direct dependency, and the topology indicates frontend is the primary service at risk.",
+          "path_assessment": "plausible",
+          "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-CHECKOUTSERVICE_MEM_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
-    "evidence_convergence": "strong_agreement",
-    "synthesis_reasoning": "The Log Agent provides compelling runtime signals (CPU spike, memory jump, elevated tail latency) in checkoutservice and correlates frontend latency degradation with the dependency on checkoutservice. The Topology Agent confirms a direct causal edge from checkoutservice to frontend, aligning with a plausible propagation direction for a root cause in checkoutservice to manifest as frontend slowdown. The TCB-RCA output is overridden here due to its contradiction with both the material resource anomalies and the structural dependency evidence; the timing-based criteria in TCB-RCA would require frontend to be the root, which is inconsistent with the observed resource saturation in checkoutservice and the downstream symptom at the frontend. Therefore, checkoutservice is the most credible root cause, with the propagation path checkoutservice -> frontend representing the most plausible sequence from root cause to symptom.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "The Log Agent identifies checkoutservice as the primary fault with strong metric anomalies, and the Topology Agent confirms a direct propagation path from checkoutservice to the symptom frontend. The TCB-RCA result conflicts, ranking frontend as the fault, but lacks the supporting metric signals and contradicts the observed direct dependency path. Therefore, we elevate checkoutservice as the root cause, reinforced by both log-level anomaly signals and the structurally plausible path. Since unsupported by the TCB-RCA rank, its influence is discounted in the final ranking. The most plausible propagation path is checkoutservice -> frontend, aligning with observed frontend latency without frontend-originating errors.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -793,6 +1059,446 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-CHECKOUTSERVICE_MEM_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.75,
+            "supporting_evidence": [
+              "ev_metric_0bc8dcdc",
+              "ev_metric_c00a3846"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Checkoutservice exhibits strong metric anomalies (CPU spike, mem jump, and latency increase) indicating it is the primary fault; its degraded availability/latency propagates downstream to frontend, causing overall service latency without visible errors.",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.4156318212684955,
+            "supporting_evidence": [
+              "ev_metric_038d401f"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_37ea79fa",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.523174018121664,
+              "observation": {
+                "p95_delta_ms": 0.36,
+                "p99_delta_ms": 116.14,
+                "p50_ms": 3.11,
+                "p95_ms": 5.92
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_0bc8dcdc",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 1.0,
+              "observation": {
+                "cpu_spike_zscore": 233.32,
+                "cpu_max": 3.9321,
+                "mem_jump_ratio": 23.249,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c00a3846",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.5471819257502257,
+              "observation": {
+                "p95_delta_ms": 122.87,
+                "p99_delta_ms": 70.87,
+                "p50_ms": 92.31,
+                "p95_ms": 379.97
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_038d401f",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.4156318212684955,
+              "observation": {
+                "p95_delta_ms": 0.31,
+                "p99_delta_ms": 88.48,
+                "p50_ms": 45.18,
+                "p95_ms": 217.39
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric summary shows checkoutservice with extreme CPU spike (cpu_z > 30), mem_jump > 0.3, and large p95/p99 latency increases, making it the strongest root-cause signal. Frontend also shows latency degradation but without metric-level anomalies. Given frontend directly depends on checkoutservice, checkoutservice faults are the most plausible upstream culprit. Volume-based signals are weaker and do not outweigh the clear metric anomalies in checkoutservice."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-CHECKOUTSERVICE_MEM_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-CHECKOUTSERVICE_MEM_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.79,
+            "supporting_evidence": [
+              "ev_metric_0bc8dcdc",
+              "ev_metric_c00a3846"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on checkoutservice as the upstream fault with a direct frontend dependency path (frontend → checkoutservice). The TCB-RCA output prioritizes frontend, but that is contradicted by the stronger metric/causal signals at checkoutservice and the direct depen",
+            "topology_path": [
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_37ea79fa",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.523174018121664,
+              "observation": {
+                "p95_delta_ms": 0.36,
+                "p99_delta_ms": 116.14,
+                "p50_ms": 3.11,
+                "p95_ms": 5.92
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_0bc8dcdc",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 1.0,
+              "observation": {
+                "cpu_spike_zscore": 233.32,
+                "cpu_max": 3.9321,
+                "mem_jump_ratio": 23.249,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c00a3846",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.5471819257502257,
+              "observation": {
+                "p95_delta_ms": 122.87,
+                "p99_delta_ms": 70.87,
+                "p50_ms": 92.31,
+                "p95_ms": 379.97
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_038d401f",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.4156318212684955,
+              "observation": {
+                "p95_delta_ms": 0.31,
+                "p99_delta_ms": 88.48,
+                "p50_ms": 45.18,
+                "p95_ms": 217.39
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "The Log Agent identifies checkoutservice as the primary fault with strong metric anomalies, and the Topology Agent confirms a direct propagation path from checkoutservice to the symptom frontend. The TCB-RCA result conflicts, ranking frontend as the fault, but lacks the supporting metric signals and contradicts the observed direct dependency path. Therefore, we elevate checkoutservice as the root cause, reinforced by both log-level anomaly signals and the structurally plausible path. Since unsupported by the TCB-RCA rank, its influence is discounted in the final ranking. The most plausible pro"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-CHECKOUTSERVICE_MEM_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_0bc8dcdc",
+              "ev_metric_c00a3846"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on checkoutservice as the upstream fault with a direct frontend dependency path (frontend → checkoutservice). The TCB-RCA output prioritizes frontend, but that is contradicted by the stronger metric/causal signals at checkoutservice and the direct depen",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_37ea79fa",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.523174018121664,
+              "observation": {
+                "p95_delta_ms": 0.36,
+                "p99_delta_ms": 116.14,
+                "p50_ms": 3.11,
+                "p95_ms": 5.92
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_0bc8dcdc",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 1.0,
+              "observation": {
+                "cpu_spike_zscore": 233.32,
+                "cpu_max": 3.9321,
+                "mem_jump_ratio": 23.249,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c00a3846",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.5471819257502257,
+              "observation": {
+                "p95_delta_ms": 122.87,
+                "p99_delta_ms": 70.87,
+                "p50_ms": 92.31,
+                "p95_ms": 379.97
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_038d401f",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-19T01:28:56.000Z",
+                "end": "2024-01-19T01:31:26.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.4156318212684955,
+              "observation": {
+                "p95_delta_ms": 0.31,
+                "p99_delta_ms": 88.48,
+                "p50_ms": 45.18,
+                "p95_ms": 217.39
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 1.0,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

@@ -4,23 +4,22 @@
   "case": "productcatalogservice_loss_3",
   "gt_service": "productcatalogservice",
   "gt_fault": "loss",
-  "elapsed_seconds": 32.73,
+  "elapsed_seconds": 33.0,
   "evaluation": {
-    "ac_at_1": true,
-    "ac_at_3": true,
+    "ac_at_1": false,
+    "ac_at_3": false,
     "path_accuracy": null,
     "fp_handled": null,
     "top_confidence": 0.6,
     "verdict": "revised",
     "ground_truth_root_cause": "productcatalogservice",
-    "predicted_top_cause_service": "productcatalogservice",
-    "predicted_top_cause_excerpt": "productcatalogservice",
+    "predicted_top_cause_service": "frontend",
+    "predicted_top_cause_excerpt": "frontend",
     "predicted_path": [
-      "productcatalogservice",
       "frontend"
     ],
-    "predicted_path_length": 2,
-    "elapsed_seconds": 32.73,
+    "predicted_path_length": 1,
+    "elapsed_seconds": 33.0,
     "gt_fault": "loss"
   },
   "result": {
@@ -36,30 +35,44 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "ProductCatalogService experiencing resource saturation and latency degradation, acting as a bottleneck that propagates latency to the frontend (symptom).",
+        "cause": "Frontend latency degradation with strong p95/p99 increases and CPU uptick, observed as the primary anomaly. No upstream error evidence detected; frontend itself shows the strongest metric anomaly and is the symptom consumer.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
-          "topology-agent:confirmed"
+          "tcb-rca:confirmed"
         ],
-        "cause_service": "productcatalogservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on productcatalogservice as the upstream bottleneck directly feeding the frontend. The Log Agent notes frontend latency correlated with degradation in productcatalogservice and cognitive path through dependencies; the Topology Agent confirms a direct frontend -> productcatalogservice propagation path. The TCB-RCA Engine, however, flags frontend as the initial anomaly with no detected upstream anomalies, which conflict with the observed downstream bottleneck. Given the structural plausibility and the stronger alignment between log signals and topology, productcatalogservice is favored as the root cause. The lack of explicit errors in productcatalogservice does not negate its role, as performance degradation can cause upstream latency without error logs (and the absence of upstream logs would imply an UNOBSERVED root cause only if upstream referenced an upstream service).",
+        "cause_service": "frontend",
+        "reasoning": "All three analyses place the frontend at or near the center of the observed degradation. The Log Agent highlights frontend as the strongest anomaly with significant latency deltas and resource hints. The TCB-RCA result ranks frontend as the top candidate with zero temporal gap, consistent with being the primary fault before propagation. The Topology Agent shows currencyservice as upstream in the structural path, but this does not override the log-driven signal that frontend bears the most immediate symptom and could be the root cause due to internal load/contestion. Given the unobserved upstream issue possibility and the lack of upstream error logs, it's plausible that frontend is the root cause or sits at the root of the cascade.",
         "supporting_evidence": {
           "log_agent_agrees": true,
+          "topology_agent_agrees": false,
+          "tcb_rca_agrees": true
+        }
+      },
+      {
+        "rank": 2,
+        "cause": "Currency service as upstream fault source propagating latency to frontend; structurally plausible path is currencyservice -> frontend. Lack of upstream logs for currencyservice makes it an unobserved root cause rather than confirmed.",
+        "confidence": 0.28,
+        "evidence_refs": [
+          "topology-agent:confirmed"
+        ],
+        "cause_service": "currencyservice",
+        "reasoning": "Topology analysis supports currencyservice as a plausible upstream contributor (frontend depends on currencyservice and the path currencyservice -> frontend is structurally valid). However, there are no observed logs from currencyservice indicating failure types, which makes this an unobserved root cause hypothesis. The Log Agent centers on frontend performance rather than a currencyservice failure, and the TCB-RCA ranking does not elevate currencyservice as a candidate. In the absence of currencyservice error indicators, this remains a secondary hypothesis driven by topology, not by direct log/temporal evidence.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "ProductCatalogService experiencing resource saturation and latency degradation, acting as a bottleneck that propagates latency to the frontend (symptom).",
+      "cause": "Frontend latency degradation with strong p95/p99 increases and CPU uptick, observed as the primary anomaly. No upstream error evidence detected; frontend itself shows the strongest metric anomaly and is the symptom consumer.",
       "confidence": 0.6,
-      "explanation": "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "productcatalogservice"
+      "explanation": "Candidate 'frontend' confirmed by 2/3 sources (log, tcb-rca).",
+      "cause_service": "frontend"
     },
     "impact_analysis": {
       "affected_services": [
-        "productcatalogservice",
         "frontend"
       ],
       "related_services": [
@@ -72,7 +85,6 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "productcatalogservice",
         "frontend"
       ],
       "blast_radius": [
@@ -83,8 +95,9 @@
       "verdict": "revised",
       "final_confidence": 0.6,
       "notes": [
-        "Candidate 'productcatalogservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'productcatalogservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'frontend' confirmed by 2/3 sources (log, tcb-rca).",
+        "Candidate 'frontend' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'currencyservice' has 1 LLM source agreement but supported by keyword matching (log + topology)."
       ]
     },
     "evidence_summary": {
@@ -96,14 +109,14 @@
         "conversion request successful"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
-        "propagation path: frontend -> productcatalogservice"
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
+        "propagation path: frontend -> currencyservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service productcatalogservice experiencing loss fault'. No error logs found. LLM hypothesis: Frontend latency/degraded performance is driven by bottlenecks in productcatalogservice (a direct dependency). The productcatalogservice shows resource saturation and latency degradation, which likely propagates upstream to frontend, causing the observed fault window.",
+        "summary": "Incident at frontend: 'Service productcatalogservice experiencing loss fault'. No error logs found. LLM hypothesis: Frontend is the primary source of latency degradation during the incident, likely due to internal load or contention causing high tail latency (p95/p99). This degradation propagates to dependent downstream calls, but metric signals indicate the frontend itself as the strongest anomaly.",
         "confidence": 0.65,
         "evidence": [
           {
@@ -274,21 +287,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['LS4PSXUNUM', '66VCHSJNUP', '2ZYFJ3GM2N', '0PUK6V6EV0', 'L9ECAV7KIM']",
-            "timestamp": "2024-01-20T02:08:17.189Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "request started [path: /cart]",
             "timestamp": "2024-01-20T02:08:17.189Z",
             "level": "DEBUG",
@@ -319,8 +317,8 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['9SIQT8TOJO', 'LS4PSXUNUM', '2ZYFJ3GM2N', '6E92ZMYYFZ', 'L9ECAV7KIM']",
-            "timestamp": "2024-01-20T02:08:17.204Z",
+            "content": "[Recv ListRecommendations] product_ids=['LS4PSXUNUM', '66VCHSJNUP', '2ZYFJ3GM2N', '0PUK6V6EV0', 'L9ECAV7KIM']",
+            "timestamp": "2024-01-20T02:08:17.189Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -370,66 +368,6 @@
             "trace_id": null,
             "metadata": {
               "service": "shippingservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['0PUK6V6EV0', 'L9ECAV7KIM', '6E92ZMYYFZ', '1YMWWN1N4O', 'LS4PSXUNUM']",
-            "timestamp": "2024-01-20T02:08:17.327Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['L9ECAV7KIM', 'OLJCESPC7Z', '0PUK6V6EV0', '9SIQT8TOJO', '2ZYFJ3GM2N']",
-            "timestamp": "2024-01-20T02:08:17.361Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['66VCHSJNUP', 'OLJCESPC7Z', '9SIQT8TOJO', '6E92ZMYYFZ', '1YMWWN1N4O']",
-            "timestamp": "2024-01-20T02:08:17.738Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "[Recv ListRecommendations] product_ids=['L9ECAV7KIM', '2ZYFJ3GM2N', '9SIQT8TOJO', '66VCHSJNUP', 'LS4PSXUNUM']",
-            "timestamp": "2024-01-20T02:08:17.999Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "recommendationservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -658,40 +596,275 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Frontend latency/degraded performance is driven by bottlenecks in productcatalogservice (a direct dependency). The productcatalogservice shows resource saturation and latency degradation, which likely propagates upstream to frontend, causing the observed fault window.",
-          "suspected_downstream": "productcatalogservice",
+          "hypothesis": "Frontend is the primary source of latency degradation during the incident, likely due to internal load or contention causing high tail latency (p95/p99). This degradation propagates to dependent downstream calls, but metric signals indicate the frontend itself as the strongest anomaly.",
+          "suspected_downstream": "frontend",
           "anomalous_services": [
-            "frontend",
-            "recommendationservice",
-            "productcatalogservice"
+            "frontend"
           ],
-          "llm_reasoning": "Metric signals show the strongest anomaly in frontend (cpu spike, large p95/p99 latency increases) during the incident window, while productcatalogservice exhibits notable but lesser metric degradation (latency degradation and resource saturation). Since frontend directly depends on productcatalogservice, and upstream saturation can cause downstream latency, the likely root cause lies in productcatalogservice causing frontend slowdown. Recommendationservice also shows latency uplift, supporting a broader upstream impact, but productcatalogservice is the deepest candidate given its metric signals and dependency path.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric summary highlights strong latency degradation for frontend (p95 Δms +170.5, p99 Δms +318.7) with cpu_z +3.7, while other services show less extreme metric anomalies. Evidence-aware summary also points to frontend latency as the dominant signal. Productcatalogservice shows some resource saturation, but no metric anomaly as strong as frontend. No upstream error evidence is present to indicate a downstream root cause; thus frontend is the most likely root in this dataset.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 4,
+            "services_covered": [
+              "frontend",
+              "productcatalogservice",
+              "recommendationservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_6381d316",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T02:16:17.000Z",
+                  "end": "2024-01-20T02:18:47.000Z"
+                },
+                "services": [
+                  "frontend"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.9206994780824023,
+                "observation": {
+                  "p95_delta_ms": 170.5,
+                  "p99_delta_ms": 318.72,
+                  "p50_ms": 63.27,
+                  "p95_ms": 431.88
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_4b7ea493",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T02:16:17.000Z",
+                  "end": "2024-01-20T02:18:47.000Z"
+                },
+                "services": [
+                  "productcatalogservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.34521403413552076,
+                "observation": {
+                  "cpu_spike_zscore": 3.84,
+                  "cpu_max": 0.719,
+                  "mem_jump_ratio": 0.216,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_c1ad616a",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T02:16:17.000Z",
+                  "end": "2024-01-20T02:18:47.000Z"
+                },
+                "services": [
+                  "productcatalogservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.3320673198448745,
+                "observation": {
+                  "p95_delta_ms": 2.14,
+                  "p99_delta_ms": 69.03,
+                  "p50_ms": 2.24,
+                  "p95_ms": 6.9
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_76a6fa0a",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T02:16:17.000Z",
+                  "end": "2024-01-20T02:18:47.000Z"
+                },
+                "services": [
+                  "recommendationservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.7779078103170411,
+                "observation": {
+                  "p95_delta_ms": 84.56,
+                  "p99_delta_ms": 208.01,
+                  "p50_ms": 7.68,
+                  "p95_ms": 95.62
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-PRODUCTCATALOGSERVICE_LOSS_3",
+            "candidates": [
+              {
+                "service": "frontend",
+                "confidence": 0.65,
+                "supporting_evidence": [
+                  "ev_metric_6381d316"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Frontend is the primary source of latency degradation during the incident, likely due to internal load or contention causing high tail latency (p95/p99). This degradation propagates to dependent downstream calls, but metric signals indicate the frontend itself as the strongest anomaly.",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_6381d316",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T02:16:17.000Z",
+                    "end": "2024-01-20T02:18:47.000Z"
+                  },
+                  "services": [
+                    "frontend"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.9206994780824023,
+                  "observation": {
+                    "p95_delta_ms": 170.5,
+                    "p99_delta_ms": 318.72,
+                    "p50_ms": 63.27,
+                    "p95_ms": 431.88
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_4b7ea493",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T02:16:17.000Z",
+                    "end": "2024-01-20T02:18:47.000Z"
+                  },
+                  "services": [
+                    "productcatalogservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.34521403413552076,
+                  "observation": {
+                    "cpu_spike_zscore": 3.84,
+                    "cpu_max": 0.719,
+                    "mem_jump_ratio": 0.216,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_c1ad616a",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T02:16:17.000Z",
+                    "end": "2024-01-20T02:18:47.000Z"
+                  },
+                  "services": [
+                    "productcatalogservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.3320673198448745,
+                  "observation": {
+                    "p95_delta_ms": 2.14,
+                    "p99_delta_ms": 69.03,
+                    "p50_ms": 2.24,
+                    "p95_ms": 6.9
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_76a6fa0a",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T02:16:17.000Z",
+                    "end": "2024-01-20T02:18:47.000Z"
+                  },
+                  "services": [
+                    "recommendationservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.7779078103170411,
+                  "observation": {
+                    "p95_delta_ms": 84.56,
+                    "p99_delta_ms": 208.01,
+                    "p50_ms": 7.68,
+                    "p95_ms": 95.62
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 1.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric summary highlights strong latency degradation for frontend (p95 Δms +170.5, p99 Δms +318.7) with cpu_z +3.7, while other services show less extreme metric anomalies. Evidence-aware summary also points to frontend latency as the dominant signal. Productcatalogservice shows some resource saturation, but no metric anomaly as strong as frontend. No upstream error evidence is present to indicate a downstream root cause; thus frontend is the most likely root in this dataset."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to productcatalogservice: frontend → productcatalogservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.92).",
-        "confidence": 0.856,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: alternative_exists (confidence 0.60).",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: alternative_exists.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service (frontend) directly depends on productcatalogservice. Therefore, a fault in productcatalogservice can propagate to frontend, making the path frontend -> productcatalogservice structurally plausible as the propagation step. No alternative path exists from frontend to productcatalogservice in the given topology since the relation is a direct dependency; other services do not form a distinct route to productcatalogservice. Given the topology, the blast radius is limited by frontend as the immediate symptom surface; monitoring frontend remains critical, as it is the service that surfaces the incident and would relay failures to its downstream calls. The topology supports the log agent's hypothesis that productcatalogservice is the downstream component in the propagation chain, since frontend consumes it directly."
+              "llm_reasoning": "The symptom service frontend directly depends on currencyservice, so a fault in currencyservice can propagate to frontend (currencyservice -> frontend). The computed path frontend -> currencyservice represents the dependency direction, not the fault propagation direction. Therefore, the more plausible propagation path from root to symptom is currencyservice -> frontend. The topology supports the log agent’s suspicion that currencyservice is involved, but the actual propagation path should be considered in the reverse direction."
             }
           }
         ],
         "metadata": {
           "propagation_path": [
             "frontend",
-            "productcatalogservice"
+            "currencyservice"
           ],
           "blast_radius": [
             "frontend"
@@ -804,18 +977,39 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service (frontend) directly depends on productcatalogservice. Therefore, a fault in productcatalogservice can propagate to frontend, making the path frontend -> productcatalogservice structurally plausible as the propagation step. No alternative path exists from frontend to productcatalogservice in the given topology since the relation is a direct dependency; other services do not form a distinct route to productcatalogservice. Given the topology, the blast radius is limited by frontend as the immediate symptom surface; monitoring frontend remains critical, as it is the service that surfaces the incident and would relay failures to its downstream calls. The topology supports the log agent's hypothesis that productcatalogservice is the downstream component in the propagation chain, since frontend consumes it directly.",
-          "path_assessment": "plausible",
-          "alternative_paths": [],
-          "critical_services_in_blast": [
-            "frontend"
+          "llm_reasoning": "The symptom service frontend directly depends on currencyservice, so a fault in currencyservice can propagate to frontend (currencyservice -> frontend). The computed path frontend -> currencyservice represents the dependency direction, not the fault propagation direction. Therefore, the more plausible propagation path from root to symptom is currencyservice -> frontend. The topology supports the log agent’s suspicion that currencyservice is involved, but the actual propagation path should be considered in the reverse direction.",
+          "path_assessment": "alternative_exists",
+          "alternative_paths": [
+            [
+              "currencyservice",
+              "frontend"
+            ]
           ],
-          "topology_supports_hypothesis": true
+          "critical_services_in_blast": [
+            "frontend",
+            "currencyservice"
+          ],
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-PRODUCTCATALOGSERVICE_LOSS_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest convergence comes from Log Agent and Topology Agent: productcatalogservice is the plausible upstream cause directly affecting the frontend through the established dependency path. The TCB-RCA result contradicts this by marking the frontend as the initial anomaly with no upstream anomalies, which is less consistent with the observed causal pattern and propagation path. Therefore, we prioritize log-based performance degradation and structural propagation over timing-only backtracking. The inferred root cause is a deeper performance issue in productcatalogservice rather than a frontend fault.",
+    "synthesis_reasoning": "The strongest signal across sources is that frontend is the primary anomaly, supported by the Log Agent and the TCB-RCA ranking frontend as the top candidate. The Topology Agent aligns with a plausible upstream influence from currencyservice but only in terms of structural propagation; there is no corroborating log data from currencyservice to confirm its failure. Given the unobserved root cause rule, currencyservice remains a viable alternative but is not evidenced. Therefore, the synthesis favors frontend as the leading root cause with currencyservice as a secondary, unobserved upstream candidate. The propagation path from root to symptom is simply [frontend], consistent with frontend being both root and symptom in this interpretation.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -829,6 +1023,459 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-PRODUCTCATALOGSERVICE_LOSS_3",
+        "candidates": [
+          {
+            "service": "frontend",
+            "confidence": 0.65,
+            "supporting_evidence": [
+              "ev_metric_6381d316"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Frontend is the primary source of latency degradation during the incident, likely due to internal load or contention causing high tail latency (p95/p99). This degradation propagates to dependent downstream calls, but metric signals indicate the frontend itself as the strongest anomaly.",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_6381d316",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9206994780824023,
+              "observation": {
+                "p95_delta_ms": 170.5,
+                "p99_delta_ms": 318.72,
+                "p50_ms": 63.27,
+                "p95_ms": 431.88
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_4b7ea493",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "productcatalogservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.34521403413552076,
+              "observation": {
+                "cpu_spike_zscore": 3.84,
+                "cpu_max": 0.719,
+                "mem_jump_ratio": 0.216,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c1ad616a",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "productcatalogservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.3320673198448745,
+              "observation": {
+                "p95_delta_ms": 2.14,
+                "p99_delta_ms": 69.03,
+                "p50_ms": 2.24,
+                "p95_ms": 6.9
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_76a6fa0a",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7779078103170411,
+              "observation": {
+                "p95_delta_ms": 84.56,
+                "p99_delta_ms": 208.01,
+                "p50_ms": 7.68,
+                "p95_ms": 95.62
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric summary highlights strong latency degradation for frontend (p95 Δms +170.5, p99 Δms +318.7) with cpu_z +3.7, while other services show less extreme metric anomalies. Evidence-aware summary also points to frontend latency as the dominant signal. Productcatalogservice shows some resource saturation, but no metric anomaly as strong as frontend. No upstream error evidence is present to indicate a downstream root cause; thus frontend is the most likely root in this dataset."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-PRODUCTCATALOGSERVICE_LOSS_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-PRODUCTCATALOGSERVICE_LOSS_3",
+        "candidates": [
+          {
+            "service": "frontend",
+            "confidence": 0.62,
+            "supporting_evidence": [
+              "ev_metric_6381d316"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "All three analyses place the frontend at or near the center of the observed degradation. The Log Agent highlights frontend as the strongest anomaly with significant latency deltas and resource hints. The TCB-RCA result ranks frontend as the top candidate with zero temporal gap, consistent with being",
+            "topology_path": [
+              "frontend"
+            ],
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "currencyservice",
+            "confidence": 0.25,
+            "supporting_evidence": [],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Topology analysis supports currencyservice as a plausible upstream contributor (frontend depends on currencyservice and the path currencyservice -> frontend is structurally valid). However, there are no observed logs from currencyservice indicating failure types, which makes this an unobserved root ",
+            "topology_path": [
+              "frontend"
+            ],
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_6381d316",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9206994780824023,
+              "observation": {
+                "p95_delta_ms": 170.5,
+                "p99_delta_ms": 318.72,
+                "p50_ms": 63.27,
+                "p95_ms": 431.88
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_4b7ea493",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "productcatalogservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.34521403413552076,
+              "observation": {
+                "cpu_spike_zscore": 3.84,
+                "cpu_max": 0.719,
+                "mem_jump_ratio": 0.216,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c1ad616a",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "productcatalogservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.3320673198448745,
+              "observation": {
+                "p95_delta_ms": 2.14,
+                "p99_delta_ms": 69.03,
+                "p50_ms": 2.24,
+                "p95_ms": 6.9
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_76a6fa0a",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7779078103170411,
+              "observation": {
+                "p95_delta_ms": 84.56,
+                "p99_delta_ms": 208.01,
+                "p50_ms": 7.68,
+                "p95_ms": 95.62
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.8,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "The strongest signal across sources is that frontend is the primary anomaly, supported by the Log Agent and the TCB-RCA ranking frontend as the top candidate. The Topology Agent aligns with a plausible upstream influence from currencyservice but only in terms of structural propagation; there is no corroborating log data from currencyservice to confirm its failure. Given the unobserved root cause rule, currencyservice remains a viable alternative but is not evidenced. Therefore, the synthesis favors frontend as the leading root cause with currencyservice as a secondary, unobserved upstream cand"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-PRODUCTCATALOGSERVICE_LOSS_3",
+        "candidates": [
+          {
+            "service": "frontend",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_6381d316"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "All three analyses place the frontend at or near the center of the observed degradation. The Log Agent highlights frontend as the strongest anomaly with significant latency deltas and resource hints. The TCB-RCA result ranks frontend as the top candidate with zero temporal gap, consistent with being",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "currencyservice",
+            "confidence": 0.28,
+            "supporting_evidence": [],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=NA",
+              "verifier_rank=2"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Topology analysis supports currencyservice as a plausible upstream contributor (frontend depends on currencyservice and the path currencyservice -> frontend is structurally valid). However, there are no observed logs from currencyservice indicating failure types, which makes this an unobserved root ",
+            "topology_path": null,
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_6381d316",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9206994780824023,
+              "observation": {
+                "p95_delta_ms": 170.5,
+                "p99_delta_ms": 318.72,
+                "p50_ms": 63.27,
+                "p95_ms": 431.88
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_4b7ea493",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "productcatalogservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.34521403413552076,
+              "observation": {
+                "cpu_spike_zscore": 3.84,
+                "cpu_max": 0.719,
+                "mem_jump_ratio": 0.216,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c1ad616a",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "productcatalogservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.3320673198448745,
+              "observation": {
+                "p95_delta_ms": 2.14,
+                "p99_delta_ms": 69.03,
+                "p50_ms": 2.24,
+                "p95_ms": 6.9
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_76a6fa0a",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T02:16:17.000Z",
+                "end": "2024-01-20T02:18:47.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7779078103170411,
+              "observation": {
+                "p95_delta_ms": 84.56,
+                "p99_delta_ms": 208.01,
+                "p50_ms": 7.68,
+                "p95_ms": 95.62
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.8,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'frontend' confirmed by 2/3 sources (log, tcb-rca)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.8,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

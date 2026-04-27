@@ -4,14 +4,14 @@
   "case": "emailservice_socket_3",
   "gt_service": "emailservice",
   "gt_fault": "socket",
-  "elapsed_seconds": 30.0,
+  "elapsed_seconds": 25.26,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.48,
-    "verdict": "weak-evidence",
+    "top_confidence": 0.6,
+    "verdict": "revised",
     "ground_truth_root_cause": "emailservice",
     "predicted_top_cause_service": "emailservice",
     "predicted_top_cause_excerpt": "emailservice",
@@ -21,7 +21,7 @@
       "frontend"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 30.0,
+    "elapsed_seconds": 25.26,
     "gt_fault": "socket"
   },
   "result": {
@@ -37,37 +37,25 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Email service experiencing severe CPU saturation leading to socket delays/failures, with downstream impact observed on frontend workflows.",
-        "confidence": 0.48,
+        "cause": "Email service is experiencing severe CPU saturation, causing socket faults and degraded performance that cascades to downstream dependencies (checkoutservice) and ultimately manifests at the symptom frontend.",
+        "confidence": 0.6,
         "evidence_refs": [
-          "log-agent:confirmed"
+          "log-agent:confirmed",
+          "topology-agent:confirmed"
         ],
         "cause_service": "emailservice",
-        "reasoning": "Strong anomaly in emailservice CPU metric (outlier cpu_z=459.9) with no error logs, aligning with a resource-induced failure cascade. Topology does not document a direct path from frontend to emailservice, making the propagation path structurally implausible per the provided graph. However, the absence of error logs does not invalidate a deep root cause in emailservice itself; unobserved path possibility and downstream impact on frontend workflows justify considering emailservice as the primary root cause, albeit with caveats about propagation path.",
+        "reasoning": "Both the Log Agent and Topology Agent converge on emailservice as the downstream service driving the observed faults (socket faults in frontend with emaildelivery related path). The TCB-RCA baseline does not flag emailservice as root (it highlights frontend with zero temporal evidence), but the strong CPU anomaly in emailservice and the validated propagation path frontend <- checkoutservice <- emailservice provide a coherent, topology-consistent root cause. Given the absence of alternative strong candidates and the unambiguous CPU spike in emailservice, emailservice is the most plausible root cause; TCB-RCA is overridden when log-topology evidence is strong.",
         "supporting_evidence": {
           "log_agent_agrees": true,
-          "topology_agent_agrees": false,
-          "tcb_rca_agrees": false
-        }
-      },
-      {
-        "rank": 2,
-        "cause": "Frontend is the causal source in propagation model due to observed symptom and TCB-RCA positioning, but without concrete temporal/anomaly evidence on frontend itself.",
-        "confidence": 0.2,
-        "evidence_refs": [],
-        "cause_service": "frontend",
-        "reasoning": "TCB-RCA places frontend as the root with zero temporal anomalies detected (rank 1), but this is weak given no explicit frontend anomalies were reported in logs or metrics. The lack of corroborating signals makes this a low-confidence alternative.",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
-          "topology_agent_agrees": false,
+          "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "Email service experiencing severe CPU saturation leading to socket delays/failures, with downstream impact observed on frontend workflows.",
-      "confidence": 0.48,
-      "explanation": "Candidate 'emailservice' has 1 LLM source agreement but supported by keyword matching (log + topology).",
+      "cause": "Email service is experiencing severe CPU saturation, causing socket faults and degraded performance that cascades to downstream dependencies (checkoutservice) and ultimately manifests at the symptom frontend.",
+      "confidence": 0.6,
+      "explanation": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "emailservice"
     },
     "impact_analysis": {
@@ -95,11 +83,11 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.48,
+      "verdict": "revised",
+      "final_confidence": 0.6,
       "notes": [
-        "Candidate 'emailservice' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-        "Candidate 'frontend' has no LLM source agreement."
+        "Candidate 'emailservice' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'emailservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -111,15 +99,15 @@
         "request started [path: /product/LS4PSXUNUM]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
         "propagation path: frontend -> checkoutservice -> emailservice"
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing socket fault'. No error logs found. LLM hypothesis: Email service is experiencing severe CPU saturation, likely causing socket-related delays or failures that propagate to dependent frontend workflows and related services.",
-        "confidence": 0.74,
+        "summary": "Incident at frontend: 'Service emailservice experiencing socket fault'. No error logs found. LLM hypothesis: Email service is experiencing severe CPU saturation which is the primary driver of degraded performance (socket faults) and is likely causing downstream effects on services that rely on email delivery or related async flows.",
+        "confidence": 0.75,
         "evidence": [
           {
             "type": "log",
@@ -578,31 +566,171 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Email service is experiencing severe CPU saturation, likely causing socket-related delays or failures that propagate to dependent frontend workflows and related services.",
+          "hypothesis": "Email service is experiencing severe CPU saturation which is the primary driver of degraded performance (socket faults) and is likely causing downstream effects on services that rely on email delivery or related async flows.",
           "suspected_downstream": "emailservice",
           "anomalous_services": [
             "emailservice"
           ],
-          "llm_reasoning": "Metric analysis shows a strong outlier in emailservice with cpu_z = 459.9, indicating severe resource pressure. Other services show no comparable metric anomalies. No error logs are present, so the primary signal is resource saturation rather than error events. Given the topology, downstream impact on frontend-related request handling is plausible, but the deepest root cause appears to be emailservice itself.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "The Metric Summary shows an extreme CPU z-score for emailservice (+459.9), indicating a strong root-cause signal. Other services show no comparable metric anomalies (cpu_z < 30, mem_jump < 0.3, p95/p99 delays not extreme). Although the incident window log-volume signals are modest for emailservice, the strongest evidence of fault is the CPU spike in emailservice, which cascades to downstream operations. Upstream dependencies are not clearly identified in the logs, so the deepest root cause is most plausibly emailservice itself.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 2,
+            "services_covered": [
+              "adservice",
+              "emailservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_9a90c6df",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T06:07:38.000Z",
+                  "end": "2024-01-20T06:10:08.000Z"
+                },
+                "services": [
+                  "adservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.31289374491321187,
+                "observation": {
+                  "cpu_spike_zscore": 12.95,
+                  "cpu_max": 0.4278,
+                  "mem_jump_ratio": 0.002,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_a1ae6412",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T06:07:38.000Z",
+                  "end": "2024-01-20T06:10:08.000Z"
+                },
+                "services": [
+                  "emailservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.9999999997936304,
+                "observation": {
+                  "cpu_spike_zscore": 459.89,
+                  "cpu_max": 4.8919,
+                  "mem_jump_ratio": 0.266,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-EMAILSERVICE_SOCKET_3",
+            "candidates": [
+              {
+                "service": "emailservice",
+                "confidence": 0.75,
+                "supporting_evidence": [
+                  "ev_metric_a1ae6412"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Email service is experiencing severe CPU saturation which is the primary driver of degraded performance (socket faults) and is likely causing downstream effects on services that rely on email delivery or related async flows.",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_9a90c6df",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T06:07:38.000Z",
+                    "end": "2024-01-20T06:10:08.000Z"
+                  },
+                  "services": [
+                    "adservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.31289374491321187,
+                  "observation": {
+                    "cpu_spike_zscore": 12.95,
+                    "cpu_max": 0.4278,
+                    "mem_jump_ratio": 0.002,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_a1ae6412",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T06:07:38.000Z",
+                    "end": "2024-01-20T06:10:08.000Z"
+                  },
+                  "services": [
+                    "emailservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.9999999997936304,
+                  "observation": {
+                    "cpu_spike_zscore": 459.89,
+                    "cpu_max": 4.8919,
+                    "mem_jump_ratio": 0.266,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 1.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "The Metric Summary shows an extreme CPU z-score for emailservice (+459.9), indicating a strong root-cause signal. Other services show no comparable metric anomalies (cpu_z < 30, mem_jump < 0.3, p95/p99 delays not extreme). Although the incident window log-volume signals are modest for emailservice, the strongest evidence of fault is the CPU spike in emailservice, which cascades to downstream operations. Upstream dependencies are not clearly identified in the logs, so the deepest root cause is most plausibly emailservice itself."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: implausible (confidence 0.40).",
-        "confidence": 0.4,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to emailservice: frontend → checkoutservice → emailservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
             "source": "arch://online-boutique/latest",
-            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: implausible.",
+            "content": "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
             "timestamp": null,
             "level": null,
             "trace_id": null,
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The explicit topology lists frontend dependencies as cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice. emailservice is not present in the dependency subgraph, so a structural path from frontend through checkoutservice to emailservice cannot be confirmed. Although the log agent suggests downstream emailservice, the topology does not document an edge to emailservice, making the proposed path implausible given the provided structure. No alternative documented paths to emailservice exist within the topology. The blast radius remains limited to frontend as per the provided blast radius, but the lack of a documented path to emailservice reduces confidence in the propagation hypothesis."
+              "llm_reasoning": "Frontend depends on checkoutservice, which (per the computed path) leads to emailservice. This downstream relationship is consistent with the propagation path frontend -> checkoutservice -> emailservice. No alternative edges are indicated in the topology for routing to emailservice, so the path is plausible and aligns with the suspected_downstream hypothesis. The blast radius is limited to frontend under the given data, with frontend being the most critical in the affected set."
             }
           }
         ],
@@ -723,18 +851,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The explicit topology lists frontend dependencies as cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice. emailservice is not present in the dependency subgraph, so a structural path from frontend through checkoutservice to emailservice cannot be confirmed. Although the log agent suggests downstream emailservice, the topology does not document an edge to emailservice, making the proposed path implausible given the provided structure. No alternative documented paths to emailservice exist within the topology. The blast radius remains limited to frontend as per the provided blast radius, but the lack of a documented path to emailservice reduces confidence in the propagation hypothesis.",
-          "path_assessment": "implausible",
+          "llm_reasoning": "Frontend depends on checkoutservice, which (per the computed path) leads to emailservice. This downstream relationship is consistent with the propagation path frontend -> checkoutservice -> emailservice. No alternative edges are indicated in the topology for routing to emailservice, so the path is plausible and aligns with the suspected_downstream hypothesis. The blast radius is limited to frontend under the given data, with frontend being the most critical in the affected set.",
+          "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": false
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-EMAILSERVICE_SOCKET_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The strongest signal comes from the Log Agent identifying severe CPU saturation in emailservice, which aligns with a plausible root cause for socket-related symptoms observed in frontend workflows. The Topology Agent conflicts with this by not documenting a direct emailservice path from frontend, weakening propagation plausibility. The TCB-RCA baseline also does not place a strong anomaly at frontend, suggesting its root path may be non-contributory. Given the mixture, emailservice is the most credible root candidate due to the pronounced resource anomaly, with the understanding that the lack of a documented path requires further validation (e.g., additional instrumentation, cross-service timing). If emailservice is ruled out by a deeper audit, frontend remains a distant secondary candidate, but current evidence weighs toward emailservice as the primary root cause extraordinarly tied to resource saturation rather than a detectable upstream fault.",
+    "synthesis_reasoning": "The strongest convergence is between the Log Agent (CPU spike in emailservice) and the Topology Agent (plausible path frontend -> checkoutservice -> emailservice). The TCB-RCA baseline conflicts with this signal, granting frontend as the nominal candidate, but there is no timing/structure evidence supporting frontend as the root. Therefore, the most credible root cause is emailservice, with propagation to frontend via checkoutservice. The absence of observed logs in emailservice isn’t a disqualifier here because the CPU anomaly itself provides a deeper root cause signal, and the topology confirms a valid propagation path. If further data shows emailservice anomalies in upstream or more granular timing, adjust accordingly.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -748,6 +891,282 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-EMAILSERVICE_SOCKET_3",
+        "candidates": [
+          {
+            "service": "emailservice",
+            "confidence": 0.75,
+            "supporting_evidence": [
+              "ev_metric_a1ae6412"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Email service is experiencing severe CPU saturation which is the primary driver of degraded performance (socket faults) and is likely causing downstream effects on services that rely on email delivery or related async flows.",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_9a90c6df",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T06:07:38.000Z",
+                "end": "2024-01-20T06:10:08.000Z"
+              },
+              "services": [
+                "adservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.31289374491321187,
+              "observation": {
+                "cpu_spike_zscore": 12.95,
+                "cpu_max": 0.4278,
+                "mem_jump_ratio": 0.002,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_a1ae6412",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T06:07:38.000Z",
+                "end": "2024-01-20T06:10:08.000Z"
+              },
+              "services": [
+                "emailservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999997936304,
+              "observation": {
+                "cpu_spike_zscore": 459.89,
+                "cpu_max": 4.8919,
+                "mem_jump_ratio": 0.266,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "The Metric Summary shows an extreme CPU z-score for emailservice (+459.9), indicating a strong root-cause signal. Other services show no comparable metric anomalies (cpu_z < 30, mem_jump < 0.3, p95/p99 delays not extreme). Although the incident window log-volume signals are modest for emailservice, the strongest evidence of fault is the CPU spike in emailservice, which cascades to downstream operations. Upstream dependencies are not clearly identified in the logs, so the deepest root cause is most plausibly emailservice itself."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-EMAILSERVICE_SOCKET_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-EMAILSERVICE_SOCKET_3",
+        "candidates": [
+          {
+            "service": "emailservice",
+            "confidence": 0.85,
+            "supporting_evidence": [
+              "ev_metric_a1ae6412"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on emailservice as the downstream service driving the observed faults (socket faults in frontend with emaildelivery related path). The TCB-RCA baseline does not flag emailservice as root (it highlights frontend with zero temporal evidence), but the stro",
+            "topology_path": [
+              "emailservice",
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_9a90c6df",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T06:07:38.000Z",
+                "end": "2024-01-20T06:10:08.000Z"
+              },
+              "services": [
+                "adservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.31289374491321187,
+              "observation": {
+                "cpu_spike_zscore": 12.95,
+                "cpu_max": 0.4278,
+                "mem_jump_ratio": 0.002,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_a1ae6412",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T06:07:38.000Z",
+                "end": "2024-01-20T06:10:08.000Z"
+              },
+              "services": [
+                "emailservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999997936304,
+              "observation": {
+                "cpu_spike_zscore": 459.89,
+                "cpu_max": 4.8919,
+                "mem_jump_ratio": 0.266,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "The strongest convergence is between the Log Agent (CPU spike in emailservice) and the Topology Agent (plausible path frontend -> checkoutservice -> emailservice). The TCB-RCA baseline conflicts with this signal, granting frontend as the nominal candidate, but there is no timing/structure evidence supporting frontend as the root. Therefore, the most credible root cause is emailservice, with propagation to frontend via checkoutservice. The absence of observed logs in emailservice isn’t a disqualifier here because the CPU anomaly itself provides a deeper root cause signal, and the topology confi"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-EMAILSERVICE_SOCKET_3",
+        "candidates": [
+          {
+            "service": "emailservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_a1ae6412"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on emailservice as the downstream service driving the observed faults (socket faults in frontend with emaildelivery related path). The TCB-RCA baseline does not flag emailservice as root (it highlights frontend with zero temporal evidence), but the stro",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_9a90c6df",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T06:07:38.000Z",
+                "end": "2024-01-20T06:10:08.000Z"
+              },
+              "services": [
+                "adservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.31289374491321187,
+              "observation": {
+                "cpu_spike_zscore": 12.95,
+                "cpu_max": 0.4278,
+                "mem_jump_ratio": 0.002,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_a1ae6412",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T06:07:38.000Z",
+                "end": "2024-01-20T06:10:08.000Z"
+              },
+              "services": [
+                "emailservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999997936304,
+              "observation": {
+                "cpu_spike_zscore": 459.89,
+                "cpu_max": 4.8919,
+                "mem_jump_ratio": 0.266,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'emailservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 1.0,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

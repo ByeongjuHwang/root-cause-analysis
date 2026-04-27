@@ -4,23 +4,24 @@
   "case": "emailservice_delay_2",
   "gt_service": "emailservice",
   "gt_fault": "delay",
-  "elapsed_seconds": 34.59,
+  "elapsed_seconds": 38.43,
   "evaluation": {
-    "ac_at_1": false,
-    "ac_at_3": false,
+    "ac_at_1": true,
+    "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.48,
-    "verdict": "weak-evidence",
+    "top_confidence": 0.6,
+    "verdict": "revised",
     "ground_truth_root_cause": "emailservice",
-    "predicted_top_cause_service": "adservice",
-    "predicted_top_cause_excerpt": "adservice",
+    "predicted_top_cause_service": "redis",
+    "predicted_top_cause_excerpt": "redis",
     "predicted_path": [
-      "currencyservice",
+      "redis",
+      "emailservice",
       "frontend"
     ],
-    "predicted_path_length": 2,
-    "elapsed_seconds": 34.59,
+    "predicted_path_length": 3,
+    "elapsed_seconds": 38.43,
     "gt_fault": "delay"
   },
   "result": {
@@ -36,45 +37,31 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Upstream adservice is another plausible root cause: log agent highlights notable CPU/memory pressure in adservice as part of upstream-dependent latency propagation; a failure or contention in adservice could propagate delays to frontend through the call graph.",
-        "confidence": 0.48,
+        "cause": "Redis cache layer experiencing increased activity/contestion (downstream pressure) leading to latency in dependent services (e.g., emailservice, checkout, cart, currency, shipping) which in turn degrades frontend performance.",
+        "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
-        "cause_service": "adservice",
-        "reasoning": "Adservice is explicitly identified by the Log Agent as showing strong CPU anomalies and is part of the frontend's upstream dependency set. The Topology Agent confirms a plausible propagation path from adservice to frontend. However, adservice is not the only plausible upstream (currencyservice also fits the direct dependency path), and the TCB-RCA engine did not elevate adservice as the root. This makes adservice a credible secondary root candidate, especially if the latency originates from ad-related workloads impacting the shared frontend call graph.",
+        "cause_service": "redis",
+        "reasoning": "All sources converge on Redis as a plausible upstream bottleneck: the Log Agent highlights Redis volume_delta and downstream saturation propagating latency; the Topology Agent notes frontend depends on multiple downstream services that commonly rely on Redis caches/state, making Redis-based degradation structurally plausible. The TCB-RCA baseline does not identify Redis as the root due to its timing/topology constraints, but given the absence of explicit frontend-only anomalies and the strong cache-layer signal, Redis remains the most credible unobserved/deeper root cause. The unobserved root-cause detection principle supports considering Redis as root since frontend shows symptoms but Redis demonstrates cache-related activity without direct frontend logs.",
         "supporting_evidence": {
           "log_agent_agrees": true,
-          "topology_agent_agrees": true,
-          "tcb_rca_agrees": false
-        }
-      },
-      {
-        "rank": 2,
-        "cause": "Upstream currency service seen as a plausible root cause: frontend directly depends on currencyservice; latency or resource contention in currencyservice could propagate delays to frontend without explicit frontend errors.",
-        "confidence": 0.28,
-        "evidence_refs": [
-          "topology-agent:confirmed"
-        ],
-        "cause_service": "currencyservice",
-        "reasoning": "Topology shows a direct dependency path frontend <- currencyservice, making currencyservice a structurally plausible upstream root. Log Agent observes upstream pressure in multiple frontend dependencies (notably adservice and productcatalogservice) that could cause general latency buildup affecting frontend; currencyservice remains a strong candidate because it is a direct upstream dependency. TCB-RCA did not elevate currencyservice and only identified frontend as the symptom, so it does not support currencyservice as the root. Given the combination of structural plausibility and the observed upstream pressure pattern, currencyservice is the strongest single root cause candidate within the constrained topology.",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
       }
     ],
     "final_verdict": {
-      "cause": "Upstream adservice is another plausible root cause: log agent highlights notable CPU/memory pressure in adservice as part of upstream-dependent latency propagation; a failure or contention in adservice could propagate delays to frontend through the call graph.",
-      "confidence": 0.48,
-      "explanation": "Candidate 'adservice' confirmed by 2/3 sources (log, topology).",
-      "cause_service": "adservice"
+      "cause": "Redis cache layer experiencing increased activity/contestion (downstream pressure) leading to latency in dependent services (e.g., emailservice, checkout, cart, currency, shipping) which in turn degrades frontend performance.",
+      "confidence": 0.6,
+      "explanation": "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
+      "cause_service": "redis"
     },
     "impact_analysis": {
       "affected_services": [
-        "currencyservice",
+        "redis",
+        "emailservice",
         "frontend"
       ],
       "related_services": [
@@ -87,7 +74,8 @@
         "shippingservice"
       ],
       "propagation_path": [
-        "currencyservice",
+        "redis",
+        "emailservice",
         "frontend"
       ],
       "blast_radius": [
@@ -95,11 +83,11 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.48,
+      "verdict": "revised",
+      "final_confidence": 0.6,
       "notes": [
-        "Candidate 'adservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'currencyservice' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "Candidate 'redis' confirmed by 2/3 sources (log, topology).",
+        "Candidate 'redis' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
       ]
     },
     "evidence_summary": {
@@ -111,14 +99,13 @@
         "request started [path: /cart]"
       ],
       "topology_evidence": [
-        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible.",
-        "propagation path: frontend -> currencyservice"
+        "Dependency map confirms frontend relations: {'service': 'frontend', 'depends_on': ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice'], 'upstream_of': [], 'criticality': 'high', 'type': 'frontend'}. Structural analysis: plausible."
       ]
     },
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: There is upstream CPU/memory pressure in several frontend dependencies (notably adservice and productcatalogservice) that propagates to frontend, with no explicit error signals in logs. This suggests resource contention or latency buildup in upstream services triggering sluggish responses in the frontend call graph, rather than a single downstream failure.",
+        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: The observed incident likely involves downstream pressure or saturation at Redis influencing downstream services (checkout, cart, currency, shipping, email) which in turn impacts frontend performance and latency.",
         "confidence": 0.28,
         "evidence": [
           {
@@ -1213,29 +1200,235 @@
           }
         ],
         "metadata": {
-          "hypothesis": "There is upstream CPU/memory pressure in several frontend dependencies (notably adservice and productcatalogservice) that propagates to frontend, with no explicit error signals in logs. This suggests resource contention or latency buildup in upstream services triggering sluggish responses in the frontend call graph, rather than a single downstream failure.",
-          "suspected_downstream": null,
+          "hypothesis": "The observed incident likely involves downstream pressure or saturation at Redis influencing downstream services (checkout, cart, currency, shipping, email) which in turn impacts frontend performance and latency.",
+          "suspected_downstream": "redis",
           "anomalous_services": [
-            "adservice",
-            "productcatalogservice",
             "redis",
-            "emailservice",
             "checkoutservice",
-            "currencyservice",
+            "paymentservice",
+            "emailservice",
             "shippingservice",
-            "recommendationservice",
+            "currencyservice",
             "cartservice",
-            "frontend",
-            "paymentservice"
+            "recommendationservice",
+            "productcatalogservice",
+            "adservice",
+            "frontend"
           ],
-          "llm_reasoning": "Metric signals show moderate to strong CPU anomalies across many services (not exceeding the explicit thresholds for root-cause), with the most pronounced values in adservice and productcatalogservice. The log-rate table shows no error spikes, timeouts, or retries, and all error metrics are zero. Since frontend depends on multiple upstream services, the upstream resource pressure could degrade overall latency and throughput without producing explicit errors in logs. Without explicit upstream error records, the root cause is inferred from metric anomalies and the dependency chain, making the pattern plausible but not definitively proven.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show no extreme CPU/memory spikes (no mem_jump >0.3, p95/p99 >100), but Redis exhibits a positive volume_delta in logs during incident, suggesting increased activity or contention at the caching layer. Several downstream services (checkout, cart, currency, shipping, email) show negative volume_delta and elevated log activity without explicit errors, compatible with downstream cache/middleware contention propagating latency to frontend. In absence of clear upstream error indicators, Redis is the deepest root-cause candidate based on metric signals and its central role in the topology as a cache/dependency for many services.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 0,
+            "services_covered": [],
+            "modalities_present": [],
+            "units": []
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-EMAILSERVICE_DELAY_2",
+            "candidates": [
+              {
+                "service": "redis",
+                "confidence": 0.28,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "The observed incident likely involves downstream pressure or saturation at Redis influencing downstream services (checkout, cart, currency, shipping, email) which in turn impacts frontend performance and latency.",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "checkoutservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "paymentservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "emailservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "shippingservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "currencyservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "cartservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "recommendationservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "productcatalogservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "adservice",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.14,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "metric_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              }
+            ],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.4,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show no extreme CPU/memory spikes (no mem_jump >0.3, p95/p99 >100), but Redis exhibits a positive volume_delta in logs during incident, suggesting increased activity or contention at the caching layer. Several downstream services (checkout, cart, currency, shipping, email) show negative volume_delta and elevated log activity without explicit errors, compatible with downstream cache/middleware contention propagating latency to frontend. In absence of clear upstream error indicators, Redis is the deepest root-cause candidate based on metric signals and its central role in the topo"
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to currencyservice: frontend → currencyservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.72).",
-        "confidence": 0.796,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.55).",
+        "confidence": 0.745,
         "evidence": [
           {
             "type": "topology",
@@ -1247,15 +1440,12 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service (frontend) directly depends on currencyservice, so a fault in currencyservice is a plausible root cause that would propagate to frontend. The given propagation path frontend -> currencyservice matches the documented dependency edge, supporting the hypothesis. No alternative intra-graph paths from frontend to currencyservice exist beyond the direct dependency, and the blast radius in the topology (as provided) centers on the frontend, aligning with the suspected downstream hypothesis."
+              "llm_reasoning": "Frontend depends on multiple downstream services (cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice). If the log agent suspects redis as downstream, the plausible propagation is that a Redis outage/degradation impacts one or more of these downstream services (which commonly rely on Redis for caching/session/state). The degraded downstream service then causes frontend to fail or degrade, producing the observed symptom. The topology itself does not show Redis explicitly, but a typical architecture allows upstream frontend bottlenecks to arise from failures in their dependencies, which can be caused by Redis-level problems embedded within those dependencies. Therefore the path is structurally plausible, with the symptom localized to frontend (blast radius), while the upstream root cause would be Redis affecting one of the frontend’s dependent services. Alternative direct paths are not evident in the given topology, hence none listed."
             }
           }
         ],
         "metadata": {
-          "propagation_path": [
-            "frontend",
-            "currencyservice"
-          ],
+          "propagation_path": [],
           "blast_radius": [
             "frontend"
           ],
@@ -1367,18 +1557,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service (frontend) directly depends on currencyservice, so a fault in currencyservice is a plausible root cause that would propagate to frontend. The given propagation path frontend -> currencyservice matches the documented dependency edge, supporting the hypothesis. No alternative intra-graph paths from frontend to currencyservice exist beyond the direct dependency, and the blast radius in the topology (as provided) centers on the frontend, aligning with the suspected downstream hypothesis.",
+          "llm_reasoning": "Frontend depends on multiple downstream services (cartservice, productcatalogservice, currencyservice, recommendationservice, checkoutservice, adservice, shippingservice). If the log agent suspects redis as downstream, the plausible propagation is that a Redis outage/degradation impacts one or more of these downstream services (which commonly rely on Redis for caching/session/state). The degraded downstream service then causes frontend to fail or degrade, producing the observed symptom. The topology itself does not show Redis explicitly, but a typical architecture allows upstream frontend bottlenecks to arise from failures in their dependencies, which can be caused by Redis-level problems embedded within those dependencies. Therefore the path is structurally plausible, with the symptom localized to frontend (blast radius), while the upstream root cause would be Redis affecting one of the frontend’s dependent services. Alternative direct paths are not evident in the given topology, hence none listed.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-EMAILSERVICE_DELAY_2",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
     "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "All sources agree that the frontend symptom is connected to upstream dependencies, but only the Topology Agent provides a clear direct edge from a specific upstream service to the frontend (currencyservice). The Log Agent points to upstream resource contention across several frontend dependencies (not limited to currencyservice), strengthening the case for an upstream-origin latency issue rather than a single, explicit frontend fault. The TCB-RCA baseline centers on the symptom itself (frontend) and does not elevate a specific upstream service, so it is given less weight in deciding the root. Given the structural plausibility and observed upstream pressure patterns, currencyservice is prioritized as the primary root cause candidate, with adservice as a plausible secondary root if currencyservice does not fully account for observed timing signals.",
+    "synthesis_reasoning": "Evidence consensus: Log Agent and Topology Agent align on Redis as a plausible upstream root cause due to cache-layer contention affecting downstream services that frontend relies on. TCB-RCA does not flag Redis, showing a mismatch with the timing-based baseline. Given the strong support from logs indicating Redis activity and the structural dependency of frontend on Redis-backed services, Redis is the most credible root cause, treated as an unobserved root cause in this incident. The proposed propagation path reflects a plausible flow: Redis impacting emailservice (a downstream dependent service that interfaces with Redis), which in turn contributes to frontend latency, producing the symptom observed in INC-EMAILSERVICE_DELAY_2.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -1392,6 +1597,298 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_2",
+        "candidates": [
+          {
+            "service": "redis",
+            "confidence": 0.28,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "The observed incident likely involves downstream pressure or saturation at Redis influencing downstream services (checkout, cart, currency, shipping, email) which in turn impacts frontend performance and latency.",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "checkoutservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "paymentservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "emailservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "shippingservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "currencyservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "cartservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "recommendationservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "productcatalogservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "adservice",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.14,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          }
+        ],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.4,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show no extreme CPU/memory spikes (no mem_jump >0.3, p95/p99 >100), but Redis exhibits a positive volume_delta in logs during incident, suggesting increased activity or contention at the caching layer. Several downstream services (checkout, cart, currency, shipping, email) show negative volume_delta and elevated log activity without explicit errors, compatible with downstream cache/middleware contention propagating latency to frontend. In absence of clear upstream error indicators, Redis is the deepest root-cause candidate based on metric signals and its central role in the topo"
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_2",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_2",
+        "candidates": [
+          {
+            "service": "redis",
+            "confidence": 0.55,
+            "supporting_evidence": [],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "metric_evidence_units"
+            ],
+            "reasoning": "All sources converge on Redis as a plausible upstream bottleneck: the Log Agent highlights Redis volume_delta and downstream saturation propagating latency; the Topology Agent notes frontend depends on multiple downstream services that commonly rely on Redis caches/state, making Redis-based degradat",
+            "topology_path": [
+              "redis",
+              "emailservice",
+              "frontend"
+            ],
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.54,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Evidence consensus: Log Agent and Topology Agent align on Redis as a plausible upstream root cause due to cache-layer contention affecting downstream services that frontend relies on. TCB-RCA does not flag Redis, showing a mismatch with the timing-based baseline. Given the strong support from logs indicating Redis activity and the structural dependency of frontend on Redis-backed services, Redis is the most credible root cause, treated as an unobserved root cause in this incident. The proposed propagation path reflects a plausible flow: Redis impacting emailservice (a downstream dependent serv"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_2",
+        "candidates": [
+          {
+            "service": "redis",
+            "confidence": 0.6,
+            "supporting_evidence": [],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=NA",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [],
+            "reasoning": "All sources converge on Redis as a plausible upstream bottleneck: the Log Agent highlights Redis volume_delta and downstream saturation propagating latency; the Topology Agent notes frontend depends on multiple downstream services that commonly rely on Redis caches/state, making Redis-based degradat",
+            "topology_path": null,
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.6,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": null
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'redis' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.6,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

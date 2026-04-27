@@ -4,7 +4,7 @@
   "case": "recommendationservice_mem_1",
   "gt_service": "recommendationservice",
   "gt_fault": "mem",
-  "elapsed_seconds": 30.72,
+  "elapsed_seconds": 25.98,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 30.72,
+    "elapsed_seconds": 25.98,
     "gt_fault": "mem"
   },
   "result": {
@@ -36,23 +36,38 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Memory/resource exhaustion and latency degradation in the recommendationservice, observed as mem_jump > 0.3 and high CPU, with downstream latency impact propagating to frontend and related flows.",
+        "cause": "Recommendation service experiencing resource saturation (mem/CPU) with rising tail latency, acting as the deepest bottleneck and driving latency degradation in downstream services (frontend, cartservice, checkoutservice). No explicit error logs but strong metric anomalies indicate saturation.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "recommendationservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on recommendationservice as the upstream fault causing frontend degradation. The Log Agent identifies recommendationservice as the primary root cause with downstream impact on frontend, cart, and checkout. The Topology Agent confirms a direct frontend → recommendationservice propagation path, making it structurally plausible. The TCB-RCA algorithm, while not indicating recommendationservice as the root (it highlights frontend with no anomalies), is weaker here since it assigns zero temporal evidence and does not reflect the observed downstream memory/latency signals. Given strong log and structural evidence, recommendationservice is the more credible root cause, with frontend as the observed symptom service.",
+        "reasoning": "Both the Log Agent and Topology Agent converge on a downstream bottleneck at recommendationservice causing cascading latency to the symptom frontend. The TCB-RCA baseline, which favors frontend as the initial fault, conflicts here; however, the strong metric signals (cpu_z, mem_jump, p95/p99 latency) and the direct downstream relationship to the symptom align more credibly with a deep-root cause in recommendationservice. The unobserved nature of potential upstream causes is consistent with a deeper root cause in the downstream service.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend observed latency degradation potentially caused by downstream dependency (recommendationservice) saturation. TCB-RCA also identifies frontend as the propagation point, effectively treating it as a symptom from a root cause located elsewhere.",
+        "confidence": 0.35,
+        "evidence_refs": [
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "The TCB-RCA engine places frontend as the propagation point with zero temporal gap, indicating it may be the observed symptom rather than the root cause. The Log Agent does not present explicit errors for frontend itself and aligns with a downstream causal chain from recommendationservice. Topology also indicates a plausible path from frontend to recommendationservice, not the reverse as a root cause. Given this mismatch, frontend as root cause has weaker support overall but remains a plausible secondary/root-cause if deeper issues are unobserved elsewhere.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": false,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "Memory/resource exhaustion and latency degradation in the recommendationservice, observed as mem_jump > 0.3 and high CPU, with downstream latency impact propagating to frontend and related flows.",
+      "cause": "Recommendation service experiencing resource saturation (mem/CPU) with rising tail latency, acting as the deepest bottleneck and driving latency degradation in downstream services (frontend, cartservice, checkoutservice). No explicit error logs but strong metric anomalies indicate saturation.",
       "confidence": 0.6,
       "explanation": "Candidate 'recommendationservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "recommendationservice"
@@ -84,7 +99,8 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'recommendationservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'recommendationservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'recommendationservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' has 1 LLM source agreement but supported by keyword matching (log + topology)."
       ]
     },
     "evidence_summary": {
@@ -103,8 +119,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service recommendationservice experiencing mem fault'. No error logs found. LLM hypothesis: Recommendation service is the root cause, showing strong memory/resource and latency degradation, which cascades to frontend and other dependent services (cart/checkout) causing overall degraded user experience.",
-        "confidence": 0.72,
+        "summary": "Incident at frontend: 'Service recommendationservice experiencing mem fault'. No error logs found. LLM hypothesis: Recommendationservice is experiencing resource saturation and latency degradation, driving cascading latency and degraded performance observed in dependent services (frontend and others).",
+        "confidence": 0.78,
         "evidence": [
           {
             "type": "log",
@@ -788,7 +804,7 @@
           }
         ],
         "metadata": {
-          "hypothesis": "Recommendation service is the root cause, showing strong memory/resource and latency degradation, which cascades to frontend and other dependent services (cart/checkout) causing overall degraded user experience.",
+          "hypothesis": "Recommendationservice is experiencing resource saturation and latency degradation, driving cascading latency and degraded performance observed in dependent services (frontend and others).",
           "suspected_downstream": "recommendationservice",
           "anomalous_services": [
             "recommendationservice",
@@ -796,14 +812,355 @@
             "frontend",
             "cartservice"
           ],
-          "llm_reasoning": "Metric signals identify recommendationservice with the largest anomalies (mem_jump > 0.3 and p99_Δms > 100, plus high cpu_z). Checkoutservice and cartservice also show significant latency increases (p95/p99 >100) and frontend shows latency degradation, consistent with downstream impact from the overloaded recommendationservice. Upstream/dependency relationships support recommendationservice as root cause with downstream effects on frontend and its dependent flows. Log-rate anomalies are weaker and secondary to metric-driven evidence.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show strong anomalies for recommendationservice (cpu_z +27.2, mem_jump +9.75, p95_Δms +20.6, p99_Δms +106.3). This points to a root cause in the deepest service with metric anomalies. Upstream/dependent services (frontend, cartservice, checkoutservice) display latency degradation and elevated tail latencies, consistent with downstream impact from a saturated recommendationservice. No explicit error logs, but multi-modality metric degradation supports root-cause hypothesis.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 5,
+            "services_covered": [
+              "cartservice",
+              "checkoutservice",
+              "frontend",
+              "recommendationservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_6e06f8c3",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-17T02:21:52.000Z",
+                  "end": "2024-01-17T02:24:22.000Z"
+                },
+                "services": [
+                  "cartservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.7926979332225623,
+                "observation": {
+                  "p95_delta_ms": 0.17,
+                  "p99_delta_ms": 215.73,
+                  "p50_ms": 3.39,
+                  "p95_ms": 9.24
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_c50658a1",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-17T02:21:52.000Z",
+                  "end": "2024-01-17T02:24:22.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.9949460390576625,
+                "observation": {
+                  "p95_delta_ms": 382.51,
+                  "p99_delta_ms": 597.82,
+                  "p50_ms": 133.95,
+                  "p95_ms": 669.41
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_642e2948",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-17T02:21:52.000Z",
+                  "end": "2024-01-17T02:24:22.000Z"
+                },
+                "services": [
+                  "frontend"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.7952849458379394,
+                "observation": {
+                  "p95_delta_ms": 4.89,
+                  "p99_delta_ms": 217.13,
+                  "p50_ms": 60.04,
+                  "p95_ms": 310.29
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_e10d46ba",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-17T02:21:52.000Z",
+                  "end": "2024-01-17T02:24:22.000Z"
+                },
+                "services": [
+                  "recommendationservice"
+                ],
+                "anomaly_type": "resource_saturation",
+                "severity": 0.9999999999999845,
+                "observation": {
+                  "cpu_spike_zscore": 27.16,
+                  "cpu_max": 3.3024,
+                  "mem_jump_ratio": 9.747,
+                  "mem_max": null
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              },
+              {
+                "evidence_id": "ev_metric_23e14994",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-17T02:21:52.000Z",
+                  "end": "2024-01-17T02:24:22.000Z"
+                },
+                "services": [
+                  "recommendationservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.48664134872253606,
+                "observation": {
+                  "p95_delta_ms": 20.58,
+                  "p99_delta_ms": 106.33,
+                  "p50_ms": 7.56,
+                  "p95_ms": 30.44
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-RECOMMENDATIONSERVICE_MEM_1",
+            "candidates": [
+              {
+                "service": "recommendationservice",
+                "confidence": 0.78,
+                "supporting_evidence": [
+                  "ev_metric_e10d46ba",
+                  "ev_metric_23e14994"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Recommendationservice is experiencing resource saturation and latency degradation, driving cascading latency and degraded performance observed in dependent services (frontend and others).",
+                "topology_path": null,
+                "failure_mode": "resource_exhaustion"
+              },
+              {
+                "service": "checkoutservice",
+                "confidence": 0.9949460390576625,
+                "supporting_evidence": [
+                  "ev_metric_c50658a1"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.7952849458379394,
+                "supporting_evidence": [
+                  "ev_metric_642e2948"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              },
+              {
+                "service": "cartservice",
+                "confidence": 0.7926979332225623,
+                "supporting_evidence": [
+                  "ev_metric_6e06f8c3"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_6e06f8c3",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-17T02:21:52.000Z",
+                    "end": "2024-01-17T02:24:22.000Z"
+                  },
+                  "services": [
+                    "cartservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.7926979332225623,
+                  "observation": {
+                    "p95_delta_ms": 0.17,
+                    "p99_delta_ms": 215.73,
+                    "p50_ms": 3.39,
+                    "p95_ms": 9.24
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_c50658a1",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-17T02:21:52.000Z",
+                    "end": "2024-01-17T02:24:22.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.9949460390576625,
+                  "observation": {
+                    "p95_delta_ms": 382.51,
+                    "p99_delta_ms": 597.82,
+                    "p50_ms": 133.95,
+                    "p95_ms": 669.41
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_642e2948",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-17T02:21:52.000Z",
+                    "end": "2024-01-17T02:24:22.000Z"
+                  },
+                  "services": [
+                    "frontend"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.7952849458379394,
+                  "observation": {
+                    "p95_delta_ms": 4.89,
+                    "p99_delta_ms": 217.13,
+                    "p50_ms": 60.04,
+                    "p95_ms": 310.29
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_e10d46ba",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-17T02:21:52.000Z",
+                    "end": "2024-01-17T02:24:22.000Z"
+                  },
+                  "services": [
+                    "recommendationservice"
+                  ],
+                  "anomaly_type": "resource_saturation",
+                  "severity": 0.9999999999999845,
+                  "observation": {
+                    "cpu_spike_zscore": 27.16,
+                    "cpu_max": 3.3024,
+                    "mem_jump_ratio": 9.747,
+                    "mem_max": null
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                },
+                {
+                  "evidence_id": "ev_metric_23e14994",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-17T02:21:52.000Z",
+                    "end": "2024-01-17T02:24:22.000Z"
+                  },
+                  "services": [
+                    "recommendationservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.48664134872253606,
+                  "observation": {
+                    "p95_delta_ms": 20.58,
+                    "p99_delta_ms": 106.33,
+                    "p50_ms": 7.56,
+                    "p95_ms": 30.44
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 0.925,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show strong anomalies for recommendationservice (cpu_z +27.2, mem_jump +9.75, p95_Δms +20.6, p99_Δms +106.3). This points to a root cause in the deepest service with metric anomalies. Upstream/dependent services (frontend, cartservice, checkoutservice) display latency degradation and elevated tail latencies, consistent with downstream impact from a saturated recommendationservice. No explicit error logs, but multi-modality metric degradation supports root-cause hypothesis."
+          }
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to recommendationservice: frontend → recommendationservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.65).",
-        "confidence": 0.775,
+        "summary": "frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Related services: ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']. Propagation path from frontend to recommendationservice: frontend → recommendationservice. Blast radius: ['frontend']. LLM assessment: plausible (confidence 0.75).",
+        "confidence": 0.805,
         "evidence": [
           {
             "type": "topology",
@@ -815,7 +1172,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "Symptom 'frontend' directly depends on 'recommendationservice'. A fault in the downstream service can propagate to the symptom via this explicit dependency (frontend -> recommendationservice). The graph search path from frontend to recommendationservice is structurally valid given the topology. There are no alternative direct downstream paths from frontend to another service that would align with the suspected downstream hypothesis; thus alternatives are not evident from the topology alone. Blast radius remains limited to the symptom frontend under the provided structure, with frontend being the most critical service to monitor within that radius. The topology clearly supports the log agent's hypothesis that a downstream issue in recommendationservice could cause the frontend symptom."
+              "llm_reasoning": "The symptom service (frontend) directly depends on the suspected downstream (recommendationservice). If the downstream experiences a fault, the frontend may experience degraded availability or errors, matching the log agent's hypothesis. There are no indicated alternate routes from frontend to other services that would more plausibly explain the symptom given the provided topology, and the blast radius remains limited to the symptom service in this topology view."
             }
           }
         ],
@@ -935,18 +1292,33 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "Symptom 'frontend' directly depends on 'recommendationservice'. A fault in the downstream service can propagate to the symptom via this explicit dependency (frontend -> recommendationservice). The graph search path from frontend to recommendationservice is structurally valid given the topology. There are no alternative direct downstream paths from frontend to another service that would align with the suspected downstream hypothesis; thus alternatives are not evident from the topology alone. Blast radius remains limited to the symptom frontend under the provided structure, with frontend being the most critical service to monitor within that radius. The topology clearly supports the log agent's hypothesis that a downstream issue in recommendationservice could cause the frontend symptom.",
+          "llm_reasoning": "The symptom service (frontend) directly depends on the suspected downstream (recommendationservice). If the downstream experiences a fault, the frontend may experience degraded availability or errors, matching the log agent's hypothesis. There are no indicated alternate routes from frontend to other services that would more plausibly explain the symptom given the provided topology, and the blast radius remains limited to the symptom service in this topology view.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "frontend"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-RECOMMENDATIONSERVICE_MEM_1",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
-    "evidence_convergence": "strong_agreement",
-    "synthesis_reasoning": "Two independent sources (Log Agent and Topology Agent) converge on recommendationservice as the upstream fault driving frontend degradation, supported by explicit dependency (frontend -> recommendationservice). The absence of corroborating TCB-RCA timing for a downstream root does not outweigh the strong log-patterns and structural propagation path. Therefore, the most plausible root cause is recommendationservice memory/resource exhaustion, with propagation path recommendationservice -> frontend.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "Agreement between Log Agent and Topology Agent strongly supports a deep root cause in recommendationservice, with symptom observed in frontend via downstream impact. The TCB-RCA baseline conflicts by suggesting frontend as the root cause, but its constraint-based logic is outweighed by the clear metric-driven signal in recommendationservice and the structural propagation path. Among candidates, recommendationservice has higher confidence due to multi-source corroboration and the absence of direct frontend errors; unobserved root causes in downstream services could explain the strong downstream impact if upstream monitoring misses issues upstream of recommendationservice. Therefore, prioritize recommendationservice as the primary root cause, with frontend as a secondary consideration only if further evidence invalidates the deeper root cause.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -960,6 +1332,594 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-RECOMMENDATIONSERVICE_MEM_1",
+        "candidates": [
+          {
+            "service": "recommendationservice",
+            "confidence": 0.78,
+            "supporting_evidence": [
+              "ev_metric_e10d46ba",
+              "ev_metric_23e14994"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Recommendationservice is experiencing resource saturation and latency degradation, driving cascading latency and degraded performance observed in dependent services (frontend and others).",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "checkoutservice",
+            "confidence": 0.9949460390576625,
+            "supporting_evidence": [
+              "ev_metric_c50658a1"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.7952849458379394,
+            "supporting_evidence": [
+              "ev_metric_642e2948"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "cartservice",
+            "confidence": 0.7926979332225623,
+            "supporting_evidence": [
+              "ev_metric_6e06f8c3"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_6e06f8c3",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7926979332225623,
+              "observation": {
+                "p95_delta_ms": 0.17,
+                "p99_delta_ms": 215.73,
+                "p50_ms": 3.39,
+                "p95_ms": 9.24
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c50658a1",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9949460390576625,
+              "observation": {
+                "p95_delta_ms": 382.51,
+                "p99_delta_ms": 597.82,
+                "p50_ms": 133.95,
+                "p95_ms": 669.41
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_642e2948",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7952849458379394,
+              "observation": {
+                "p95_delta_ms": 4.89,
+                "p99_delta_ms": 217.13,
+                "p50_ms": 60.04,
+                "p95_ms": 310.29
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_e10d46ba",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999999999845,
+              "observation": {
+                "cpu_spike_zscore": 27.16,
+                "cpu_max": 3.3024,
+                "mem_jump_ratio": 9.747,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_23e14994",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.48664134872253606,
+              "observation": {
+                "p95_delta_ms": 20.58,
+                "p99_delta_ms": 106.33,
+                "p50_ms": 7.56,
+                "p95_ms": 30.44
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.925,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show strong anomalies for recommendationservice (cpu_z +27.2, mem_jump +9.75, p95_Δms +20.6, p99_Δms +106.3). This points to a root cause in the deepest service with metric anomalies. Upstream/dependent services (frontend, cartservice, checkoutservice) display latency degradation and elevated tail latencies, consistent with downstream impact from a saturated recommendationservice. No explicit error logs, but multi-modality metric degradation supports root-cause hypothesis."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-RECOMMENDATIONSERVICE_MEM_1",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-RECOMMENDATIONSERVICE_MEM_1",
+        "candidates": [
+          {
+            "service": "recommendationservice",
+            "confidence": 0.85,
+            "supporting_evidence": [
+              "ev_metric_e10d46ba",
+              "ev_metric_23e14994"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on a downstream bottleneck at recommendationservice causing cascading latency to the symptom frontend. The TCB-RCA baseline, which favors frontend as the initial fault, conflicts here; however, the strong metric signals (cpu_z, mem_jump, p95/p99 latency",
+            "topology_path": [
+              "recommendationservice",
+              "frontend"
+            ],
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.32,
+            "supporting_evidence": [
+              "ev_metric_642e2948"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "The TCB-RCA engine places frontend as the propagation point with zero temporal gap, indicating it may be the observed symptom rather than the root cause. The Log Agent does not present explicit errors for frontend itself and aligns with a downstream causal chain from recommendationservice. Topology ",
+            "topology_path": [
+              "recommendationservice",
+              "frontend"
+            ],
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_6e06f8c3",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7926979332225623,
+              "observation": {
+                "p95_delta_ms": 0.17,
+                "p99_delta_ms": 215.73,
+                "p50_ms": 3.39,
+                "p95_ms": 9.24
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c50658a1",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9949460390576625,
+              "observation": {
+                "p95_delta_ms": 382.51,
+                "p99_delta_ms": 597.82,
+                "p50_ms": 133.95,
+                "p95_ms": 669.41
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_642e2948",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7952849458379394,
+              "observation": {
+                "p95_delta_ms": 4.89,
+                "p99_delta_ms": 217.13,
+                "p50_ms": 60.04,
+                "p95_ms": 310.29
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_e10d46ba",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999999999845,
+              "observation": {
+                "cpu_spike_zscore": 27.16,
+                "cpu_max": 3.3024,
+                "mem_jump_ratio": 9.747,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_23e14994",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.48664134872253606,
+              "observation": {
+                "p95_delta_ms": 20.58,
+                "p99_delta_ms": 106.33,
+                "p50_ms": 7.56,
+                "p95_ms": 30.44
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Agreement between Log Agent and Topology Agent strongly supports a deep root cause in recommendationservice, with symptom observed in frontend via downstream impact. The TCB-RCA baseline conflicts by suggesting frontend as the root cause, but its constraint-based logic is outweighed by the clear metric-driven signal in recommendationservice and the structural propagation path. Among candidates, recommendationservice has higher confidence due to multi-source corroboration and the absence of direct frontend errors; unobserved root causes in downstream services could explain the strong downstream"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-RECOMMENDATIONSERVICE_MEM_1",
+        "candidates": [
+          {
+            "service": "recommendationservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_e10d46ba",
+              "ev_metric_23e14994"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Both the Log Agent and Topology Agent converge on a downstream bottleneck at recommendationservice causing cascading latency to the symptom frontend. The TCB-RCA baseline, which favors frontend as the initial fault, conflicts here; however, the strong metric signals (cpu_z, mem_jump, p95/p99 latency",
+            "topology_path": null,
+            "failure_mode": "resource_exhaustion"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.35,
+            "supporting_evidence": [
+              "ev_metric_642e2948"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=2"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "The TCB-RCA engine places frontend as the propagation point with zero temporal gap, indicating it may be the observed symptom rather than the root cause. The Log Agent does not present explicit errors for frontend itself and aligns with a downstream causal chain from recommendationservice. Topology ",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_6e06f8c3",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "cartservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7926979332225623,
+              "observation": {
+                "p95_delta_ms": 0.17,
+                "p99_delta_ms": 215.73,
+                "p50_ms": 3.39,
+                "p95_ms": 9.24
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_c50658a1",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.9949460390576625,
+              "observation": {
+                "p95_delta_ms": 382.51,
+                "p99_delta_ms": 597.82,
+                "p50_ms": 133.95,
+                "p95_ms": 669.41
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_642e2948",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "frontend"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.7952849458379394,
+              "observation": {
+                "p95_delta_ms": 4.89,
+                "p99_delta_ms": 217.13,
+                "p50_ms": 60.04,
+                "p95_ms": 310.29
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_e10d46ba",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "resource_saturation",
+              "severity": 0.9999999999999845,
+              "observation": {
+                "cpu_spike_zscore": 27.16,
+                "cpu_max": 3.3024,
+                "mem_jump_ratio": 9.747,
+                "mem_max": null
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            },
+            {
+              "evidence_id": "ev_metric_23e14994",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-17T02:21:52.000Z",
+                "end": "2024-01-17T02:24:22.000Z"
+              },
+              "services": [
+                "recommendationservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.48664134872253606,
+              "observation": {
+                "p95_delta_ms": 20.58,
+                "p99_delta_ms": 106.33,
+                "p50_ms": 7.56,
+                "p95_ms": 30.44
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 1.0,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'recommendationservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 1.0,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }

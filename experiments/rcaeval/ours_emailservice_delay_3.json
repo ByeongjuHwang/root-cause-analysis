@@ -4,10 +4,10 @@
   "case": "emailservice_delay_3",
   "gt_service": "emailservice",
   "gt_fault": "delay",
-  "elapsed_seconds": 29.13,
+  "elapsed_seconds": 30.05,
   "evaluation": {
-    "ac_at_1": true,
-    "ac_at_3": true,
+    "ac_at_1": false,
+    "ac_at_3": false,
     "path_accuracy": null,
     "fp_handled": null,
     "top_confidence": 0.6,
@@ -20,7 +20,7 @@
       "frontend"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 29.13,
+    "elapsed_seconds": 30.05,
     "gt_fault": "delay"
   },
   "result": {
@@ -36,23 +36,39 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "checkoutservice experiencing extreme latency which propagates downstream to dependent frontend via the service path, leading to elevated frontend latency and observed delays described as 'Service emailservice experiencing delay fault'.",
+        "cause": "Checkoutservice experiences tail latency spike (p99 > 100 ms) leading to upstream stall and increased latency observed in the symptom frontend; downstream impact propagates to frontend due to direct dependency.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "checkoutservice",
-        "reasoning": "Both the Log Agent and Topology Agent converge on checkoutservice as the upstream bottleneck driving the frontend symptom: extremely high p99 latency delta and latency degradation in checkoutservice, plus a direct frontend → checkoutservice dependency path. The TCB-RCA baseline ranks frontend as the initial node with no anomalies, which is inconsistent with the observed latency signals. Given strong temporal and structural signals pointing to checkoutservice, and the absence of strong counter-evidence suggesting a deeper upstream root, checkoutservice is the most credible root cause. The unobserved root cause condition does not apply here since checkoutservice itself shows clear anomalies.",
+        "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the upstream fault with a valid propagation path (frontend directly depends on checkoutservice). The TCB-RCA result prioritizes frontend, but the absence of an anomaly signal at frontend combined with the strong latency signal in checkoutservice (and a plausible propagation path) makes checkoutservice the more credible root cause given structural constraints and timing evidence.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Frontend shows latency amplification and is the symptom service; no direct error logs observed but latency increases align with upstream checkoutservice degradation.",
+        "confidence": 0.48,
+        "evidence_refs": [
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "frontend",
+        "reasoning": "Frontend is the symptom service and may appear constrained by upstream checkoutservice latency. However, there is no independent log-based anomaly at frontend to suggest a root cause within frontend itself. TCB-RCA marks frontend as the initial node due to zero temporal gap, but this contradicts the explicit latency spike observed upstream. Given topology confirms a dependency path but logs point to checkoutservice as the source of delay, frontend as root is a weaker, compensatory candidate.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "checkoutservice experiencing extreme latency which propagates downstream to dependent frontend via the service path, leading to elevated frontend latency and observed delays described as 'Service emailservice experiencing delay fault'.",
+      "cause": "Checkoutservice experiences tail latency spike (p99 > 100 ms) leading to upstream stall and increased latency observed in the symptom frontend; downstream impact propagates to frontend due to direct dependency.",
       "confidence": 0.6,
       "explanation": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
       "cause_service": "checkoutservice"
@@ -84,7 +100,8 @@
       "final_confidence": 0.6,
       "notes": [
         "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology).",
-        "Candidate 'checkoutservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6."
+        "Candidate 'checkoutservice' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'frontend' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -103,8 +120,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: A latency/bottleneck in checkoutservice is driving downstream delays, causing the frontend to experience elevated latency and triggering downstream symptoms (e.g., emailservice delays) through the frontend as the primary client.",
-        "confidence": 0.55,
+        "summary": "Incident at frontend: 'Service emailservice experiencing delay fault'. No error logs found. LLM hypothesis: Checkoutservice tail latency spiked (p99 > 100 ms) causing frontend requests to stall, leading to upstream latency increase in the symptom service (frontend) and broader delays in dependent downstream calls.",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "log",
@@ -199,21 +216,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-20T07:57:39.031Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "request complete [path: /cart]",
             "timestamp": "2024-01-20T07:57:39.080Z",
             "level": "DEBUG",
@@ -259,42 +261,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "Getting supported currencies...",
-            "timestamp": "2024-01-20T07:57:39.315Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "GetCartAsync called with userId=1b0b55bc-e00f-4320-b0c3-3d277a8ac3ec",
             "timestamp": "2024-01-20T07:57:39.320Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "cartservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-20T07:57:39.323Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -355,36 +327,6 @@
             "trace_id": null,
             "metadata": {
               "service": "frontend",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "Getting supported currencies...",
-            "timestamp": "2024-01-20T07:57:39.341Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "conversion request successful",
-            "timestamp": "2024-01-20T07:57:39.349Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "currencyservice",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -673,15 +615,121 @@
           }
         ],
         "metadata": {
-          "hypothesis": "A latency/bottleneck in checkoutservice is driving downstream delays, causing the frontend to experience elevated latency and triggering downstream symptoms (e.g., emailservice delays) through the frontend as the primary client.",
+          "hypothesis": "Checkoutservice tail latency spiked (p99 > 100 ms) causing frontend requests to stall, leading to upstream latency increase in the symptom service (frontend) and broader delays in dependent downstream calls.",
           "suspected_downstream": "checkoutservice",
           "anomalous_services": [
-            "frontend",
             "checkoutservice",
-            "currencyservice"
+            "frontend"
           ],
-          "llm_reasoning": "Metric signals show checkoutservice with extremely high p99 latency delta (+171.5) and notable latency degradation (checkoutservice max_severity 0.69). Frontend also shows latency increases (p95_Δms 4.5, p99_Δms 11.8) and CPU spike, suggesting frontend is affected by upstream checkoutservice delays. Although currencyservice also shows CPU spikes, the most dramatic metric anomaly is in checkoutservice, making it the likely deepest root cause. Volume_delta is less informative due to low baseline counts for some services, but the metric anomalies point to checkoutservice as the downstream bottleneck propagating to frontend and related components.",
-          "referenced_upstreams": {}
+          "llm_reasoning": "Metric signals show checkoutservice with the strongest anomaly (p99 > 100 ms, latency degradation). Frontend also exhibits latency increases. No error logs observed. Given frontend directly depends on checkoutservice, the checkoutservice latency spike is the most plausible upstream root cause affecting frontend performance.",
+          "referenced_upstreams": {},
+          "evidence_collection": {
+            "count": 1,
+            "services_covered": [
+              "checkoutservice"
+            ],
+            "modalities_present": [
+              "metric"
+            ],
+            "units": [
+              {
+                "evidence_id": "ev_metric_955c3de9",
+                "modality": "metric",
+                "time_range": {
+                  "start": "2024-01-20T08:05:39.000Z",
+                  "end": "2024-01-20T08:08:09.000Z"
+                },
+                "services": [
+                  "checkoutservice"
+                ],
+                "anomaly_type": "latency_degradation",
+                "severity": 0.6948639478323406,
+                "observation": {
+                  "p95_delta_ms": 27.83,
+                  "p99_delta_ms": 171.46,
+                  "p50_ms": 118.92,
+                  "p95_ms": 269.88
+                },
+                "source": "observability_mcp/metric_repository",
+                "topology_path": null,
+                "supporting_refs": [],
+                "raw_samples": [],
+                "preceded_by": []
+              }
+            ]
+          },
+          "_agent_response": {
+            "agent_name": "log_agent",
+            "request_id": "INC-EMAILSERVICE_DELAY_3",
+            "candidates": [
+              {
+                "service": "checkoutservice",
+                "confidence": 0.65,
+                "supporting_evidence": [
+                  "ev_metric_955c3de9"
+                ],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "Checkoutservice tail latency spiked (p99 > 100 ms) causing frontend requests to stall, leading to upstream latency increase in the symptom service (frontend) and broader delays in dependent downstream calls.",
+                "topology_path": null,
+                "failure_mode": "dependency_timeout"
+              },
+              {
+                "service": "frontend",
+                "confidence": 0.325,
+                "supporting_evidence": [],
+                "assumptions": [
+                  "dual_window: baseline=480.0s, incident=150.0s",
+                  "stats_mode=dual"
+                ],
+                "missing_evidence": [
+                  "log_evidence_units",
+                  "trace_evidence_units"
+                ],
+                "reasoning": "secondary candidate (anomalous_services rank)",
+                "topology_path": null,
+                "failure_mode": null
+              }
+            ],
+            "evidence_collection": {
+              "units": [
+                {
+                  "evidence_id": "ev_metric_955c3de9",
+                  "modality": "metric",
+                  "time_range": {
+                    "start": "2024-01-20T08:05:39.000Z",
+                    "end": "2024-01-20T08:08:09.000Z"
+                  },
+                  "services": [
+                    "checkoutservice"
+                  ],
+                  "anomaly_type": "latency_degradation",
+                  "severity": 0.6948639478323406,
+                  "observation": {
+                    "p95_delta_ms": 27.83,
+                    "p99_delta_ms": 171.46,
+                    "p50_ms": 118.92,
+                    "p95_ms": 269.88
+                  },
+                  "source": "observability_mcp/metric_repository",
+                  "topology_path": null,
+                  "supporting_refs": [],
+                  "raw_samples": [],
+                  "preceded_by": []
+                }
+              ]
+            },
+            "completeness_score": 0.65,
+            "consistency_checks": null,
+            "recommended_next_actions": [],
+            "reasoning": "Metric signals show checkoutservice with the strongest anomaly (p99 > 100 ms, latency degradation). Frontend also exhibits latency increases. No error logs observed. Given frontend directly depends on checkoutservice, the checkoutservice latency spike is the most plausible upstream root cause affecting frontend performance."
+          }
         }
       },
       {
@@ -699,7 +747,7 @@
             "metadata": {
               "service": "frontend",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, so a fault in checkoutservice can propagate to frontend, making the hypothesis that checkoutservice is a plausible root cause consistent with the topology. No alternative, topology-consistent paths from a root cause to frontend are evident given the dependency directions; the blast radius remains limited to the symptom (frontend) per the current topology. Monitoring the frontend remains essential, and given the suspected downstream is checkoutservice, that service is the key upstream to watch as a potential root. "
+              "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, establishing a valid transitive path frontend -> checkoutservice. No alternative transitive paths from frontend to the same suspected root are evident in the topology since the only described path to the suspected downstream is the direct dependency. The topology indicates checkoutservice is a downstream dependency of frontend, making it the plausible propagation target. Given the dependency structure, monitoring both frontend and its immediate downstream checkoutservice is most critical; the suspicion that checkoutservice is the downstream fault source is structurally supported."
             }
           }
         ],
@@ -819,18 +867,34 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json",
-          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, so a fault in checkoutservice can propagate to frontend, making the hypothesis that checkoutservice is a plausible root cause consistent with the topology. No alternative, topology-consistent paths from a root cause to frontend are evident given the dependency directions; the blast radius remains limited to the symptom (frontend) per the current topology. Monitoring the frontend remains essential, and given the suspected downstream is checkoutservice, that service is the key upstream to watch as a potential root. ",
+          "llm_reasoning": "The symptom service frontend directly depends on checkoutservice, establishing a valid transitive path frontend -> checkoutservice. No alternative transitive paths from frontend to the same suspected root are evident in the topology since the only described path to the suspected downstream is the direct dependency. The topology indicates checkoutservice is a downstream dependency of frontend, making it the plausible propagation target. Given the dependency structure, monitoring both frontend and its immediate downstream checkoutservice is most critical; the suspicion that checkoutservice is the downstream fault source is structurally supported.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "frontend"
+            "frontend",
+            "checkoutservice"
           ],
-          "topology_supports_hypothesis": true
+          "topology_supports_hypothesis": true,
+          "_agent_response": {
+            "agent_name": "topology_agent",
+            "request_id": "INC-EMAILSERVICE_DELAY_3",
+            "candidates": [],
+            "evidence_collection": {
+              "units": []
+            },
+            "completeness_score": 0.0,
+            "consistency_checks": null,
+            "recommended_next_actions": [
+              "fetch_log_evidence_for_top_candidates",
+              "fetch_metric_evidence_for_top_candidates"
+            ],
+            "reasoning": ""
+          }
         }
       }
     ],
-    "evidence_convergence": "strong_agreement",
-    "synthesis_reasoning": "The strongest signal comes from the Log Agent indicating checkoutservice as the primary downstream bottleneck causing frontend latency, supported by the Topology Agent’s direct dependency path frontend → checkoutservice and plausible propagation. The TCB-RCA algorithm weakly supports a frontend-origin path (due to its topology-constrained backtracking) but shows no observed anomalies for frontend itself, which is inconsistent with the observed latency. Therefore, we prioritize the log+topology convergence, assigning checkoutservice as the root cause with high confidence, while treating the TCB-RCA result as a lower-priority data point that does not override the stronger, corroborated evidence.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "Strong convergence between Log Agent and Topology Agent supports checkoutservice as the upstream root cause due to observed tail latency in checkoutservice and a direct dependency path to the symptom frontend. The TCB-RCA result conflicts by ranking frontend higher as the initial fault node, but this is outweighed by the explicit latency degradation signal in checkoutservice and the structural propagation path. The unobserved-root-cause rule does not apply here since there is observable latency in checkoutservice and no evidence that an upstream failure lacks logs. Therefore, checkoutservice is the primary root-cause candidate, with frontend as a secondary candidate representing the symptom path rather than the root cause.",
     "tcb_rca_reference": {
       "candidates": [
         {
@@ -844,6 +908,261 @@
         "frontend"
       ]
     },
-    "agent_errors": null
+    "agent_errors": null,
+    "agent_contracts": {
+      "log_agent": {
+        "agent_name": "log_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.65,
+            "supporting_evidence": [
+              "ev_metric_955c3de9"
+            ],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Checkoutservice tail latency spiked (p99 > 100 ms) causing frontend requests to stall, leading to upstream latency increase in the symptom service (frontend) and broader delays in dependent downstream calls.",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.325,
+            "supporting_evidence": [],
+            "assumptions": [
+              "dual_window: baseline=480.0s, incident=150.0s",
+              "stats_mode=dual"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "secondary candidate (anomalous_services rank)",
+            "topology_path": null,
+            "failure_mode": null
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_955c3de9",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T08:05:39.000Z",
+                "end": "2024-01-20T08:08:09.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.6948639478323406,
+              "observation": {
+                "p95_delta_ms": 27.83,
+                "p99_delta_ms": 171.46,
+                "p50_ms": 118.92,
+                "p95_ms": 269.88
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.65,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Metric signals show checkoutservice with the strongest anomaly (p99 > 100 ms, latency degradation). Frontend also exhibits latency increases. No error logs observed. Given frontend directly depends on checkoutservice, the checkoutservice latency spike is the most plausible upstream root cause affecting frontend performance."
+      },
+      "topology_agent": {
+        "agent_name": "topology_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_3",
+        "candidates": [],
+        "evidence_collection": {
+          "units": []
+        },
+        "completeness_score": 0.0,
+        "consistency_checks": null,
+        "recommended_next_actions": [
+          "fetch_log_evidence_for_top_candidates",
+          "fetch_metric_evidence_for_top_candidates"
+        ],
+        "reasoning": ""
+      },
+      "rca_agent": {
+        "agent_name": "rca_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.78,
+            "supporting_evidence": [
+              "ev_metric_955c3de9"
+            ],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the upstream fault with a valid propagation path (frontend directly depends on checkoutservice). The TCB-RCA result prioritizes frontend, but the absence of an anomaly signal at frontend combined with the strong latency signal in check",
+            "topology_path": [
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.4,
+            "supporting_evidence": [],
+            "assumptions": [
+              "evidence_convergence=partial_agreement",
+              "algorithm=LLM-Synthesis (with TCB-RCA reference)"
+            ],
+            "missing_evidence": [
+              "log_evidence_units"
+            ],
+            "reasoning": "Frontend is the symptom service and may appear constrained by upstream checkoutservice latency. However, there is no independent log-based anomaly at frontend to suggest a root cause within frontend itself. TCB-RCA marks frontend as the initial node due to zero temporal gap, but this contradicts the",
+            "topology_path": [
+              "checkoutservice",
+              "frontend"
+            ],
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_955c3de9",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T08:05:39.000Z",
+                "end": "2024-01-20T08:08:09.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.6948639478323406,
+              "observation": {
+                "p95_delta_ms": 27.83,
+                "p99_delta_ms": 171.46,
+                "p50_ms": 118.92,
+                "p95_ms": 269.88
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.65,
+        "consistency_checks": null,
+        "recommended_next_actions": [],
+        "reasoning": "Strong convergence between Log Agent and Topology Agent supports checkoutservice as the upstream root cause due to observed tail latency in checkoutservice and a direct dependency path to the symptom frontend. The TCB-RCA result conflicts by ranking frontend higher as the initial fault node, but this is outweighed by the explicit latency degradation signal in checkoutservice and the structural propagation path. The unobserved-root-cause rule does not apply here since there is observable latency in checkoutservice and no evidence that an upstream failure lacks logs. Therefore, checkoutservice i"
+      },
+      "verifier_agent": {
+        "agent_name": "verifier_agent",
+        "request_id": "INC-EMAILSERVICE_DELAY_3",
+        "candidates": [
+          {
+            "service": "checkoutservice",
+            "confidence": 0.6,
+            "supporting_evidence": [
+              "ev_metric_955c3de9"
+            ],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=OK",
+              "verifier_rank=1"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Both Log Agent and Topology Agent converge on checkoutservice as the upstream fault with a valid propagation path (frontend directly depends on checkoutservice). The TCB-RCA result prioritizes frontend, but the absence of an anomaly signal at frontend combined with the strong latency signal in check",
+            "topology_path": null,
+            "failure_mode": "dependency_timeout"
+          },
+          {
+            "service": "frontend",
+            "confidence": 0.48,
+            "supporting_evidence": [],
+            "assumptions": [
+              "verifier_mode=hybrid (5-signal + consistency_checks)",
+              "verdict=revised",
+              "consistency: temporal=OK, topological=OK, modality=FAIL, counter_evidence=NA",
+              "verifier_rank=2"
+            ],
+            "missing_evidence": [
+              "log_evidence_units",
+              "trace_evidence_units"
+            ],
+            "reasoning": "Frontend is the symptom service and may appear constrained by upstream checkoutservice latency. However, there is no independent log-based anomaly at frontend to suggest a root cause within frontend itself. TCB-RCA marks frontend as the initial node due to zero temporal gap, but this contradicts the",
+            "topology_path": null,
+            "failure_mode": "cascading_failure"
+          }
+        ],
+        "evidence_collection": {
+          "units": [
+            {
+              "evidence_id": "ev_metric_955c3de9",
+              "modality": "metric",
+              "time_range": {
+                "start": "2024-01-20T08:05:39.000Z",
+                "end": "2024-01-20T08:08:09.000Z"
+              },
+              "services": [
+                "checkoutservice"
+              ],
+              "anomaly_type": "latency_degradation",
+              "severity": 0.6948639478323406,
+              "observation": {
+                "p95_delta_ms": 27.83,
+                "p99_delta_ms": 171.46,
+                "p50_ms": 118.92,
+                "p95_ms": 269.88
+              },
+              "source": "observability_mcp/metric_repository",
+              "topology_path": null,
+              "supporting_refs": [],
+              "raw_samples": [],
+              "preceded_by": []
+            }
+          ]
+        },
+        "completeness_score": 0.65,
+        "consistency_checks": {
+          "temporal": true,
+          "topological": true,
+          "modality": false,
+          "counter_evidence": true
+        },
+        "recommended_next_actions": [],
+        "reasoning": "Candidate 'checkoutservice' confirmed by 2/3 sources (log, topology)."
+      }
+    },
+    "adaptive_iterations": [
+      {
+        "iteration": 1,
+        "reason": "completeness_sufficient",
+        "completeness_score": 0.65,
+        "threshold": 0.4,
+        "action": "stop"
+      }
+    ]
   }
 }
