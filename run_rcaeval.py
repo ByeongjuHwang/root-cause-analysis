@@ -1,21 +1,30 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-run_rcaeval.py — RCAEval RE2-OB 공개 벤치마크 러너.
+run_rcaeval.py ??RCAEval RE2-OB 怨듦컻 踰ㅼ튂留덊겕 ?щ꼫.
 
-experiment_core의 SYSTEMS, resolve_services, evaluate_prediction을 공유하여
-합성 시나리오/Case Study/공개 벤치마크가 동일 평가 파이프라인을 통과한다.
+experiment_core??SYSTEMS, resolve_services, evaluate_prediction??怨듭쑀?섏뿬
+?⑹꽦 ?쒕굹由ъ삤/Case Study/怨듦컻 踰ㅼ튂留덊겕媛 ?숈씪 ?됯? ?뚯씠?꾨씪?몄쓣 ?듦낵?쒕떎.
 
-사전 준비:
-    1. RCAEval RE2-OB 데이터셋 (90 cases)
-    2. 프로젝트 루트에 onlineboutique_topology.json
+?ъ쟾 以鍮?
+    1. RCAEval RE2-OB ?곗씠?곗뀑 (90 cases)
+    2. ?꾨줈?앺듃 猷⑦듃??onlineboutique_topology.json
 
-사용법:
+?ъ슜踰?
     python run_rcaeval.py --data-dir <rcaeval_data>
     python run_rcaeval.py --data-dir <path> --systems ours,b3
     python run_rcaeval.py --data-dir <path> --fault-types cpu,mem
     python run_rcaeval.py --data-dir <path> --first-only
     python run_rcaeval.py --data-dir <path> --csv
 """
+
+# [TT-PATCH] Force UTF-8 stdout/stderr — Windows cp949 console fails on '✓' etc.
+import sys as _sys, os as _os
+_os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+try:
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    _sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -56,7 +65,7 @@ TOPOLOGY_FILES = {
     "ss": PROJECT_ROOT / "sockshop_topology.json",  # placeholder for future
 }
 
-# Dataset → (entry_point_service, diagram_uri)
+# Dataset ??(entry_point_service, diagram_uri)
 # entry_point_service: the user-visible "front door" of the system used in
 # convert_case() as the incident.service. For OB: 'frontend'. For TT we use
 # 'ts-preserve-service' which is a primary booking entry per RE2-TT traces.
@@ -94,18 +103,18 @@ def get_topology_file(dataset: str) -> Path:
         )
     return path
 
-# Analysis window: RCAEval inject_time은 순간(instant)이므로 그 주위로 윈도우를
-# 잡아야 서비스별 통계를 산출할 수 있다. v6부터는 비대칭 두 창 설계로 전환:
+# Analysis window: RCAEval inject_time? ?쒓컙(instant)?대?濡?洹?二쇱쐞濡??덈룄?곕?
+# ?≪븘???쒕퉬?ㅻ퀎 ?듦퀎瑜??곗텧?????덈떎. v6遺?곕뒗 鍮꾨?移???李??ㅺ퀎濡??꾪솚:
 #
 #   baseline window: [t - BASELINE_START_SEC, t - BASELINE_END_SEC]
-#                    e.g. [t-600s, t-120s] = 주입 10분 전부터 2분 전까지의 정상 기준선
+#                    e.g. [t-600s, t-120s] = 二쇱엯 10遺??꾨???2遺??꾧퉴吏???뺤긽 湲곗???
 #   incident window: [t - INCIDENT_PRE_SEC, t + INCIDENT_POST_SEC]
-#                    e.g. [t-120s, t+30s]  = 주입 2분 전부터 30초 후까지의 이상 구간
+#                    e.g. [t-120s, t+30s]  = 二쇱엯 2遺??꾨???30珥??꾧퉴吏???댁긽 援ш컙
 #
-# baseline과 incident 사이에 2분 간격을 두는 이유는 주입 직전에 이미 이상
-# 증상이 로그로 흘러나올 수 있어 baseline을 오염시키기 때문. incident를
-# 주입 2분 전부터 시작하는 이유는 실제 장애 관찰이 주입 지연으로 약간 늦게
-# 나타나는 경우를 커버하고, 주입 직전에 이미 시작된 리트라이 로그 등을 잡기 위함.
+# baseline怨?incident ?ъ씠??2遺?媛꾧꺽???먮뒗 ?댁쑀??二쇱엯 吏곸쟾???대? ?댁긽
+# 利앹긽??濡쒓렇濡??섎윭?섏삱 ???덉뼱 baseline???ㅼ뿼?쒗궎湲??뚮Ц. incident瑜?
+# 二쇱엯 2遺??꾨????쒖옉?섎뒗 ?댁쑀???ㅼ젣 ?μ븷 愿李곗씠 二쇱엯 吏?곗쑝濡??쎄컙 ??쾶
+# ?섑??섎뒗 寃쎌슦瑜?而ㅻ쾭?섍퀬, 二쇱엯 吏곸쟾???대? ?쒖옉??由ы듃?쇱씠 濡쒓렇 ?깆쓣 ?↔린 ?꾪븿.
 INCIDENT_PRE_SEC = int(os.getenv("INCIDENT_PRE_SEC", "120"))     # t-120s
 INCIDENT_POST_SEC = int(os.getenv("INCIDENT_POST_SEC", "30"))    # t+30s
 BASELINE_START_SEC = int(os.getenv("BASELINE_START_SEC", "600"))  # t-10min
@@ -181,7 +190,7 @@ def _analysis_window(inject_iso: str, window_seconds: int = 300) -> Tuple[str, s
 # =============================================================================
 
 def parse_case_name(case_name: str) -> Optional[Dict[str, Any]]:
-    """Parse 'cartservice_cpu_1' → {service, fault, instance}."""
+    """Parse 'cartservice_cpu_1' ??{service, fault, instance}."""
     parts = case_name.split("_")
     if len(parts) < 3:
         return None
@@ -227,7 +236,7 @@ def discover_cases(data_dir: Path) -> List[Dict[str, Any]]:
         if not sub.is_dir():
             continue
 
-        # Layout A: nested — sub is '{service}_{fault}', children are instance dirs
+        # Layout A: nested ??sub is '{service}_{fault}', children are instance dirs
         parts_outer = sub.name.split("_")
         if len(parts_outer) >= 2:
             service_outer = "_".join(parts_outer[:-1])
@@ -245,9 +254,9 @@ def discover_cases(data_dir: Path) -> List[Dict[str, Any]]:
                         "name": f"{service_outer}_{fault_outer}_{inst_dir.name}",
                         "path": inst_dir,
                     })
-                continue  # this sub was a nested case folder — don't try flat parse
+                continue  # this sub was a nested case folder ??don't try flat parse
 
-        # Layout B: flattened — sub IS the instance folder
+        # Layout B: flattened ??sub IS the instance folder
         if (sub / "logs.csv").exists():
             parsed = parse_case_name(sub.name)
             if parsed is not None:
@@ -307,8 +316,8 @@ def convert_case(case: Dict[str, Any], work_dir: Path,
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
     # RCAEval convention (v6): use asymmetric dual-window around inject_time.
-    #   baseline: [t-10min, t-2min] — clean normal period (not polluted by pre-fault signals)
-    #   incident: [t-2min, t+30s]   — anomaly period (covers early-onset retries too)
+    #   baseline: [t-10min, t-2min] ??clean normal period (not polluted by pre-fault signals)
+    #   incident: [t-2min, t+30s]   ??anomaly period (covers early-onset retries too)
     # `time_range` is the outer envelope so any other agent that treats it as
     # a single window still gets a valid range. Log Agent reads the precise
     # windows from `attachments.baseline_range` and `attachments.incident_range`.
@@ -347,10 +356,10 @@ def convert_case(case: Dict[str, Any], work_dir: Path,
             "topology_file": str(topology_path),
             "diagram_uri": ds_config["diagram_uri"],
             "inject_time": inject_iso,
-            # Dual windows (v6) — Log Agent uses these for baseline vs incident stats
+            # Dual windows (v6) ??Log Agent uses these for baseline vs incident stats
             "baseline_range": baseline_range,
             "incident_range": incident_range,
-            # v8: metric source (RCAEval metrics.csv) — None if not shipped
+            # v8: metric source (RCAEval metrics.csv) ??None if not shipped
             "metrics_file": metrics_file,
         },
     }
@@ -436,7 +445,7 @@ def run_one_persistent(
     Windows TIME_WAIT port exhaustion on consecutive runs), this version sends
     the request to the orchestrator with log_file embedded in attachments.
     The orchestrator forwards log_file to the Log Agent, which resolves it via
-    _resolve_log_file() — so no environment variable or agent restart needed.
+    _resolve_log_file() ??so no environment variable or agent restart needed.
 
     Required: agents must be started with _start_system_persistent() before
     the first call and stopped with _stop_system() after the last call.
@@ -446,7 +455,7 @@ def run_one_persistent(
     start = time.time()
 
     try:
-        # Send analyze request — log_file is already in incident.attachments
+        # Send analyze request ??log_file is already in incident.attachments
         resp = httpx.post(
             f"http://127.0.0.1:{port_base}/analyze",
             json=converted["incident"],
@@ -497,7 +506,7 @@ def run_one_persistent(
 def _start_system_persistent(system_key: str, topology_file: Path):
     """Start all agents ONCE for the entire benchmark run.
 
-    Unlike _start_system(), this does NOT set OBSERVABILITY_LOG_FILE — each
+    Unlike _start_system(), this does NOT set OBSERVABILITY_LOG_FILE ??each
     case's log_file is passed via the HTTP request body (incident.attachments).
     Agents use _resolve_log_file() which checks the function parameter first,
     so the per-case log_file wins over any absent env var.
@@ -728,13 +737,13 @@ def main() -> None:
     # Discover
     cases = discover_cases(args.data_dir)
     cases = filter_cases(cases, fault_types=fault_types, first_only=args.first_only)
-    print(f"Discovered {len(cases)} cases, {len(systems)} systems → "
+    print(f"Discovered {len(cases)} cases, {len(systems)} systems ??"
           f"{len(cases) * len(systems)} experiments")
 
     if args.dry_run:
         for s in systems:
             for c in cases[:5]:
-                print(f"  {s} × {c['name']}")
+                print(f"  {s} 횞 {c['name']}")
             if len(cases) > 5:
                 print(f"  ... and {len(cases) - 5} more for {s}")
         return
@@ -774,11 +783,11 @@ def main() -> None:
             for c in case_list:
                 completed += 1
                 cv = converted[c["name"]]
-                print(f"  [{completed}/{total}] {sk:<5} × {c['name']}...",
+                print(f"  [{completed}/{total}] {sk:<5} 횞 {c['name']}...",
                       end=" ", flush=True)
                 r = run_one_persistent(sk, c, cv, RESULTS_DIR, dataset=args.dataset)   # [TT-PATCH]
                 ev = r.get("evaluation", {})
-                status = "✓" if ev.get("ac_at_1") else ("✗" if "error" not in r else "ERR")
+                status = "?? if ev.get("ac_at_1") else ("?? if "error" not in r else "ERR")
                 print(f"{status} ({r.get('elapsed_seconds', 0):.1f}s)")
                 all_results.append(r)
         finally:
@@ -815,3 +824,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

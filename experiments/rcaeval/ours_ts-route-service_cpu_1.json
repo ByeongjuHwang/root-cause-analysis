@@ -4,7 +4,7 @@
   "case": "ts-route-service_cpu_1",
   "gt_service": "ts-route-service",
   "gt_fault": "cpu",
-  "elapsed_seconds": 104.85,
+  "elapsed_seconds": 93.84,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
@@ -21,7 +21,7 @@
       "ts-preserve-service"
     ],
     "predicted_path_length": 3,
-    "elapsed_seconds": 104.85,
+    "elapsed_seconds": 93.84,
     "gt_fault": "cpu"
   },
   "result": {
@@ -37,14 +37,14 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "CPU fault and latency spike in ts-route-service with downstream impact propagating to dependent services including ts-preserve-service.",
+        "cause": "CPU fault on ts-route-service (CPU spike, latency/throughput pressure) likely causal upstream fault; propagates downstream through ts-travel-service to ts-preserve-service, causing observed elevated load and eventual CPU fault indicators on downstream path.",
         "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed",
           "topology-agent:confirmed"
         ],
         "cause_service": "ts-route-service",
-        "reasoning": "All three sources converge on ts-route-service as a likely upstream fault point: Log Agent identifies ts-route-service as the primary CPU anomaly with downstream effects observed in ts-preserve-service; Topology shows a plausible propagation path from ts-route-service through ts-travel-service to ts-preserve-service, aligning with the observed symptom cascade. The TCB-RCA baseline is at odds, placing ts-preserve-service as the root; however, the stronger concrete evidence points to ts-route-service as the initiating fault. Given the instruction to respect topology but override when log evidence is strong, ts-route-service is the most credible root cause under current evidence.",
+        "reasoning": "All three sources converge on ts-route-service as the upstream source of pressure: Log Agent highlights ts-route-service as having strong CPU anomalies and describes a propagation to ts-preserve-service; Topology shows a plausible path ts-route-service <- ts-travel-service <- ts-preserve-service, aligning with the observed symptom. TCB-RCA does not rank ts-route-service due to its default depiction of the symptom service, but its temporal/topology constraints do not contradict ts-route-service being the root cause. Given the combination of robust CPU metrics and structural propagation path, ts-route-service is the most credible root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": true,
@@ -53,7 +53,7 @@
       }
     ],
     "final_verdict": {
-      "cause": "CPU fault and latency spike in ts-route-service with downstream impact propagating to dependent services including ts-preserve-service.",
+      "cause": "CPU fault on ts-route-service (CPU spike, latency/throughput pressure) likely causal upstream fault; propagates downstream through ts-travel-service to ts-preserve-service, causing observed elevated load and eventual CPU fault indicators on downstream path.",
       "confidence": 0.6,
       "explanation": "Candidate 'ts-route-service' confirmed by 2/3 sources (log, topology).",
       "cause_service": "ts-route-service"
@@ -109,8 +109,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at ts-preserve-service: 'Service ts-route-service experiencing cpu fault'. Errors detected in 2 service(s): ts-consign-mongo (7 errors), ts-order-mongo (1 errors). LLM hypothesis: ts-route-service is experiencing a CPU fault and latency spike, likely propagating load to dependent services (including ts-preserve-service), with ts-order-service also under CPU stress suggesting a broader upstream pressure.",
-        "confidence": 0.75,
+        "summary": "Incident at ts-preserve-service: 'Service ts-route-service experiencing cpu fault'. Errors detected in 2 service(s): ts-consign-mongo (7 errors), ts-order-mongo (1 errors). LLM hypothesis: A CPU fault on ts-route-service is the likely upstream cause, propagating load/latency pressure to ts-preserve-service (and also impacting ts-order-service due to shared upstream resource contention).",
+        "confidence": 0.72,
         "evidence": [
           {
             "type": "log",
@@ -2754,22 +2754,22 @@
           }
         ],
         "metadata": {
-          "hypothesis": "ts-route-service is experiencing a CPU fault and latency spike, likely propagating load to dependent services (including ts-preserve-service), with ts-order-service also under CPU stress suggesting a broader upstream pressure.",
+          "hypothesis": "A CPU fault on ts-route-service is the likely upstream cause, propagating load/latency pressure to ts-preserve-service (and also impacting ts-order-service due to shared upstream resource contention).",
           "suspected_downstream": "ts-route-service",
           "anomalous_services": [
             "ts-route-service",
             "ts-order-service",
             "ts-preserve-service"
           ],
-          "llm_reasoning": "Metric Summary shows strong anomalies for ts-route-service (cpu_z 49.8, p95_Δms 5.1, p99_Δms 8.7) and ts-order-service (cpu_z 46.1, p95_Δms -55.8, p99_Δms -15.9). ts-preserve-service shows a notable volume_delta (+0.58) and log activity, consistent with downstream impact. No explicit upstream log errors are shown, but the highest metric anomaly is in ts-route-service, making it the most plausible root cause; ts-preserve-service and ts-order-service appear affected downstream. The lack of upstream log entries does not negate the metric evidence, and the dependency topology places ts-route-service as a deeper root relative to ts-preserve-service.",
+          "llm_reasoning": "Metric Summary shows strong anomalies for ts-route-service (cpu_z +49.8, p95_Δms +5.1, p99_Δ_ms +8.7) and ts-order-service (cpu_z +46.1, p95_Δms -55.8, p99_Δ_ms -15.9). ts-preserve-service shows elevated log volume (Δvol +0.58) but no direct metric spike. Since ts-preserve-service depends on ts-route-service and ts-order-service, the deepest root-cause signal is most consistent with ts-route-service CPU fault driving downstream impact on preserve-service, with route-service as the upstream culprit. The volume_delta alone for preserve-service could reflect downstream effects rather than primary failure due to low baseline logs, so metric data dominates the pattern.",
           "referenced_upstreams": {},
           "evidence_collection": null
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "ts-preserve-service depends on ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Related services: ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Propagation path from ts-preserve-service to ts-route-service: ts-preserve-service → ts-travel-service → ts-route-service. Blast radius: ['ts-preserve-service']. LLM assessment: plausible (confidence 0.75).",
-        "confidence": 0.805,
+        "summary": "ts-preserve-service depends on ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Related services: ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Propagation path from ts-preserve-service to ts-route-service: ts-preserve-service → ts-travel-service → ts-route-service. Blast radius: ['ts-preserve-service']. LLM assessment: plausible (confidence 0.65).",
+        "confidence": 0.775,
         "evidence": [
           {
             "type": "topology",
@@ -2781,7 +2781,7 @@
             "metadata": {
               "service": "ts-preserve-service",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\trainticket_topology.json",
-              "llm_reasoning": "The symptom service ts-preserve-service calls ts-travel-service, which in turn calls ts-route-service. The computed path ts-preserve-service → ts-travel-service → ts-route-service is structurally consistent with the topology. Alternative paths from ts-preserve-service to the suspected root (downstream ts-route-service) are not indicated by the given dependency graph, so no additional paths are evident. Confidence is moderate to high given the explicit dependency chain. In the blast radius, if the fault propagates further from the root (likely ts-travel-service or ts-route-service), the most relevant services to monitor are the involved ones: ts-travel-service and ts-route-service, in addition to ts-preserve-service which is currently affected. The topology supports the log agent's hypothesis that ts-route-service could be downstream implicated in the propagation."
+              "llm_reasoning": "The symptom service directly depends on ts-travel-service, making a downstream path ts-preserve-service -> ts-travel-service -> ts-route-service structurally plausible. No alternative path is evidenced by the given dependency listing. Confidence is moderate due to limited visibility of full downstream edges. If the fault propagates beyond ts-route-service, ts-route-service and ts-travel-service are the next critical nodes to monitor, as they sit on the described path. The topology supports the log agent's suspected downstream path."
             }
           }
         ],
@@ -3034,7 +3034,7 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\trainticket_topology.json",
-          "llm_reasoning": "The symptom service ts-preserve-service calls ts-travel-service, which in turn calls ts-route-service. The computed path ts-preserve-service → ts-travel-service → ts-route-service is structurally consistent with the topology. Alternative paths from ts-preserve-service to the suspected root (downstream ts-route-service) are not indicated by the given dependency graph, so no additional paths are evident. Confidence is moderate to high given the explicit dependency chain. In the blast radius, if the fault propagates further from the root (likely ts-travel-service or ts-route-service), the most relevant services to monitor are the involved ones: ts-travel-service and ts-route-service, in addition to ts-preserve-service which is currently affected. The topology supports the log agent's hypothesis that ts-route-service could be downstream implicated in the propagation.",
+          "llm_reasoning": "The symptom service directly depends on ts-travel-service, making a downstream path ts-preserve-service -> ts-travel-service -> ts-route-service structurally plausible. No alternative path is evidenced by the given dependency listing. Confidence is moderate due to limited visibility of full downstream edges. If the fault propagates beyond ts-route-service, ts-route-service and ts-travel-service are the next critical nodes to monitor, as they sit on the described path. The topology supports the log agent's suspected downstream path.",
           "path_assessment": "plausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
@@ -3046,8 +3046,8 @@
         }
       }
     ],
-    "evidence_convergence": "partial_agreement",
-    "synthesis_reasoning": "The Log Agent clearly points to ts-route-service as the upstream fault with downstream impact on ts-preserve-service. The Topology Agent corroborates a structurally plausible propagation path via ts-travel-service, consistent with the observed symptom in ts-preserve-service. The deterministic TCB-RCA baseline, which ranks ts-preserve-service as the root, conflicts with the stronger multi-source evidence pointing to ts-route-service as the initiating fault. Given the greater weight of log-driven anomaly evidence and the valid topology-supported path, ts-route-service is favored as the root cause, with ts-travel-service as a likely intermediate propagator leading to ts-preserve-service. If more data becomes available (e.g., telemetry from ts-travel-service), we can reassess to possibly elevate ts-travel-service if it shows earlier anomalies. The propagation path remains ts-route-service -> ts-travel-service -> ts-preserve-service, ending at the symptom service ts-preserve-service.",
+    "evidence_convergence": "strong_agreement",
+    "synthesis_reasoning": "The strongest signal is the CPU fault observed on ts-route-service (Log Agent) with a clear downstream impact pattern to ts-preserve-service. The topology confirms a plausible propagation chain from ts-route-service through ts-travel-service to ts-preserve-service. The TCB-RCA baseline did not elevate ts-route-service due to its default focus on the symptom node, but it does not contradict the proposed root cause and, in this case, supports prioritizing deeper, timing-based constraints over purely observational logs. Therefore, we prioritize ts-route-service as the root cause, with ts-travel-service as an intermediate propagator, and ts-preserve-service as the symptom/output service.",
     "tcb_rca_reference": {
       "candidates": [
         {

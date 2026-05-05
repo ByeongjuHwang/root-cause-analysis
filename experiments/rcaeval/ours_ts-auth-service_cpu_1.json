@@ -4,14 +4,14 @@
   "case": "ts-auth-service_cpu_1",
   "gt_service": "ts-auth-service",
   "gt_fault": "cpu",
-  "elapsed_seconds": 104.05,
+  "elapsed_seconds": 114.29,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.45,
-    "verdict": "weak-evidence",
+    "top_confidence": 0.6,
+    "verdict": "revised",
     "ground_truth_root_cause": "ts-auth-service",
     "predicted_top_cause_service": "ts-auth-service",
     "predicted_top_cause_excerpt": "ts-auth-service",
@@ -20,7 +20,7 @@
       "ts-preserve-service"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 104.05,
+    "elapsed_seconds": 114.29,
     "gt_fault": "cpu"
   },
   "result": {
@@ -36,23 +36,39 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "CPU/memory pressure in ts-auth-service observed as the strongest upstream anomaly, with downstream services stressed in metric signals; however, topology shows no structural dependency path from ts-preserve-service back to ts-auth-service, and there is no direct log cascade confirming propagation path. Given unobserved root-cause detection patterns, ts-auth-service is a plausible deeper root cause beneath the symptom ts-preserve-service, but evidence lacks a structurally confirmed propagation path.",
-        "confidence": 0.45,
+        "cause": "CPU spike in ts-auth-service causing upstream resource contention that propagates to dependent services, including ts-preserve-service, triggering elevated load and incidental anomalies during the incident window.",
+        "confidence": 0.6,
         "evidence_refs": [
           "log-agent:confirmed"
         ],
         "cause_service": "ts-auth-service",
-        "reasoning": "Log Agent identifies ts-auth-service as the strongest upstream pressure with CPU-related anomalies that could cascade to dependencies used by ts-preserve-service. Topology indicates no plausible propagation path from ts-preserve-service to ts-auth-service, suggesting ts-auth-service as an unobserved/root-cause candidate rather than a simple downstream failure. TCB-RCA does not surface a concrete upstream root cause in its constrained analysis. Given the absence of a clear topology path, we elevate ts-auth-service as a potential unobserved root cause rather than a confirmed propagation source, balancing strong metric signals with structural constraints.",
+        "reasoning": "Log analysis shows ts-auth-service has the strongest CPU anomaly (cpu_z 17.9) and ts-preserve-service is listed as downstream affected. While the topology graph does not document a direct ts-auth-service -> ts-preserve-service edge, the timing and symptom propagation pattern strongly point to ts-auth-service as the upstream fault source. The TCB-RCA baseline assigns ts-preserve-service as the primary node, but it does not override strong upstream CPU contention signals. Given the absence of a supported upstream edge in topology, the log-provenance evidence takes precedence for identifying the root cause.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": false,
           "tcb_rca_agrees": false
         }
+      },
+      {
+        "rank": 2,
+        "cause": "Unknown anomaly on ts-preserve-service itself (per TCB-RCA), with propagation consistent to symptom service but lacking independent evidence of fault at ts-preserve-service. Could be a downstream consequence or a local resource issue not captured in logs.",
+        "confidence": 0.36,
+        "evidence_refs": [
+          "topology-agent:confirmed",
+          "tcb-rca:confirmed"
+        ],
+        "cause_service": "ts-preserve-service",
+        "reasoning": "TCB-RCA marks ts-preserve-service as the directly observed node with no clear upstream propagation within the constrained topology, and Topology Agent notes propagation path is not structurally supported to ts-auth-service. This candidate represents a plausible root cause given the timing constraints, but the lack of direct log evidence of ts-preserve-service fault reduces confidence compared to the upstream CPU spike hypothesis.",
+        "supporting_evidence": {
+          "log_agent_agrees": false,
+          "topology_agent_agrees": true,
+          "tcb_rca_agrees": true
+        }
       }
     ],
     "final_verdict": {
-      "cause": "CPU/memory pressure in ts-auth-service observed as the strongest upstream anomaly, with downstream services stressed in metric signals; however, topology shows no structural dependency path from ts-preserve-service back to ts-auth-service, and there is no direct log cascade confirming propagation path. Given unobserved root-cause detection patterns, ts-auth-service is a plausible deeper root cause beneath the symptom ts-preserve-service, but evidence lacks a structurally confirmed propagation path.",
-      "confidence": 0.45,
+      "cause": "CPU spike in ts-auth-service causing upstream resource contention that propagates to dependent services, including ts-preserve-service, triggering elevated load and incidental anomalies during the incident window.",
+      "confidence": 0.6,
       "explanation": "Candidate 'ts-auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
       "cause_service": "ts-auth-service"
     },
@@ -82,10 +98,12 @@
       ]
     },
     "verification": {
-      "verdict": "weak-evidence",
-      "final_confidence": 0.45,
+      "verdict": "revised",
+      "final_confidence": 0.6,
       "notes": [
-        "Candidate 'ts-auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology)."
+        "Candidate 'ts-auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
+        "Candidate 'ts-auth-service' supported by 1 modality (has_log_evidence); confidence capped at 0.6.",
+        "Candidate 'ts-preserve-service' confirmed by 2/3 sources (topology, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -94,7 +112,7 @@
         "2024-01-22 09:58:25.058  INFO 1 --- [io-12340-exec-9] auth.security.UserDetailsServiceImpl     : UsernamePasswordAuthenticationToken  username :fdse_microservice",
         "2024-01-22 09:58:25.122  INFO 1 --- [io-12031-exec-3] order.controller.OrderController         : [Order Other Service][Query Orders] Query Orders for 4d2a46c7-71cb-4cf1-b5bb-b68406d9da6f",
         "2024-01-22 09:58:25.133  INFO 1 --- [io-12031-exec-3] order.service.OrderServiceImpl           : [Order Service][Query Order][Step 1] Get Orders Number of Account: 460",
-        "2024-01-22 09:58:25.199  INFO 1 --- [io-12340-exec-9] auth.service.impl.TokenServiceImpl       : eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmZHNlX21pY3Jvc2VydmljZSIsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJpZCI6IjRkMmE0NmM3LTcxY2ItNGNmMS1iNWJiLWI2ODQwNmQ5ZGE2ZiIsImlhdCI6MTcwNTkxNzUwNSwiZXhwIjoxNzA1OTIxMTA1fQ.E--MpvRgg3BqWKYpcM3i6MkGGByiOgPCyg4n6jEjpFUUSER TOKEN"
+        "2024-01-22 09:58:25.133  INFO 1 --- [io-12031-exec-3] order.service.OrderServiceImpl           : [Order Service][Query Order] Get order num: 460"
       ],
       "topology_evidence": [
         "Dependency map confirms ts-preserve-service relations: {'service': 'ts-preserve-service', 'depends_on': ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service'], 'upstream_of': [], 'criticality': 'low', 'type': 'backend'}. Structural analysis: implausible."
@@ -103,8 +121,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at ts-preserve-service: 'Service ts-auth-service experiencing cpu fault'. Errors detected in 2 service(s): ts-order-service (6 errors), ts-security-service (1 errors). LLM hypothesis: A CPU/memory pressure spike in ts-auth-service is propagating downstream, stressing dependent services that ts-preserve-service relies on, leading to degraded performance in ts-preserve-service during the incident window.",
-        "confidence": 0.52,
+        "summary": "Incident at ts-preserve-service: 'Service ts-auth-service experiencing cpu fault'. Errors detected in 2 service(s): ts-order-service (6 errors), ts-security-service (1 errors). LLM hypothesis: A CPU spike in ts-auth-service indicates upstream resource contention that propagates through its dependent services, including ts-preserve-service, causing elevated load and incidental anomalies during the incident window.",
+        "confidence": 0.45,
         "evidence": [
           {
             "type": "log",
@@ -169,6 +187,21 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "2024-01-22 09:58:25.133  INFO 1 --- [io-12031-exec-3] order.service.OrderServiceImpl           : [Order Service][Query Order] Get order num: 460",
+            "timestamp": "2024-01-22T09:58:25.134Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-order-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "2024-01-22 09:58:25.199  INFO 1 --- [io-12340-exec-9] auth.service.impl.TokenServiceImpl       : eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmZHNlX21pY3Jvc2VydmljZSIsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJpZCI6IjRkMmE0NmM3LTcxY2ItNGNmMS1iNWJiLWI2ODQwNmQ5ZGE2ZiIsImlhdCI6MTcwNTkxNzUwNSwiZXhwIjoxNzA1OTIxMTA1fQ.E--MpvRgg3BqWKYpcM3i6MkGGByiOgPCyg4n6jEjpFUUSER TOKEN",
             "timestamp": "2024-01-22T09:58:25.199Z",
             "level": "INFO",
@@ -190,21 +223,6 @@
             "trace_id": null,
             "metadata": {
               "service": "ts-auth-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "127.0.0.6 - - [22/Jan/2024:17:58:25 +0800] \"POST /api/v1/users/login HTTP/1.1\" 200 380 \"http://34.129.185.245:32677/client_login.html\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36\"",
-            "timestamp": "2024-01-22T09:58:25.201Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-ui-dashboard",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -274,21 +292,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.249  INFO 1 --- [io-11178-exec-8] route.controller.RouteController         : Route id: 0b23bd3e-876a-4af3-b920-c50a90c90b04",
-            "timestamp": "2024-01-22T09:58:25.249Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-route-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "2024-01-22 09:58:25.253  INFO 1 --- [o-16346-exec-14] travel2.service.Travel2ServiceImpl       : [Travel Other Service][Get Route By Id] Success.",
             "timestamp": "2024-01-22T09:58:25.253Z",
             "level": "INFO",
@@ -349,117 +352,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.280  INFO 1 --- [io-15680-exec-4] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Get Route By Id] Route ID：0b23bd3e-876a-4af3-b920-c50a90c90b04",
-            "timestamp": "2024-01-22T09:58:25.281Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-basic-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.283  INFO 1 --- [io-11178-exec-3] route.controller.RouteController         : Route id: 0b23bd3e-876a-4af3-b920-c50a90c90b04",
-            "timestamp": "2024-01-22T09:58:25.283Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-route-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.286  INFO 1 --- [io-15680-exec-4] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Get Route By Id] Success.",
-            "timestamp": "2024-01-22T09:58:25.287Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-basic-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.290  INFO 1 --- [o-16579-exec-10] price.service.PriceServiceImpl           : [Price Service][Find By Route And Train Type] Rote: 0b23bd3e-876a-4af3-b920-c50a90c90b04   Train Type: ZhiDa",
-            "timestamp": "2024-01-22T09:58:25.290Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-price-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.292  INFO 1 --- [o-16579-exec-10] price.service.PriceServiceImpl           : [Price Service][Find By Route Id And Train Type]",
-            "timestamp": "2024-01-22T09:58:25.292Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-price-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "2024-01-22 09:58:25.310  INFO 1 --- [o-16346-exec-14] travel2.service.Travel2ServiceImpl       : Ticket info  is: Response(status=1, msg=Success, data=TravelResult(status=true, percent=1.0, trainType=TrainType(id=ZhiDa, economyClass=2147483647, confortClass=2147483647, averageSpeed=120), prices={confortClass=350.0, economyClass=122.49999999999999}))",
             "timestamp": "2024-01-22T09:58:25.310Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "ts-travel2-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.313  INFO 1 --- [io-12032-exec-1] other.controller.OrderOtherController    : [Order Other Service][Calculate Sold Tickets] Date: Mon Jan 22 00:00:00 GMT 2024 TrainNumber: Z1234",
-            "timestamp": "2024-01-22T09:58:25.313Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-other-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.324  INFO 1 --- [io-12032-exec-1] other.service.OrderOtherServiceImpl      : [Order Other Service][Calculate Sold Ticket] Get Orders Number: 307",
-            "timestamp": "2024-01-22T09:58:25.324Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-other-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -484,102 +382,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.380  INFO 1 --- [o-16346-exec-14] travel2.service.Travel2ServiceImpl       : Seat request To String: Seat(travelDate=Mon Jan 22 00:00:00 GMT 2024, trainNumber=Z1234, startStation=shanghai, destStation=nanjing, seatType=2)",
-            "timestamp": "2024-01-22T09:58:25.380Z",
+            "content": "2024-01-22 09:58:25.423  INFO 1 --- [io-12031-exec-7] order.service.OrderServiceImpl           : Name List is: Response(status=1, msg=Success, data=[Nan Jing, Shang Hai Hong Qiao, Shang Hai, Bei Jing, Shang Hai, Bei Jing, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou",
+            "timestamp": "2024-01-22T09:58:25.424Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-travel2-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.384  INFO 1 --- [io-18898-exec-5] seat.service.SeatServiceImpl             : Seat request To String: Seat{travelDate=Mon Jan 22 00:00:00 GMT 2024, trainNumber='Z1234', startStation='shanghai', destStation='nanjing', seatType=2}",
-            "timestamp": "2024-01-22T09:58:25.384Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-seat-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.384  INFO 1 --- [io-18898-exec-5] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] TrainNumber start with other capital",
-            "timestamp": "2024-01-22T09:58:25.384Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-seat-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.387  INFO 1 --- [o-16346-exec-12] travel2.controller.Travel2Controller     : [Get Route By Trip ID] TripId: Z1234",
-            "timestamp": "2024-01-22T09:58:25.387Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-travel2-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "127.0.0.6 - - [22/Jan/2024:17:58:25 +0800] \"POST /api/v1/orderservice/order/refresh HTTP/1.1\" 200 188190 \"-\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36\"",
-            "timestamp": "2024-01-22T09:58:25.432Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-ui-dashboard",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.472  INFO 1 --- [io-16111-exec-4] consign.service.ConsignServiceImpl       : [Consign servie] [ Update consign record]",
-            "timestamp": "2024-01-22T09:58:25.473Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-consign-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.477  INFO 1 --- [io-16111-exec-4] consign.service.ConsignServiceImpl       : [Consign servie] [ Insert new consign record] 382ac71c-ac12-4236-adcd-b8868bb137b0",
-            "timestamp": "2024-01-22T09:58:25.477Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-consign-service",
+              "service": "ts-order-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -604,42 +412,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.636  INFO 1 --- [io-12340-exec-1] auth.security.UserDetailsServiceImpl     : UsernamePasswordAuthenticationToken  username :fdse_microservice",
-            "timestamp": "2024-01-22T09:58:25.636Z",
+            "content": "2024-01-22 09:58:26.087  INFO 1 --- [io-12031-exec-3] order.service.OrderServiceImpl           : Name List is: Response(status=1, msg=Success, data=[Nan Jing, Shang Hai Hong Qiao, Shang Hai, Bei Jing, Shang Hai, Bei Jing, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou, Shang Hai, Su Zhou",
+            "timestamp": "2024-01-22T09:58:26.088Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-auth-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:25.743  INFO 1 --- [io-12340-exec-1] auth.service.impl.TokenServiceImpl       : eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmZHNlX21pY3Jvc2VydmljZSIsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJpZCI6IjRkMmE0NmM3LTcxY2ItNGNmMS1iNWJiLWI2ODQwNmQ5ZGE2ZiIsImlhdCI6MTcwNTkxNzUwNSwiZXhwIjoxNzA1OTIxMTA1fQ.E--MpvRgg3BqWKYpcM3i6MkGGByiOgPCyg4n6jEjpFUUSER TOKEN",
-            "timestamp": "2024-01-22T09:58:25.743Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-auth-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.007  INFO 1 --- [io-18767-exec-7] a.controller.AdminBasicInfoController    : [Admin Basic Info Service][Find All Config by admin  ",
-            "timestamp": "2024-01-22T09:58:26.008Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-admin-basic-info-service",
+              "service": "ts-order-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -709,12 +487,27 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.277  INFO 1 --- [o-18855-exec-10] food.controller.TrainFoodController      : [Food Map Service][Get TrainFoods By TripId]",
+            "content": "2024-01-22 09:58:26.277  INFO 1 --- [io-12346-exec-7] travel.service.TravelServiceImpl         : Query for Station id is: Response(status=1, msg=Success, data=shanghai)",
             "timestamp": "2024-01-22T09:58:26.277Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-food-map-service",
+              "service": "ts-travel-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-22 09:58:26.279  INFO 1 --- [io-12346-exec-7] travel.service.TravelServiceImpl         : [Travel Service][Get Route By Id] Route ID：92708982-77af-4318-be25-57ccb0ff69ad",
+            "timestamp": "2024-01-22T09:58:26.279Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-travel-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -739,27 +532,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.784  INFO 1 --- [io-18767-exec-9] a.controller.AdminBasicInfoController    : [Admin Basic Info Service][Find All Price by admin ",
-            "timestamp": "2024-01-22T09:58:26.785Z",
+            "content": "2024-01-22 09:58:26.284  INFO 1 --- [io-12346-exec-6] travel.controller.TravelController       : [Get Route By Trip ID] TripId: D1345",
+            "timestamp": "2024-01-22T09:58:26.285Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-admin-basic-info-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.925  INFO 1 --- [io-18888-exec-8] a.controller.AssuranceController         : [Assurances Service][Get Assurance Type]",
-            "timestamp": "2024-01-22T09:58:26.925Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-assurance-service",
+              "service": "ts-travel-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -799,66 +577,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.937  INFO 1 --- [io-18855-exec-2] food.controller.TrainFoodController      : [Food Map Service][Get TrainFoods By TripId]",
-            "timestamp": "2024-01-22T09:58:26.938Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-food-map-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.941  INFO 1 --- [o-18856-exec-10] foodsearch.service.FoodServiceImpl       : [Food Service]Get Train Food List!",
-            "timestamp": "2024-01-22T09:58:26.941Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-food-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.983  INFO 1 --- [io-12347-exec-7] contacts.controller.ContactsController   : [Contacts Service][Find Contacts By Account Id: 4d2a46c7-71cb-4cf1-b5bb-b68406d9da6f",
-            "timestamp": "2024-01-22T09:58:26.983Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-contacts-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:26.983  INFO 1 --- [io-12347-exec-7] contacts.controller.ContactsController   : [ContactsService][VerifyLogin] Success",
-            "timestamp": "2024-01-22T09:58:26.983Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-contacts-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "2024-01-22 09:58:26.995  INFO 1 --- [io-14568-exec-6] preserve.controller.PreserveController   : [Preserve Service][Preserve] Account  order from Shang Hai -----> Su Zhou at Mon Jan 22 00:00:00 GMT 2024",
             "timestamp": "2024-01-22T09:58:26.995Z",
             "level": "INFO",
@@ -889,12 +607,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:27.002  INFO 1 --- [io-11188-exec-1] security.controller.SecurityController   : [Security Service][Check Security] Check Account Id: 4d2a46c7-71cb-4cf1-b5bb-b68406d9da6f",
-            "timestamp": "2024-01-22T09:58:27.003Z",
+            "content": "2024-01-22 09:58:26.995  INFO 1 --- [io-14568-exec-6] preserve.service.PreserveServiceImpl     : [Preserve Other Service][Check Security] Checking....",
+            "timestamp": "2024-01-22T09:58:26.995Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-security-service",
+              "service": "ts-preserve-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -904,12 +622,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:27.002  INFO 1 --- [io-11188-exec-1] security.service.SecurityServiceImpl     : [Security Service][Get Order Num Info]",
-            "timestamp": "2024-01-22T09:58:27.003Z",
+            "content": "2024-01-22 09:58:27.044  INFO 1 --- [io-14568-exec-6] preserve.service.PreserveServiceImpl     : [Preserve Service] [Step 1] Check Security Complete",
+            "timestamp": "2024-01-22T09:58:27.044Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-security-service",
+              "service": "ts-preserve-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -919,57 +637,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:27.134  INFO 1 --- [io-18856-exec-4] foodsearch.controller.FoodController     : [Food Service]Get the Get Food Request!",
-            "timestamp": "2024-01-22T09:58:27.134Z",
+            "content": "2024-01-22 09:58:27.044  INFO 1 --- [io-14568-exec-6] preserve.service.PreserveServiceImpl     : [Preserve Service] [Step 2] Find contacts",
+            "timestamp": "2024-01-22T09:58:27.044Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-food-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:29.456  INFO 1 --- [io-16114-exec-4] a.service.AdminTravelServiceImpl         : [Admin Travel Service][Get All Travels]",
-            "timestamp": "2024-01-22T09:58:29.456Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-admin-travel-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:29.527  INFO 1 --- [io-16114-exec-4] a.service.AdminTravelServiceImpl         : [Admin Travel Service][Get Travel From ts-travel-service successfully!]",
-            "timestamp": "2024-01-22T09:58:29.527Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-admin-travel-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:32.109  INFO 1 --- [io-18673-exec-7] i.controller.InsidePaymentController     : [Inside Payment Service][Pay] Pay for: 6b41b9b5-7b7e-4c40-ac64-3c21c6a7f0d2",
-            "timestamp": "2024-01-22T09:58:32.110Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-inside-payment-service",
+              "service": "ts-preserve-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -994,21 +667,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-22 09:58:36.433  INFO 1 --- [io-18673-exec-5] i.controller.InsidePaymentController     : [Inside Payment Service][Pay] Pay for: be37805e-2366-4d81-bb62-bcbce91c8e2e",
-            "timestamp": "2024-01-22T09:58:36.433Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-inside-payment-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "2024-01-22 09:58:36.464  INFO 1 --- [io-18673-exec-5] i.service.InsidePaymentServiceImpl       : Out pay result: Response(status=1, msg=Pay Success, data=null)",
             "timestamp": "2024-01-22T09:58:36.464Z",
             "level": "INFO",
@@ -1018,21 +676,6 @@
               "status_code": null,
               "latency_ms": null,
               "upstream": "paymentservice",
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:58:49.769  INFO 1 --- [io-18888-exec-1] a.controller.AssuranceController         : [Assurances Service][Get Assurance Type]",
-            "timestamp": "2024-01-22T09:58:49.770Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-assurance-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
               "error_type": null
             }
           },
@@ -1084,111 +727,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:13.614+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917553:614026][1:0x78cf82629700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 343, snapshot max: 343 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:13.614Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-preserve-other-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:13.635+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917553:635046][1:0x781a8ce0a700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 353, snapshot max: 353 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:13.635Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-auth-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:14.457+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917554:457747][1:0x7eef2fdf4700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 343, snapshot max: 343 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:14.458Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-preserve-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:14.524+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917554:524766][1:0x7be77ce5e700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 352, snapshot max: 352 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:14.524Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-user-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:14.754+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917554:754106][1:0x7cdc0a313700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 361, snapshot max: 361 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:14.754Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-route-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:14.781+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917554:781337][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 343, snapshot max: 343 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:14.781Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-notification-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:14.818+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917554:818560][1:0x7aac6b574700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 353, snapshot max: 353 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:14.818Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-contacts-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:15.355+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917555:355105][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 937, snapshot max: 937 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
             "timestamp": "2024-01-22T09:59:15.355Z",
             "level": "INFO",
@@ -1219,156 +757,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:15.705+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917555:705106][1:0x78b2125fa700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 364, snapshot max: 364 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:15.705Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-station-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:16.029+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917556:29668][1:0x7ec7fd6ad700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 357, snapshot max: 357 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:16.029Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-train-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:16.029+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917556:29188][1:0x79f8ea652700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 356, snapshot max: 356 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:16.029Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-travel-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:16.340+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917556:340081][1:0x7a3aa3937700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 1183, snapshot max: 1183 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:16.340Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:16.746+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917556:746181][1:0x7b1685337700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 356, snapshot max: 356 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:16.746Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-travel2-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:17.784+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917557:784477][1:0x7cdeda516700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 353, snapshot max: 353 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:17.784Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-security-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:17.787+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917557:787036][1:0x7ce79d0c5700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 352, snapshot max: 352 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:17.787Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-ticket-office-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:17.792+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917557:792346][1:0x7cf4dbaeb700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 361, snapshot max: 361 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:17.792Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-price-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:18.376+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917558:376966][1:0x7dbc80d6c700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 862, snapshot max: 862 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:18.377Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-payment-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:18.405+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917558:405675][1:0x7bfebc3d6700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 870, snapshot max: 870 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:18.405Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-inside-payment-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:18.633+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917558:633056][1:0x7d32ec957700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 372, snapshot max: 372 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
             "timestamp": "2024-01-22T09:59:18.633Z",
             "level": "INFO",
@@ -1384,87 +772,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:18.652+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917558:652290][1:0x7e452b1dd700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 867, snapshot max: 867 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:18.652Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-assurance-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:18.861+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917558:861848][1:0x7e2cc8872700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 352, snapshot max: 352 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:18.862Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-consign-price-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:19.475+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917559:475910][1:0x7cfe366e7700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 1240, snapshot max: 1240 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T09:59:19.476Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-consign-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "{\"t\":{\"$date\":\"2024-01-22T09:59:20.167+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917560:167266][1:0x77ffd57f7700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 893, snapshot max: 893 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
             "timestamp": "2024-01-22T09:59:20.167Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "ts-food-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:59:25.098  INFO 1 --- [io-14569-exec-3] p.controller.PreserveOtherController     : [Preserve Other Service][Preserve] Account  order from Shang Hai -----> Nan Jing at Mon Jan 22 00:00:00 GMT 2024",
-            "timestamp": "2024-01-22T09:59:25.098Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-preserve-other-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-22 09:59:25.098  INFO 1 --- [io-14569-exec-3] p.service.PreserveOtherServiceImpl       : [Preserve Other Service][Verify Login] Success",
-            "timestamp": "2024-01-22T09:59:25.098Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-preserve-other-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -1564,111 +877,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:13.620+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917613:620616][1:0x78cf82629700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 345, snapshot max: 345 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:13.620Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-preserve-other-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:13.641+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917613:641640][1:0x781a8ce0a700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 355, snapshot max: 355 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:13.641Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-auth-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:14.464+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917614:464267][1:0x7eef2fdf4700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 345, snapshot max: 345 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:14.464Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-preserve-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:14.532+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917614:532236][1:0x7be77ce5e700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 354, snapshot max: 354 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:14.532Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-user-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:14.761+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917614:761907][1:0x7cdc0a313700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 363, snapshot max: 363 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:14.762Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-route-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:14.788+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917614:788768][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 345, snapshot max: 345 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:14.789Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-notification-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:14.825+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917614:825787][1:0x7aac6b574700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 355, snapshot max: 355 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:14.826Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-contacts-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:15.369+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917615:369620][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 943, snapshot max: 943 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
             "timestamp": "2024-01-22T10:00:15.369Z",
             "level": "INFO",
@@ -1699,207 +907,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:15.716+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917615:716286][1:0x78b2125fa700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 366, snapshot max: 366 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:15.716Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-station-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:16.037+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917616:37483][1:0x7ec7fd6ad700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 359, snapshot max: 359 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:16.037Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-train-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:16.038+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917616:38917][1:0x79f8ea652700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 358, snapshot max: 358 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:16.039Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-travel-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:16.356+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917616:356263][1:0x7a3aa3937700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 1192, snapshot max: 1192 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:16.356Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:16.753+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917616:753123][1:0x7b1685337700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 358, snapshot max: 358 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:16.753Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-travel2-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:17.792+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917617:792048][1:0x7cdeda516700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 355, snapshot max: 355 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:17.792Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-security-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:17.794+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917617:794293][1:0x7ce79d0c5700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 354, snapshot max: 354 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:17.794Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-ticket-office-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:17.799+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917617:799656][1:0x7cf4dbaeb700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 363, snapshot max: 363 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:17.799Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-price-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:18.388+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917618:388737][1:0x7dbc80d6c700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 866, snapshot max: 866 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:18.388Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-payment-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:18.421+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917618:421023][1:0x7bfebc3d6700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 874, snapshot max: 874 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:18.421Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-inside-payment-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:18.641+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917618:641856][1:0x7d32ec957700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 374, snapshot max: 374 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
             "timestamp": "2024-01-22T10:00:18.642Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
               "service": "ts-food-map-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:18.664+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917618:664203][1:0x7e452b1dd700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 873, snapshot max: 873 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:18.664Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-assurance-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:18.869+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917618:869743][1:0x7e2cc8872700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 354, snapshot max: 354 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:18.869Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-consign-price-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:00:19.493+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917619:493030][1:0x7cfe366e7700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 1249, snapshot max: 1249 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:00:19.493Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-consign-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2044,12 +1057,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:01:14.797+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917674:797007][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 347, snapshot max: 347 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:01:14.797Z",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:01:15.383+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917675:383677][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 950, snapshot max: 950 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:01:15.383Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-notification-mongo",
+              "service": "ts-order-other-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2059,12 +1072,27 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:01:15.383+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917675:383677][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 950, snapshot max: 950 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:01:15.383Z",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:01:15.634+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917675:634106][1:0x7a680f456700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 356, snapshot max: 356 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:01:15.634Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-order-other-mongo",
+              "service": "ts-config-mongo",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:01:18.649+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917678:649659][1:0x7d32ec957700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 376, snapshot max: 376 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:01:18.649Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-food-map-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2119,12 +1147,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:02:14.804+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917734:804349][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 349, snapshot max: 349 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:02:14.804Z",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:02:15.398+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917735:398294][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 958, snapshot max: 958 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:02:15.398Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-notification-mongo",
+              "service": "ts-order-other-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2134,12 +1162,27 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:02:15.398+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917735:398294][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 958, snapshot max: 958 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:02:15.398Z",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:02:15.643+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917735:643100][1:0x7a680f456700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 358, snapshot max: 358 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:02:15.643Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-order-other-mongo",
+              "service": "ts-config-mongo",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:02:18.658+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917738:658794][1:0x7d32ec957700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 378, snapshot max: 378 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:02:18.658Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-food-map-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2284,12 +1327,12 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:03:14.813+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917794:813382][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 351, snapshot max: 351 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:03:14.813Z",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:03:15.412+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917795:412185][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 966, snapshot max: 966 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:03:15.412Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-notification-mongo",
+              "service": "ts-order-other-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2299,12 +1342,27 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:03:15.412+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917795:412185][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 966, snapshot max: 966 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:03:15.412Z",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:03:15.650+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917795:650291][1:0x7a680f456700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 360, snapshot max: 360 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:03:15.650Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
-              "service": "ts-order-other-mongo",
+              "service": "ts-config-mongo",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "{\"t\":{\"$date\":\"2024-01-22T10:03:18.666+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917798:666313][1:0x7d32ec957700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 380, snapshot max: 380 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+            "timestamp": "2024-01-22T10:03:18.666Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-food-map-mongo",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -2449,36 +1507,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:04:14.819+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917854:819962][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 353, snapshot max: 353 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:04:14.820Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-notification-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:04:15.427+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917855:427705][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 976, snapshot max: 976 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:04:15.428Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-other-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "2024-01-22 10:04:17.212  INFO 1 --- [io-18673-exec-5] i.service.InsidePaymentServiceImpl       : Out pay result: Response(status=1, msg=Pay Success, data=null)",
             "timestamp": "2024-01-22T10:04:17.212Z",
             "level": "INFO",
@@ -2488,21 +1516,6 @@
               "status_code": null,
               "latency_ms": null,
               "upstream": "paymentservice",
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:04:20.238+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917860:238732][1:0x77ffd57f7700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 923, snapshot max: 923 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:04:20.239Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-food-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
               "error_type": null
             }
           },
@@ -2608,51 +1621,6 @@
               "status_code": null,
               "latency_ms": null,
               "upstream": "paymentservice",
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:05:14.828+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917914:828042][1:0x7f32e9894700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 355, snapshot max: 355 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:05:14.828Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-notification-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:05:15.445+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917915:445323][1:0x78de59e41700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 981, snapshot max: 981 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:05:15.445Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-other-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "{\"t\":{\"$date\":\"2024-01-22T10:05:20.257+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1705917920:257154][1:0x77ffd57f7700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 929, snapshot max: 929 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
-            "timestamp": "2024-01-22T10:05:20.257Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-food-mongo",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
               "error_type": null
             }
           },
@@ -3113,28 +2081,32 @@
           }
         ],
         "metadata": {
-          "hypothesis": "A CPU/memory pressure spike in ts-auth-service is propagating downstream, stressing dependent services that ts-preserve-service relies on, leading to degraded performance in ts-preserve-service during the incident window.",
+          "hypothesis": "A CPU spike in ts-auth-service indicates upstream resource contention that propagates through its dependent services, including ts-preserve-service, causing elevated load and incidental anomalies during the incident window.",
           "suspected_downstream": "ts-auth-service",
           "anomalous_services": [
             "ts-auth-service",
-            "ts-order-other-mongo",
             "ts-food-service",
-            "ts-notification-mongo",
+            "ts-order-service",
+            "ts-travel-service",
+            "ts-train-service",
             "ts-config-service",
             "ts-travel2-service",
-            "ts-food-mysql",
             "ts-basic-service",
             "ts-food-mongo",
-            "ts-train-service"
+            "ts-food-map-mongo",
+            "ts-order-other-mongo",
+            "ts-preserve-service",
+            "ts-consign-price-service",
+            "ts-config-mongo"
           ],
-          "llm_reasoning": "Metric Summary shows ts-auth-service with the strongest anomaly (cpu_z 17.9, p95Δms +8.7, notable sockets metric). Several other services also show elevated CPU signals, indicating a broader upstream pressure. No explicit upstream error logs are available, but the TS-preserve-service depends on multiple downstream services (e.g., ts-food-service, ts-order-service, ts-security-service). Elevated metrics in the top anomalous services strongly suggest upstream root-cause pressure that could cascade to downstream APIs used by ts-preserve-service. The absence of high-volume error logs shifts the emphasis to metric-based root cause rather than log-error counts. Therefore, ts-auth-service is the most plausible deep root cause, with ts-preserve-service affected downstream by this upstream stress.",
+          "llm_reasoning": "Metric signals show ts-auth-service has the strongest anomaly (cpu_z 17.9, highest among services), while other services show milder deviations. There is no clear high-severity metric in the data (>30 cpu_z, mem_jump >0.3, p95Δms >100). Log-rate indicators show some activity across multiple services, with ts-order-service having a few errors, but no dominant downstream failure is evident. Given ts-preserve-service depends on ts-auth-service, the elevated CPU in ts-auth-service is the most plausible upstream root cause, with downstream ripple effects reflected in related services during the incident window.",
           "referenced_upstreams": {},
           "evidence_collection": null
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "ts-preserve-service depends on ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Related services: ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Blast radius: ['ts-preserve-service']. LLM assessment: implausible (confidence 0.65).",
+        "summary": "ts-preserve-service depends on ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Related services: ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Blast radius: ['ts-preserve-service']. LLM assessment: implausible (confidence 0.25).",
         "confidence": 0.4,
         "evidence": [
           {
@@ -3147,7 +2119,7 @@
             "metadata": {
               "service": "ts-preserve-service",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\trainticket_topology.json",
-              "llm_reasoning": "Symptom service ts-preserve-service lists its direct dependencies, none of which include ts-auth-service. Since ts-auth-service is not in the transitive dependency chain described, a propagation path from ts-preserve-service to ts-auth-service is not structurally supported by the topology. The blast radius remains limited to ts-preserve-service per the provided topology. Therefore the log agent’s hypothesis about ts-auth-service being downstream is not corroborated by the topology alone."
+              "llm_reasoning": "ts-preserve-service lists explicit dependencies but does not include ts-auth-service as a downstream service. Without a known edge from ts-preserve-service (or its listed dependencies) to ts-auth-service in the topology, the suspected downstream path to ts-auth-service is structurally unsupported. A plausible propagation would require a chain through one of the listed dependencies to ts-auth-service, which is not specified in the given topology. Therefore the propagation path is implausible given the provided graph. If ts-auth-service were downstream of one of the dependencies (e.g., ts-assurance-service) with an internal dependency, that would create an alternative path, but such edges are not provided. The blast radius remains limited to the symptom service and its direct transitive dependencies; monitoring should prioritize ts-preserve-service and its key dependencies for potential fault amplification."
             }
           }
         ],
@@ -3396,18 +2368,20 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\trainticket_topology.json",
-          "llm_reasoning": "Symptom service ts-preserve-service lists its direct dependencies, none of which include ts-auth-service. Since ts-auth-service is not in the transitive dependency chain described, a propagation path from ts-preserve-service to ts-auth-service is not structurally supported by the topology. The blast radius remains limited to ts-preserve-service per the provided topology. Therefore the log agent’s hypothesis about ts-auth-service being downstream is not corroborated by the topology alone.",
+          "llm_reasoning": "ts-preserve-service lists explicit dependencies but does not include ts-auth-service as a downstream service. Without a known edge from ts-preserve-service (or its listed dependencies) to ts-auth-service in the topology, the suspected downstream path to ts-auth-service is structurally unsupported. A plausible propagation would require a chain through one of the listed dependencies to ts-auth-service, which is not specified in the given topology. Therefore the propagation path is implausible given the provided graph. If ts-auth-service were downstream of one of the dependencies (e.g., ts-assurance-service) with an internal dependency, that would create an alternative path, but such edges are not provided. The blast radius remains limited to the symptom service and its direct transitive dependencies; monitoring should prioritize ts-preserve-service and its key dependencies for potential fault amplification.",
           "path_assessment": "implausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
-            "ts-preserve-service"
+            "ts-preserve-service",
+            "ts-assurance-service",
+            "ts-security-service"
           ],
           "topology_supports_hypothesis": false
         }
       }
     ],
-    "evidence_convergence": "disagreement",
-    "synthesis_reasoning": "There is strong agreement from the Log Agent that ts-auth-service is the strongest upstream pressure. However, the Topology Agent finds no structural propagation path from ts-preserve-service back to ts-auth-service, and the TCB-RCA output does not identify ts-auth-service as a confirmed propagation path. This creates a disagreement between metric-based upstream signal and structural feasibility. In such cases, the most credible approach is to treat ts-auth-service as a plausible deep root cause (UNOBSERVED), acknowledging the absence of corroborating topology and deterministic backtracking. Therefore, ts-auth-service is the leading candidate, but with cautious confidence pending corroborating topology or additional logs confirming a cross-service cascade.",
+    "evidence_convergence": "partial_agreement",
+    "synthesis_reasoning": "The strongest signal comes from Log Agent: ts-auth-service shows the most pronounced CPU anomaly and is upstream of the symptom service ts-preserve-service. Topology constraints do not document a direct edge from ts-auth-service to ts-preserve-service, which reduces structural confidence; however, when there is strong upstream resource contention with a plausible propagation effect observed in downstream services, the log-based root can be prioritized over topology-only inference. TCB-RCA leans toward ts-preserve-service as the direct fault node, but its zero temporal gap and lack of explicit error indicators in logs weaken its stance relative to the clear CPU anomaly in ts-auth-service. Therefore, the final root-cause candidate prioritizes ts-auth-service as the upstream root cause, with ts-preserve-service as the immediate downstream symptom carrier, forming the propagation path ts-auth-service -> ts-preserve-service. If future data fills the topology gap (e.g., explicit ts-auth-service -> ts-preserve-service edge) or ts-preserve-service shows independent fault evidence, reevaluation should be performed.",
     "tcb_rca_reference": {
       "candidates": [
         {

@@ -177,21 +177,41 @@ _DEFAULT_KNOWN_SERVICES: Set[str] = set()
 def _extract_known_services(agent_results: Dict[str, Any]) -> Set[str]:
     """Extract known services from topology agent results dynamically.
 
+    [TT-PATCH-2] Now includes the FULL topology (topology_graph keys +
+    service_metadata keys) in addition to the incident-relevant subset
+    (related_services, blast_radius, propagation_path). This is critical
+    for orphan services (e.g., entry-point auth services with no edges)
+    which would otherwise be rejected as hallucinations even though they
+    are valid services in the system.
+
     Falls back to the default set if topology data is unavailable.
     """
     topo = agent_results.get("topology_agent", {})
     if not isinstance(topo, dict):
         return _DEFAULT_KNOWN_SERVICES.copy()
 
-    # Topology Agent now includes related_services and blast_radius
     services: Set[str] = set()
 
+    # [TT-PATCH-2] Full topology — covers ALL services including orphans
+    topology_graph = topo.get("topology_graph", {})
+    if isinstance(topology_graph, dict):
+        services.update(str(k) for k in topology_graph.keys() if k)
+        # Also include callees (graph values) in case some services only
+        # appear as targets, not sources
+        for callees in topology_graph.values():
+            if isinstance(callees, list):
+                services.update(str(c) for c in callees if c)
+
+    service_metadata = topo.get("service_metadata", {})
+    if isinstance(service_metadata, dict):
+        services.update(str(k) for k in service_metadata.keys() if k)
+
+    # Incident-relevant subset (kept for completeness)
     for key in ("related_services", "blast_radius"):
         vals = topo.get(key, [])
         if isinstance(vals, list):
             services.update(str(v) for v in vals if v)
 
-    # Also extract from propagation_path
     pp = topo.get("propagation_path", [])
     if isinstance(pp, list):
         services.update(str(v) for v in pp if v)
