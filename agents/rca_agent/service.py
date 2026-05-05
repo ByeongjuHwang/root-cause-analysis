@@ -35,33 +35,21 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Default topology — ONLY used when Topology Agent result is unavailable.
-# In normal operation, the topology comes from the Topology Agent / MCP.
+# Default topology — DISABLED (TT-PATCH).
+#
+# Previously contained an OB-style fallback graph used as a "Strategy 3" last
+# resort. With multi-system support (OB + TT + ...), keeping a fallback is
+# dangerous: if the topology file fails to load, the agent would silently
+# fall back to OB services and produce wrong predictions on TT data.
+#
+# Fail-fast is preferable. The Topology Agent / Architecture MCP must succeed.
+# If both fail, the RCA Agent now returns an empty topology and logs a clear
+# error rather than masking the misconfiguration.
 # ---------------------------------------------------------------------------
 
-_DEFAULT_TOPOLOGY_GRAPH: Dict[str, List[str]] = {
-    "frontend-web": ["api-gateway"],
-    "api-gateway": ["auth-service", "catalog-service", "order-service"],
-    "auth-service": ["user-db"],
-    "catalog-service": [],
-    "order-service": ["message-queue", "order-db"],
-    "message-queue": ["worker-service"],
-    "worker-service": ["order-db"],
-    "user-db": [],
-    "order-db": [],
-}
+_DEFAULT_TOPOLOGY_GRAPH: Dict[str, List[str]] = {}
 
-_DEFAULT_SERVICE_METADATA: Dict[str, Dict[str, Any]] = {
-    "frontend-web": {"type": "frontend", "criticality": "high"},
-    "api-gateway": {"type": "gateway", "criticality": "high"},
-    "auth-service": {"type": "backend", "criticality": "high"},
-    "catalog-service": {"type": "backend", "criticality": "medium"},
-    "order-service": {"type": "backend", "criticality": "high"},
-    "message-queue": {"type": "queue", "criticality": "high"},
-    "worker-service": {"type": "worker", "criticality": "high"},
-    "user-db": {"type": "database", "criticality": "high"},
-    "order-db": {"type": "database", "criticality": "high"},
-}
+_DEFAULT_SERVICE_METADATA: Dict[str, Dict[str, Any]] = {}
 
 
 def _load_topology_from_mcp(

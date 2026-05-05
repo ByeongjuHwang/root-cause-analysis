@@ -6,8 +6,12 @@ This module queries observability data and returns structured log evidence
 for the TCB-RCA algorithm. It supports an external JSONL log file so the
 thesis demo can be executed against real incident logs instead of only the
 bundled sample file.
+
+[TT-PATCH] _KNOWN_SERVICES is now driven by the KNOWN_SERVICES_OVERRIDE env var
+so the same code works for OB / TT / SS without hardcoded service lists.
 """
 
+import os
 from typing import Any, Dict, List, Optional
 
 from mcp_servers.observability_mcp.app.repository import (
@@ -19,23 +23,21 @@ from mcp_servers.observability_mcp.app.repository import (
 from mcp_servers.observability_mcp.app.models import LogRecord
 
 
-_KNOWN_SERVICES = [
-    "frontend-web",
-    "api-gateway",
-    "auth-service",
-    "catalog-service",
-    "order-service",
-    "worker-service",
-    "message-queue",
-    "user-db",
-    "order-db",
-]
+# [TT-PATCH] System-agnostic: services come from observed logs + optional env override.
+# To use a hand-curated service list, set: KNOWN_SERVICES_OVERRIDE="svc1,svc2,svc3"
+_KNOWN_SERVICES_ENV = os.getenv("KNOWN_SERVICES_OVERRIDE", "")
+_KNOWN_SERVICES: List[str] = (
+    [s.strip() for s in _KNOWN_SERVICES_ENV.split(",") if s.strip()]
+    if _KNOWN_SERVICES_ENV
+    else []
+)
 
 
 class LogAnalysisService:
     def _candidate_services(self, log_file: Optional[str]) -> List[str]:
         observed = sorted({record.service for record in load_logs(log_file=log_file)})
-        return list(dict.fromkeys(_KNOWN_SERVICES + observed))
+        # [TT-PATCH] observed first (primary), env override second (supplementary)
+        return list(dict.fromkeys(observed + _KNOWN_SERVICES))
 
     async def analyze(
         self,

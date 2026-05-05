@@ -47,7 +47,52 @@ PYTHON = sys.executable
 STARTUP_TIMEOUT = 30.0
 ANALYZE_TIMEOUT = 120.0
 RESULTS_DIR = PROJECT_ROOT / "experiments" / "rcaeval"
-ONLINEBOUTIQUE_TOPOLOGY = PROJECT_ROOT / "onlineboutique_topology.json"
+
+# [TT-PATCH] Dataset-aware topology file mapping.
+# Add new datasets here as they're supported.
+TOPOLOGY_FILES = {
+    "ob": PROJECT_ROOT / "onlineboutique_topology.json",
+    "tt": PROJECT_ROOT / "trainticket_topology.json",
+    "ss": PROJECT_ROOT / "sockshop_topology.json",  # placeholder for future
+}
+
+# Dataset → (entry_point_service, diagram_uri)
+# entry_point_service: the user-visible "front door" of the system used in
+# convert_case() as the incident.service. For OB: 'frontend'. For TT we use
+# 'ts-preserve-service' which is a primary booking entry per RE2-TT traces.
+DATASET_DEFAULTS = {
+    "ob": {
+        "entry_point": "frontend",
+        "diagram_uri": "arch://online-boutique/latest",
+        "benchmark_label": "rcaeval-re2-ob",
+    },
+    "tt": {
+        "entry_point": "ts-preserve-service",
+        "diagram_uri": "arch://train-ticket/latest",
+        "benchmark_label": "rcaeval-re2-tt",
+    },
+    "ss": {
+        "entry_point": "front-end",
+        "diagram_uri": "arch://sock-shop/latest",
+        "benchmark_label": "rcaeval-re2-ss",
+    },
+}
+
+# Backward-compat alias (some old code paths may reference this name)
+ONLINEBOUTIQUE_TOPOLOGY = TOPOLOGY_FILES["ob"]
+
+
+def get_topology_file(dataset: str) -> Path:
+    """Resolve dataset key to the topology JSON path. Raises if missing."""
+    if dataset not in TOPOLOGY_FILES:
+        raise ValueError(f"Unknown dataset: {dataset}. Choose from: {list(TOPOLOGY_FILES)}")
+    path = TOPOLOGY_FILES[dataset]
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Topology file missing for dataset '{dataset}': {path}\n"
+            f"Generate it with build_trainticket_topology.py (TT) or place it at the project root."
+        )
+    return path
 
 # Analysis window: RCAEval inject_time은 순간(instant)이므로 그 주위로 윈도우를
 # 잡아야 서비스별 통계를 산출할 수 있다. v6부터는 비대칭 두 창 설계로 전환:
@@ -236,11 +281,14 @@ def filter_cases(
     return cases
 
 
-def convert_case(case: Dict[str, Any], work_dir: Path) -> Optional[Dict[str, Any]]:
+def convert_case(case: Dict[str, Any], work_dir: Path,
+                 dataset: str = "ob") -> Optional[Dict[str, Any]]:
     """Convert RCAEval case to framework input format.
 
     Delegates to convert_rcaeval.py which reads logs.csv / inject_time.txt
     and emits logs.jsonl + meta.json.
+
+    [TT-PATCH] dataset parameter selects entry_point / topology / diagram_uri.
     """
     logs_path = work_dir / f"{case['name']}.jsonl"
     completed = subprocess.run(
@@ -284,16 +332,20 @@ def convert_case(case: Dict[str, Any], work_dir: Path) -> Optional[Dict[str, Any
     metrics_csv = case["path"] / "metrics.csv"
     metrics_file = str(metrics_csv) if metrics_csv.exists() else None
 
+    # [TT-PATCH] Dataset-aware entry point and topology.
+    ds_config = DATASET_DEFAULTS.get(dataset, DATASET_DEFAULTS["ob"])
+    topology_path = get_topology_file(dataset)
+
     incident = {
         "incident_id": f"INC-{case['name'].upper()}",
-        "service": "frontend",  # Online Boutique entry point
+        "service": ds_config["entry_point"],   # entry-point service (varies by dataset)
         "time_range": {"start": win_start, "end": win_end},
         "symptom": f"Service {case['service']} experiencing {case['fault']} fault",
         "trace_id": None,
         "attachments": {
             "log_file": str(logs_path),
-            "topology_file": str(ONLINEBOUTIQUE_TOPOLOGY),
-            "diagram_uri": "arch://online-boutique/latest",
+            "topology_file": str(topology_path),
+            "diagram_uri": ds_config["diagram_uri"],
             "inject_time": inject_iso,
             # Dual windows (v6) — Log Agent uses these for baseline vs incident stats
             "baseline_range": baseline_range,
@@ -376,6 +428,7 @@ def run_one_persistent(
     case: Dict[str, Any],
     converted: Dict[str, Any],
     results_dir: Path,
+    dataset: str = "ob",
 ) -> Dict[str, Any]:
     """Run a single case against ALREADY-RUNNING persistent agents.
 
@@ -388,6 +441,7 @@ def run_one_persistent(
     Required: agents must be started with _start_system_persistent() before
     the first call and stopped with _stop_system() after the last call.
     """
+    benchmark_label = DATASET_DEFAULTS.get(dataset, DATASET_DEFAULTS["ob"])["benchmark_label"]
     port_base = SYSTEMS[system_key]["port_base"]
     start = time.time()
 
@@ -413,7 +467,7 @@ def run_one_persistent(
 
         output = {
             "system": system_key,
-            "benchmark": "rcaeval-re2-ob",
+            "benchmark": benchmark_label,
             "case": case["name"],
             "gt_service": case["service"],
             "gt_fault": case["fault"],
@@ -431,7 +485,7 @@ def run_one_persistent(
     except Exception as exc:
         return {
             "system": system_key,
-            "benchmark": "rcaeval-re2-ob",
+            "benchmark": benchmark_label,
             "case": case["name"],
             "gt_service": case["service"],
             "gt_fault": case["fault"],
@@ -477,17 +531,20 @@ def run_one(
     case: Dict[str, Any],
     converted: Dict[str, Any],
     results_dir: Path,
+    dataset: str = "ob",
 ) -> Dict[str, Any]:
     """Legacy: start agents, run one case, stop agents. Use run_one_persistent()
     for batch runs to avoid Windows TIME_WAIT port exhaustion.
     """
+    benchmark_label = DATASET_DEFAULTS.get(dataset, DATASET_DEFAULTS["ob"])["benchmark_label"]
+    topology_path = get_topology_file(dataset)
     port_base = SYSTEMS[system_key]["port_base"]
     start = time.time()
     processes = []
 
     try:
         processes = _start_system(
-            system_key, converted["logs_path"], ONLINEBOUTIQUE_TOPOLOGY,
+            system_key, converted["logs_path"], topology_path,
         )
 
         resp = httpx.post(
@@ -513,7 +570,7 @@ def run_one(
 
         output = {
             "system": system_key,
-            "benchmark": "rcaeval-re2-ob",
+            "benchmark": benchmark_label,
             "case": case["name"],
             "gt_service": case["service"],
             "gt_fault": case["fault"],
@@ -531,7 +588,7 @@ def run_one(
     except Exception as exc:
         return {
             "system": system_key,
-            "benchmark": "rcaeval-re2-ob",
+            "benchmark": benchmark_label,
             "case": case["name"],
             "gt_service": case["service"],
             "gt_fault": case["fault"],
@@ -610,9 +667,11 @@ def export_csv(results: List[Dict[str, Any]], path: Path) -> None:
             })
 
 
-def print_summary(summary: Dict[str, Dict[str, Any]], n_results: int, n_errors: int) -> None:
+def print_summary(summary: Dict[str, Dict[str, Any]], n_results: int, n_errors: int,
+                  dataset: str = "ob") -> None:
+    label = DATASET_DEFAULTS.get(dataset, DATASET_DEFAULTS["ob"])["benchmark_label"].upper()
     print("\n" + "=" * 80)
-    print("  RCAEval RE2-OB SUMMARY")
+    print(f"  {label} SUMMARY")
     print("=" * 80)
     for sk in ("ours", "b1", "b2", "b3"):
         s = summary.get(sk)
@@ -634,9 +693,12 @@ def print_summary(summary: Dict[str, Dict[str, Any]], n_results: int, n_errors: 
 # =============================================================================
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="RCAEval RE2-OB benchmark runner")
+    parser = argparse.ArgumentParser(description="RCAEval RE2 benchmark runner (OB / TT / SS)")
     parser.add_argument("--data-dir", required=True, type=Path,
                         help="Directory containing RCAEval case folders")
+    parser.add_argument("--dataset", default="ob",
+                        choices=sorted(TOPOLOGY_FILES.keys()),
+                        help="Dataset key: ob (Online Boutique) | tt (Train Ticket) | ss (Sock Shop)")
     parser.add_argument("--systems", default="ours,b1,b2,b3",
                         help="Comma-separated system keys")
     parser.add_argument("--fault-types", default=None,
@@ -646,6 +708,13 @@ def main() -> None:
     parser.add_argument("--csv", action="store_true", help="Export CSV")
     parser.add_argument("--dry-run", action="store_true", help="Show plan only")
     args = parser.parse_args()
+
+    # [TT-PATCH] Validate topology file exists for the chosen dataset
+    try:
+        topology_path = get_topology_file(args.dataset)
+    except (FileNotFoundError, ValueError) as e:
+        parser.error(str(e))
+    print(f"Dataset: {args.dataset}  |  Topology: {topology_path.name}")
 
     systems = [s.strip() for s in args.systems.split(",")]
     invalid = [s for s in systems if s not in SYSTEMS]
@@ -678,7 +747,7 @@ def main() -> None:
     print("\nConverting cases...")
     converted: Dict[str, Dict[str, Any]] = {}
     for c in cases:
-        cv = convert_case(c, work_dir)
+        cv = convert_case(c, work_dir, dataset=args.dataset)   # [TT-PATCH]
         if cv:
             converted[c["name"]] = cv
     print(f"  {len(converted)}/{len(cases)} cases converted")
@@ -698,7 +767,7 @@ def main() -> None:
         if not case_list:
             continue
         print(f"\n=== Starting agents for system: {sk} ===")
-        processes = _start_system_persistent(sk, ONLINEBOUTIQUE_TOPOLOGY)
+        processes = _start_system_persistent(sk, topology_path)   # [TT-PATCH]
         print(f"  [OK] {len(processes)} agents up for {sk}")
 
         try:
@@ -707,7 +776,7 @@ def main() -> None:
                 cv = converted[c["name"]]
                 print(f"  [{completed}/{total}] {sk:<5} × {c['name']}...",
                       end=" ", flush=True)
-                r = run_one_persistent(sk, c, cv, RESULTS_DIR)
+                r = run_one_persistent(sk, c, cv, RESULTS_DIR, dataset=args.dataset)   # [TT-PATCH]
                 ev = r.get("evaluation", {})
                 status = "✓" if ev.get("ac_at_1") else ("✗" if "error" not in r else "ERR")
                 print(f"{status} ({r.get('elapsed_seconds', 0):.1f}s)")
@@ -719,15 +788,17 @@ def main() -> None:
     total_elapsed = time.time() - overall_start
     summary = aggregate(all_results)
     n_errors = sum(1 for r in all_results if "error" in r)
-    print_summary(summary, len(all_results), n_errors)
+    print_summary(summary, len(all_results), n_errors, dataset=args.dataset)   # [TT-PATCH]
     print(f"\nTotal: {total_elapsed:.0f}s ({total_elapsed / 60:.1f} min)")
 
     # Save
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_file = RESULTS_DIR / f"rcaeval_summary_{ts}.json"
+    benchmark_label = DATASET_DEFAULTS[args.dataset]["benchmark_label"]
+    summary_file = RESULTS_DIR / f"rcaeval_summary_{args.dataset}_{ts}.json"
     summary_file.write_text(json.dumps({
         "timestamp": datetime.now().isoformat(),
-        "benchmark": "rcaeval-re2-ob",
+        "benchmark": benchmark_label,
+        "dataset": args.dataset,
         "total_elapsed_seconds": round(total_elapsed, 2),
         "summary": summary,
         "results": [
@@ -737,7 +808,7 @@ def main() -> None:
     print(f"Summary: {summary_file}")
 
     if args.csv:
-        csv_file = RESULTS_DIR / f"rcaeval_results_{ts}.csv"
+        csv_file = RESULTS_DIR / f"rcaeval_results_{args.dataset}_{ts}.csv"
         export_csv(all_results, csv_file)
         print(f"CSV: {csv_file}")
 

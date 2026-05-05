@@ -27,7 +27,6 @@ LLM 담당:
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -53,69 +52,6 @@ from .service import (
     _load_topology_from_mcp,
     _extract_topology_from_agent_result,
 )
-
-
-# ---------------------------------------------------------------------------
-# Phase 4b: A2A contract dual output helper.
-# ---------------------------------------------------------------------------
-# This wraps every RCA return in a feature-flagged attach of a serialised
-# AgentResponse. If A2A_CONTRACT_MODE env is "off" (default) it short-circuits
-# and returns the legacy dict unchanged.
-#
-# We read the upstream Log Agent's serialised AgentResponse (if present) to
-# inherit its evidence_collection. This is how RCA Candidates get their
-# supporting_evidence IDs.
-
-def _maybe_attach_rca_response(
-    result: dict,
-    incident_id: str,
-    log_result: dict,
-) -> dict:
-    """Attach AgentResponse to an RCA result dict when A2A_CONTRACT_MODE is on.
-
-    Any failure here is swallowed — contract building must never break the
-    RCA pipeline.
-    """
-    if os.getenv("A2A_CONTRACT_MODE", "off") == "off":
-        return result
-    try:
-        from common.response_builder import (
-            build_log_agent_response,
-            build_rca_agent_response,
-            attach_agent_response,
-        )
-        # If log_result already contains a built AgentResponse (Phase 4b
-        # active on Log Agent), reuse it so evidence_collection carries over.
-        upstream_dict = (log_result or {}).get("_agent_response")
-        if upstream_dict is not None:
-            try:
-                from common.a2a_contract import AgentResponse
-                upstream = AgentResponse.model_validate(upstream_dict)
-            except Exception:
-                upstream = None
-        else:
-            # Fall back to building one from scratch so we still get
-            # evidence_collection attached if log_result has it.
-            upstream = None
-            if log_result:
-                try:
-                    upstream = build_log_agent_response(
-                        legacy_result=log_result,
-                        request_id=incident_id or "UNKNOWN",
-                    )
-                except Exception:
-                    upstream = None
-
-        agent_resp = build_rca_agent_response(
-            legacy_result=result,
-            request_id=incident_id or "UNKNOWN",
-            upstream_log_response=upstream,
-        )
-        attach_agent_response(result, agent_resp)
-    except Exception:
-        # Defensive: if anything goes wrong, the legacy dict still flows.
-        pass
-    return result
 
 
 # =========================================================================
@@ -259,9 +195,9 @@ def build_rca_agent_user_prompt(
         "\nIMPORTANT rules for final_propagation_path:\n"
         "- MUST start at the root cause service\n"
         "- MUST end at the symptom service (not beyond)\n"
-        "- Do NOT include services downstream of the symptom (e.g., frontend-web that calls the symptom gateway)\n"
-        "- Example: if root cause is user-db and symptom is api-gateway, path = [user-db, auth-service, api-gateway]\n"
-        "- Do NOT extend the path to frontend-web even though it observes the failure"
+        "- Do NOT include services downstream of the symptom (i.e., services that the symptom service itself calls)\n"
+        "- Example: if root cause is a database service and symptom is its caller, path = [database, intermediate, caller]\n"
+        "- Do NOT extend the path back toward an entry-point/UI service even though it observes the failure"
     )
     
     return "\n".join(lines)
@@ -441,7 +377,7 @@ class RCAServiceLLM:
         
         related_services = topology_result.get("related_services", []) or []
         
-        result = {
+        return {
             "incident_id": incident_id,
             "service": service,
             "algorithm": "LLM-Synthesis (with TCB-RCA reference)",
@@ -493,7 +429,6 @@ class RCAServiceLLM:
                 }
             ],
         }
-        return _maybe_attach_rca_response(result, incident_id, log_result)
     
     # ---- Topology resolution (same fallback chain as deterministic service) ----
 
@@ -611,7 +546,7 @@ class RCAServiceLLM:
             summary = f"RCA Agent (FALLBACK): no candidates (LLM failed: {error_msg})"
             top_confidence = 0.0
         
-        result = {
+        return {
             "incident_id": tcb_rca_output.incident_id,
             "service": service,
             "algorithm": "TCB-RCA-Fallback",
@@ -664,4 +599,3 @@ class RCAServiceLLM:
             ],
             "_llm_error": error_msg,
         }
-        return _maybe_attach_rca_response(result, tcb_rca_output.incident_id, log_result)
