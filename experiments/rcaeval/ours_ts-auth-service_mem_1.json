@@ -4,13 +4,13 @@
   "case": "ts-auth-service_mem_1",
   "gt_service": "ts-auth-service",
   "gt_fault": "mem",
-  "elapsed_seconds": 111.8,
+  "elapsed_seconds": 81.12,
   "evaluation": {
     "ac_at_1": true,
     "ac_at_3": true,
     "path_accuracy": null,
     "fp_handled": null,
-    "top_confidence": 0.45,
+    "top_confidence": 0.51,
     "verdict": "weak-evidence",
     "ground_truth_root_cause": "ts-auth-service",
     "predicted_top_cause_service": "ts-auth-service",
@@ -20,7 +20,7 @@
       "ts-preserve-service"
     ],
     "predicted_path_length": 2,
-    "elapsed_seconds": 111.8,
+    "elapsed_seconds": 81.12,
     "gt_fault": "mem"
   },
   "result": {
@@ -36,13 +36,13 @@
     "root_cause_candidates": [
       {
         "rank": 1,
-        "cause": "Memory pressure and high tail latency on ts-auth-service likely causing downstream impact on dependent services, including ts-preserve-service, leading to observed latency/load increases with no direct error logs on ts-preserve-service.",
-        "confidence": 0.45,
+        "cause": "ts-auth-service is experiencing resource pressure (CPU/memory) leading to cascading load on downstream services, including ts-preserve-service, causing degraded performance in the preservation path.",
+        "confidence": 0.51,
         "evidence_refs": [
           "log-agent:confirmed"
         ],
         "cause_service": "ts-auth-service",
-        "reasoning": "Log evidence points to ts-auth-service as an upstream source of resource/latency pressure with strong metrics (mem_jump, p95_Δms, p99_Δms). Topology does not support a direct downstream path from ts-auth-service to ts-preserve-service, making this a contested but plausible root cause given observed symptoms. TCB-RCA does not identify this service due to topology constraints, but the strongest signals are in the logs pointing to ts-auth-service as the upstream culprit.",
+        "reasoning": "The Log Agent points to ts-auth-service as the upstream source with strong resource anomalies (cpu_z, mem_jump) and identifies downstream impact on ts-preserve-service. However, the Topology Agent finds no direct dependency path from ts-preserve-service to ts-auth-service, making a direct propagation path structurally implausible. The TCB-RCA baseline ranks ts-preserve-service as the immediate symptom (depth=0) with no anomalies seen upstream in the deterministic traversal. Given the observed mem pressure and the unobserved-but-potential upstream root-cause pattern (A references B with no logs for B), ts-auth-service is a plausible unobserved root cause despite topology constraints. The absence of ts-auth-service logs does not imply health; it indicates monitoring gaps. Therefore, ts-auth-service is ranked as a primary candidate, acknowledging topology constraints.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": false,
@@ -51,38 +51,24 @@
       },
       {
         "rank": 2,
-        "cause": "As a critical dependency of ts-preserve-service, ts-security-service could be a propagation point for systemic issues affecting multiple downstream services, consistent with blast radius considerations in topology.",
-        "confidence": 0.4,
+        "cause": "ts-preserve-service is the service showing degraded performance within its dependency chain, likely due to upstream pressure or internal mem fault manifesting as downstream cascading load.",
+        "confidence": 0.44,
         "evidence_refs": [
-          "topology-agent:confirmed"
+          "log-agent:confirmed",
+          "tcb-rca:confirmed"
         ],
-        "cause_service": "ts-security-service",
-        "reasoning": "Topology analysis highlights ts-security-service as a critical dependency, suggesting that failures here could impact ts-preserve-service. However, there is no direct log evidence tying ts-security-service to the observed incident as strongly as the ts-auth-service signals. The agreement is mainly structural, not evidence-based, resulting in a lower but non-negligible candidate.",
-        "supporting_evidence": {
-          "log_agent_agrees": false,
-          "topology_agent_agrees": true,
-          "tcb_rca_agrees": false
-        }
-      },
-      {
-        "rank": 3,
-        "cause": "Mem/latency anomalies observed in ts-order-service could propagate to ts-preserve-service through indirect pathways not explicitly captured in the current topology, contributing to observed downstream effects in ts-preserve-service.",
-        "confidence": 0.35,
-        "evidence_refs": [
-          "log-agent:confirmed"
-        ],
-        "cause_service": "ts-order-service",
-        "reasoning": "Ts-order-service is flagged as anomalous by the Log Agent and sits within the blast radius of ts-preserve-service. However, the Topology Agent deems the direct propagation path implausible, and the TCB-RCA baseline does not place ts-order-service as a root under the topology constraints. Given the strong log signals, ts-order-service remains a plausible secondary root cause in a multi-hop propagation scenario.",
+        "cause_service": "ts-preserve-service",
+        "reasoning": "Log Agent identifies ts-preserve-service as experiencing cascading impact and degradation within its chain, and TCB-RCA places ts-preserve-service as the primary traversal node with zero temporal gap, consistent with its role as the symptom service. Topology does not support a direct causal path from ts-preserve-service to ts-auth-service, limiting its credibility as the root. However, given mem-related signals and downstream performance hit, ts-preserve-service remains a credible candidate as the immediate faulting service, potentially reflecting the manifestation of upstream issues.",
         "supporting_evidence": {
           "log_agent_agrees": true,
           "topology_agent_agrees": false,
-          "tcb_rca_agrees": false
+          "tcb_rca_agrees": true
         }
       }
     ],
     "final_verdict": {
-      "cause": "Memory pressure and high tail latency on ts-auth-service likely causing downstream impact on dependent services, including ts-preserve-service, leading to observed latency/load increases with no direct error logs on ts-preserve-service.",
-      "confidence": 0.45,
+      "cause": "ts-auth-service is experiencing resource pressure (CPU/memory) leading to cascading load on downstream services, including ts-preserve-service, causing degraded performance in the preservation path.",
+      "confidence": 0.51,
       "explanation": "Candidate 'ts-auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
       "cause_service": "ts-auth-service"
     },
@@ -113,11 +99,10 @@
     },
     "verification": {
       "verdict": "weak-evidence",
-      "final_confidence": 0.45,
+      "final_confidence": 0.51,
       "notes": [
         "Candidate 'ts-auth-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-        "Candidate 'ts-order-service' has 1 LLM source agreement but supported by keyword matching (log + topology).",
-        "Candidate 'ts-security-service' supported by only 1/3 LLM sources (topology)."
+        "Candidate 'ts-preserve-service' confirmed by 2/3 sources (log, tcb-rca)."
       ]
     },
     "evidence_summary": {
@@ -135,8 +120,8 @@
     "agent_results": [
       {
         "agent": "log_agent",
-        "summary": "Incident at ts-preserve-service: 'Service ts-auth-service experiencing mem fault'. No error logs found. LLM hypothesis: ts-auth-service is experiencing memory pressure and high tail latency, likely causing downstream services (including ts-preserve-service) to observe higher latency and load within the incident window.",
-        "confidence": 0.78,
+        "summary": "Incident at ts-preserve-service: 'Service ts-auth-service experiencing mem fault'. No error logs found. LLM hypothesis:  ts-auth-service is experiencing resource pressure (CPU/memory) leading to cascading load on downstream ts-preserve-service and related preservation paths, causing degraded performance within ts-preserve-service's dependency chain.",
+        "confidence": 0.65,
         "evidence": [
           {
             "type": "log",
@@ -456,81 +441,6 @@
           {
             "type": "log",
             "source": "observability-mcp",
-            "content": "2024-01-23 16:08:20.565  INFO 1 --- [io-12031-exec-8] order.controller.OrderController         : [Order Service][Get Sold Ticket] Date: Tue Jan 23 00:00:00 GMT 2024",
-            "timestamp": "2024-01-23T16:08:20.565Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-23 16:08:20.567  INFO 1 --- [io-12031-exec-8] order.service.OrderServiceImpl           : Left ticket info is empty",
-            "timestamp": "2024-01-23T16:08:20.568Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-23 16:08:20.639  INFO 1 --- [io-12031-exec-4] order.controller.OrderController         : [Order Service][Get Sold Ticket] Date: Tue Jan 23 00:00:00 GMT 2024",
-            "timestamp": "2024-01-23T16:08:20.639Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-23 16:08:20.641  INFO 1 --- [io-12031-exec-4] order.service.OrderServiceImpl           : Left ticket info is empty",
-            "timestamp": "2024-01-23T16:08:20.641Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
-            "content": "2024-01-23 16:08:20.726  INFO 1 --- [o-12031-exec-10] order.controller.OrderController         : [Order Other Service][Calculate Sold Tickets] Date: Tue Jan 23 00:00:00 GMT 2024 TrainNumber: G1236",
-            "timestamp": "2024-01-23T16:08:20.726Z",
-            "level": "INFO",
-            "trace_id": null,
-            "metadata": {
-              "service": "ts-order-service",
-              "status_code": null,
-              "latency_ms": null,
-              "upstream": null,
-              "error_type": null
-            }
-          },
-          {
-            "type": "log",
-            "source": "observability-mcp",
             "content": "2024-01-23 16:08:22.151  INFO 1 --- [io-18888-exec-4] a.controller.AssuranceController         : [Assurances Service][Get Assurance Type]",
             "timestamp": "2024-01-23T16:08:22.152Z",
             "level": "INFO",
@@ -651,6 +561,21 @@
           {
             "type": "log",
             "source": "observability-mcp",
+            "content": "2024-01-23 16:08:22.214  INFO 1 --- [io-14568-exec-4] preserve.service.PreserveServiceImpl     : [Preserve Other Service][Check Security] Checking....",
+            "timestamp": "2024-01-23T16:08:22.214Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
             "content": "2024-01-23 16:08:22.220  INFO 1 --- [io-11188-exec-5] security.controller.SecurityController   : [Security Service][Check Security] Check Account Id: 4d2a46c7-71cb-4cf1-b5bb-b68406d9da6f",
             "timestamp": "2024-01-23T16:08:22.220Z",
             "level": "INFO",
@@ -672,6 +597,66 @@
             "trace_id": null,
             "metadata": {
               "service": "ts-security-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:08:22.252  INFO 1 --- [io-14568-exec-4] preserve.service.PreserveServiceImpl     : [Preserve Service] [Step 1] Check Security Complete",
+            "timestamp": "2024-01-23T16:08:22.252Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:08:22.252  INFO 1 --- [io-14568-exec-4] preserve.service.PreserveServiceImpl     : [Preserve Service] [Step 2] Find contacts",
+            "timestamp": "2024-01-23T16:08:22.252Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:08:22.252  INFO 1 --- [io-14568-exec-4] preserve.service.PreserveServiceImpl     : [Preserve Service] [Step 2] Contacts Id: 470ead71-24e3-494c-8466-30b3597b84c9",
+            "timestamp": "2024-01-23T16:08:22.252Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:08:22.252  INFO 1 --- [io-14568-exec-4] preserve.service.PreserveServiceImpl     : [Preserve Other Service][Get Contacts By Id] Getting....",
+            "timestamp": "2024-01-23T16:08:22.252Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-service",
               "status_code": null,
               "latency_ms": null,
               "upstream": null,
@@ -1718,6 +1703,81 @@
             "source": "observability-mcp",
             "content": "2024-01-23 16:09:33.424  INFO 1 --- [io-14569-exec-4] p.service.PreserveOtherServiceImpl       : [Preserve Other Service][Verify Login] Success",
             "timestamp": "2024-01-23T16:09:33.425Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-other-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:09:33.424  INFO 1 --- [io-14569-exec-4] p.service.PreserveOtherServiceImpl       : [Preserve Service] [Step 1] Check Security",
+            "timestamp": "2024-01-23T16:09:33.425Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-other-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:09:33.424  INFO 1 --- [io-14569-exec-4] p.service.PreserveOtherServiceImpl       : [Preserve Other Service][Check Account Security] Checking....",
+            "timestamp": "2024-01-23T16:09:33.425Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-other-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:09:33.469  INFO 1 --- [io-14569-exec-4] p.service.PreserveOtherServiceImpl       : [Preserve Service] [Step 1] Check Security Complete. ",
+            "timestamp": "2024-01-23T16:09:33.469Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-other-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:09:33.469  INFO 1 --- [io-14569-exec-4] p.service.PreserveOtherServiceImpl       : [Preserve Other Service] [Step 2] Find contacts",
+            "timestamp": "2024-01-23T16:09:33.469Z",
+            "level": "INFO",
+            "trace_id": null,
+            "metadata": {
+              "service": "ts-preserve-other-service",
+              "status_code": null,
+              "latency_ms": null,
+              "upstream": null,
+              "error_type": null
+            }
+          },
+          {
+            "type": "log",
+            "source": "observability-mcp",
+            "content": "2024-01-23 16:09:33.469  INFO 1 --- [io-14569-exec-4] p.service.PreserveOtherServiceImpl       : [Preserve Other Service] [Step 2] Contacts Id: 470ead71-24e3-494c-8466-30b3597b84c9",
+            "timestamp": "2024-01-23T16:09:33.469Z",
             "level": "INFO",
             "trace_id": null,
             "metadata": {
@@ -2965,20 +3025,21 @@
           }
         ],
         "metadata": {
-          "hypothesis": "ts-auth-service is experiencing memory pressure and high tail latency, likely causing downstream services (including ts-preserve-service) to observe higher latency and load within the incident window.",
+          "hypothesis": " ts-auth-service is experiencing resource pressure (CPU/memory) leading to cascading load on downstream ts-preserve-service and related preservation paths, causing degraded performance within ts-preserve-service's dependency chain.",
           "suspected_downstream": "ts-auth-service",
           "anomalous_services": [
+            "ts-preserve-other-service",
             "ts-auth-service",
-            "ts-order-service"
+            "ts-preserve-service"
           ],
-          "llm_reasoning": "Metric signals show strong anomalies for ts-auth-service: mem_jump > 0.3, p95_Δms > 100, and p99_Δms > 400, indicating memory/latency pressure that plausibly propagates to dependents like ts-preserve-service. ts-order-service also shows p95_Δms > 100, but ts-auth-service has more severe metrics (memory and tail latency) and is upstream of ts-preserve-service per topology. Log-rate signals show ts-preserve-service increased incident counts but no direct errors, consistent with downstream effects rather than a separate failure. Therefore, ts-auth-service is the deepest root cause, with ts-order-service also anomalous but less likely the primary driver.",
+          "llm_reasoning": "Metric Summary shows strong anomalies for ts-auth-service (cpu_z 23.9, mem_jump 1.82) and an extreme spike for ts-preserve-other-service (cpu_z 40.5), while the log-rate table highlights ts-preserve-service and its peers as active during the incident window. Given ts-preserve-service directly depends on ts-auth-service, the elevated metrics in ts-auth-service are likely the upstream root cause. The downstream impact is evidenced by ts-preserve-service and related preserve services showing anomalies in the same window. No other downstream in the dependency list shows stronger metric signals, reinforcing ts-auth-service as the deepest root-cause candidate.",
           "referenced_upstreams": {},
           "evidence_collection": null
         }
       },
       {
         "agent": "topology_agent",
-        "summary": "ts-preserve-service depends on ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Related services: ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Blast radius: ['ts-preserve-service']. LLM assessment: implausible (confidence 0.25).",
+        "summary": "ts-preserve-service depends on ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Related services: ['ts-assurance-service', 'ts-contacts-service', 'ts-food-service', 'ts-order-service', 'ts-seat-service', 'ts-security-service', 'ts-station-service', 'ts-ticketinfo-service', 'ts-travel-service', 'ts-user-service']. Blast radius: ['ts-preserve-service']. LLM assessment: implausible (confidence 0.65).",
         "confidence": 0.4,
         "evidence": [
           {
@@ -2991,7 +3052,7 @@
             "metadata": {
               "service": "ts-preserve-service",
               "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\trainticket_topology.json",
-              "llm_reasoning": "The symptom ts-preserve-service is shown to depend on a set of downstream services. The log agent's suspected downstream ts-auth-service would imply ts-preserve-service calls ts-auth-service. However, ts-auth-service is not in ts-preserve-service's dependency list, and ts-preserve-service has no callers, indicating ts-auth-service cannot be a downstream path in the provided topology. Therefore the propagation path from a root cause to ts-preserve-service via ts-auth-service is structurally implausible. A plausible propagation would originate from one of ts-preserve-service's dependencies failing and impacting ts-preserve-service, but the topology as given does not indicate a downstream chain from ts-preserve-service to ts-auth-service. Confidence in a ts-auth-service-based propagation is low given the topology. Within the blast radius (ts-preserve-service), monitoring should focus on the most critical dependencies such as ts-security-service, ts-user-service, ts-travel-service, and ts-order-service, since failures there could affect overall service behavior in the symptom chain."
+              "llm_reasoning": "ts-preserve-service lists its direct dependencies but ts-auth-service is not among them, and the topology shows ts-auth-service as downstream only if there is a path from ts-preserve-service to ts-auth-service that is not present in the provided dependency set. Therefore, the suspected downstream ts-auth-service is structurally unlikely given the current dependency graph. Alternative plausible paths would require ts-auth-service to be a downstream consumer of one of ts-preserve-service's dependencies or for ts-auth-service to be affected by shared upstreams, which is not indicated. The blast radius remains limited to ts-preserve-service and its listed dependencies; the most critical components to monitor within that blast are the security-related and high-impact services: ts-security-service, ts-user-service, and ts-order-service. The topology does not support the log agent's hypothesis about ts-auth-service being downstream from ts-preserve-service."
             }
           }
         ],
@@ -3240,13 +3301,12 @@
             }
           },
           "topology_file": "C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\trainticket_topology.json",
-          "llm_reasoning": "The symptom ts-preserve-service is shown to depend on a set of downstream services. The log agent's suspected downstream ts-auth-service would imply ts-preserve-service calls ts-auth-service. However, ts-auth-service is not in ts-preserve-service's dependency list, and ts-preserve-service has no callers, indicating ts-auth-service cannot be a downstream path in the provided topology. Therefore the propagation path from a root cause to ts-preserve-service via ts-auth-service is structurally implausible. A plausible propagation would originate from one of ts-preserve-service's dependencies failing and impacting ts-preserve-service, but the topology as given does not indicate a downstream chain from ts-preserve-service to ts-auth-service. Confidence in a ts-auth-service-based propagation is low given the topology. Within the blast radius (ts-preserve-service), monitoring should focus on the most critical dependencies such as ts-security-service, ts-user-service, ts-travel-service, and ts-order-service, since failures there could affect overall service behavior in the symptom chain.",
+          "llm_reasoning": "ts-preserve-service lists its direct dependencies but ts-auth-service is not among them, and the topology shows ts-auth-service as downstream only if there is a path from ts-preserve-service to ts-auth-service that is not present in the provided dependency set. Therefore, the suspected downstream ts-auth-service is structurally unlikely given the current dependency graph. Alternative plausible paths would require ts-auth-service to be a downstream consumer of one of ts-preserve-service's dependencies or for ts-auth-service to be affected by shared upstreams, which is not indicated. The blast radius remains limited to ts-preserve-service and its listed dependencies; the most critical components to monitor within that blast are the security-related and high-impact services: ts-security-service, ts-user-service, and ts-order-service. The topology does not support the log agent's hypothesis about ts-auth-service being downstream from ts-preserve-service.",
           "path_assessment": "implausible",
           "alternative_paths": [],
           "critical_services_in_blast": [
             "ts-security-service",
             "ts-user-service",
-            "ts-travel-service",
             "ts-order-service"
           ],
           "topology_supports_hypothesis": false
@@ -3254,7 +3314,7 @@
       }
     ],
     "evidence_convergence": "disagreement",
-    "synthesis_reasoning": "Log evidence strongly implicates ts-auth-service as an upstream source of memory/latency pressure, which could plausibly affect ts-preserve-service. Topology constraints do not support a direct ts-auth-service -> ts-preserve-service propagation, reducing credibility of ts-auth-service as a definitive root under the topology alone. The TCB-RCA baseline does not identify ts-auth-service due to topology constraints. Given the strongest, deepest signal originates from ts-auth-service, it is reported as the top candidate with moderate confidence, acknowledging topology constraints and the lack of direct downstream path in the model. Ts-order-service is a plausible secondary root due to overlapping anomalies, but topology does not confirm a direct path. Ts-security-service remains a weakly supported, topology-consistent candidate. Overall, prioritize ts-auth-service as the primary root cause with propagation directly to ts-preserve-service, while recognizing the structural caveats.",
+    "synthesis_reasoning": "The Log Agent provides the strongest single-threaded signal pointing at ts-auth-service as the upstream root cause due to resource pressure and observed downstream impact on ts-preserve-service. The Topology Agent contradicts this by showing no valid structural path from ts-preserve-service to ts-auth-service, suggesting the proposed propagation path is unlikely within the given dependency graph. The TCB-RCA baseline centers on ts-preserve-service as the symptom with zero immediate temporal gaps, reinforcing ts-preserve-service as the observable fault host but not necessarily the root. Given the unobserved-root-cause detection principle, ts-auth-service should be considered a high-priority candidate despite topology constraints, because A -> B with B unobserved logs fits the pattern of an unobserved upstream fault driving downstream degradation. Because evidence is not uniformly convergent, we assign a moderate overall confidence and present the two top candidates with a clearly defined propagation path from root (ts-auth-service) to symptom (ts-preserve-service).",
     "tcb_rca_reference": {
       "candidates": [
         {
