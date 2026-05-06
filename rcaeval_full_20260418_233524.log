@@ -1,0 +1,786 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260418233524
+Username: AUTH\hwang
+RunAs User: AUTH\hwang
+Configuration Name: 
+Machine: HP-5CG6062Z5K (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noexit -command try { . "c:\Users\hwang\AppData\Local\Programs\Microsoft VS Code\560a9dba96\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1" } catch {}
+Process ID: 9984
+PSVersion: 5.1.26100.7462
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.7462
+BuildVersion: 10.0.26100.7462
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is rcaeval_full_20260418_233524.log
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --csv
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$latestCsv = Get-ChildItem experiments\rcaeval\rcaeval_results_*.csv |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+Write-Host "CSV: $($latestCsv.FullName)" -ForegroundColor Cyan
+CSV: C:\Users\hwang\Documents\GitHub\rca_work\experiments\rcaeval\rcaeval_results_20260419_010043.csv
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Import-Csv $latestCsv.FullName |
+    Where-Object { -not $_.error } |
+    Group-Object gt_fault |
+    ForEach-Object {
+        $correct_ac1 = ($_.Group | Where-Object { $_.ac_at_1 -eq 'True' }).Count
+        $correct_ac3 = ($_.Group | Where-Object { $_.ac_at_3 -eq 'True' }).Count
+        $total = $_.Count
+        [PSCustomObject]@{
+            Fault = $_.Name
+            Total = $total
+            'AC@1' = "$correct_ac1/$total ($([Math]::Round($correct_ac1/$total*100, 1))%)"
+            'AC@3' = "$correct_ac3/$total ($([Math]::Round($correct_ac3/$total*100, 1))%)"
+        }
+    } | Format-Table -AutoSize
+
+Fault  Total AC@1         AC@3
+-----  ----- ----         ----
+cpu       15 3/15 (20%)   6/15 (40%)
+delay     15 3/15 (20%)   6/15 (40%)
+disk      15 7/15 (46.7%) 11/15 (73.3%)
+loss      15 3/15 (20%)   3/15 (20%)
+mem       15 4/15 (26.7%) 5/15 (33.3%)
+socket    15 7/15 (46.7%) 10/15 (66.7%)
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Import-Csv $latestCsv.FullName |
+    Where-Object { -not $_.error } |
+    Group-Object gt_service |
+    ForEach-Object {
+        $correct_ac1 = ($_.Group | Where-Object { $_.ac_at_1 -eq 'True' }).Count
+        $total = $_.Count
+        [PSCustomObject]@{
+            Service = $_.Name
+            Total = $total
+            'AC@1' = "$correct_ac1/$total ($([Math]::Round($correct_ac1/$total*100, 1))%)"
+        }
+    } | Sort-Object Service | Format-Table -AutoSize
+
+Service               Total AC@1
+-------               ----- ----
+checkoutservice          18 3/18 (16.7%)
+currencyservice          18 8/18 (44.4%)
+emailservice             18 2/18 (11.1%)
+productcatalogservice    18 8/18 (44.4%)
+recommendationservice    18 6/18 (33.3%)
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$errors = Import-Csv $latestCsv.FullName | Where-Object { $_.error -and $_.error -ne "" }
+Write-Host "`n=== ERRORS: $($errors.Count) / 90 ===" -ForegroundColor $(if ($errors.Count -eq 0) { 'Green' } else { 'Yellow' })
+if ($errors.Count -gt 0) {
+    $errors | Group-Object { $_.error.Substring(0, [Math]::Min(40, $_.error.Length)) } |
+        Format-Table Count, Name -AutoSize
+}
+
+=== ERRORS: 0 / 90 ===
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Import-Csv $latestCsv.FullName |
+    Where-Object { -not $_.error -and $_.retry_count } |
+    Group-Object retry_count |
+    Format-Table @{N='Retries';E={$_.Name}}, Count -AutoSize
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python diagnose_failures.py --results-dir experiments\rcaeval --only ours
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python diagnose_failures.py --results-dir experiments\rcaeval --only ours
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$case = "emailservice_cpu_1"
+$file = "experiments\rcaeval\ours_$case.json"
+$data = Get-Content $file -Raw | ConvertFrom-Json
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "=== Agent Results for $case ===" -ForegroundColor Cyan
+foreach ($agent in $data.result.agent_results) {
+    Write-Host "`n[$($agent.agent)]" -ForegroundColor Yellow
+    Write-Host "  summary:    $($agent.summary.Substring(0, [Math]::Min(150, $agent.summary.Length)))"
+    Write-Host "  confidence: $($agent.confidence)"
+    Write-Host "  evidence count: $($agent.evidence.Count)"
+    if ($agent.evidence.Count -gt 0) {
+        Write-Host "  first evidence: $($agent.evidence[0] | ConvertTo-Json -Depth 3 -Compress)"
+    }
+}
+
+=== Agent Results for emailservice_cpu_1 ===
+
+[log_agent]
+  summary:    Incident at frontend: 'Service emailservice experiencing cpu fault'. No error logs found. LLM hypothesis: No anomalous service detected in the provide
+  confidence: 0.0
+  evidence count: 0
+
+[topology_agent]
+  summary:    frontend depends on ['cartservice', 'productcatalogservice', 'currencyservice', 'recommendationservice', 'checkoutservice', 'adservice', 'shippingserv
+  confidence: 0.79
+  evidence count: 1
+  first evidence: {"type":"topology","source":"arch://online-boutique/latest","content":"Dependency map confirms frontend relations: {\u0027service\u0027: \u0027frontend\u0027, \u0027depends_on\u0027: [\u0027cartservice\u0027, \u0027productcatalogservice\u0027, \u0027currencyservice\u0027, \u0027recommendationservice\u0027, \u0027checkoutservice\u0027, \u0027adservice\u0027, \u0027shippingservice\u0027], \u0027upstream_of\u0027: [], \u0027criticality\u0027: \u0027high\u0027, \u0027type\u0027: \u0027frontend\u0027}. Structural analysis: plausible.","timestamp":null,"level":null,"trace_id":null,"metadata":{"service":"frontend","topology_file":"C:\\Users\\hwang\\Documents\\GitHub\\rca_work\\onlineboutique_topology.json","llm_reasoning":"Frontend depends directly on the listed services; therefore a fault in any of these downstream services could plausibly cause the frontend symptom. Without deeper internal dependency details, all listed services constitute plausible propagation paths (root -\u003e [dependency] -\u003e frontend). The blast radius currently centers on the frontend, but among those dependencies, cartservice, productcatalogservice, and checkoutservice are typically most critical to user flows, hence prioritized for monitoring. The topology supports the log agent\u0027s suspected_downstream hypothesis in the sense that potential downstream services exist among the frontend\u0027s dependencies."}}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Evidence Summary ===" -ForegroundColor Cyan
+Write-Host "  log_evidence:      $($data.result.evidence_summary.log_evidence.Count) items"
+Write-Host "  topology_evidence: $($data.result.evidence_summary.topology_evidence.Count) items"
+
+=== Evidence Summary ===
+  log_evidence:      0 items
+  topology_evidence: 1 items
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Input Log File ===" -ForegroundColor Cyan
+$logFile = "experiments\rcaeval\_work\$case.jsonl"
+if (Test-Path $logFile) {
+    $logSize = (Get-Item $logFile).Length
+    $lineCount = (Get-Content $logFile | Measure-Object -Line).Lines
+    Write-Host "  File size:  $([Math]::Round($logSize/1MB, 2)) MB"
+    Write-Host "  Line count: $lineCount"
+
+    # emailservice 관련 로그가 있는지 확인
+    $emailLogs = Get-Content $logFile | Select-String -Pattern '"emailservice"' | Select-Object -First 3
+    Write-Host "  emailservice 관련 로그 샘플:"
+    foreach ($l in $emailLogs) {
+        $shortLine = $l.Line.Substring(0, [Math]::Min(200, $l.Line.Length))
+        Write-Host "    $shortLine"
+    }
+
+    # 레벨별 분포
+    $levels = Get-Content $logFile | ForEach-Object {
+        try { ($_ | ConvertFrom-Json).level } catch {}
+    } | Group-Object | Select-Object Count, Name
+    Write-Host "`n  로그 레벨 분포:"
+    $levels | Format-Table -AutoSize
+}
+
+=== Input Log File ===
+  File size:  40 MB
+  Line count: 171212
+  emailservice 관련 로그 샘플:
+    {"timestamp": "2024-01-15T20:10:47.682Z", "service": "emailservice", "level": "INFO", "trace_id": null, "message": "A request to send order confirmation email to someone@example.com has been received.
+    {"timestamp": "2024-01-15T20:10:50.085Z", "service": "emailservice", "level": "INFO", "trace_id": null, "message": "A request to send order confirmation email to someone@example.com has been received.
+    {"timestamp": "2024-01-15T20:10:50.487Z", "service": "emailservice", "level": "INFO", "trace_id": null, "message": "A request to send order confirmation email to someone@example.com has been received.
+
+  로그 레벨 분포:
+
+ Count Name
+ ----- ----
+ 56671 DEBUG
+114541 INFO
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>cls
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:PYTHONUTF8 = "1"
+
+python -m py_compile agents\log_agent\skills_llm.py
+$e1 = $LASTEXITCODE
+python -m py_compile mcp_servers\observability_mcp\app\repository.py
+$e2 = $LASTEXITCODE
+
+if ($e1 -eq 0 -and $e2 -eq 0) {
+    Write-Host "[OK] Syntax valid" -ForegroundColor Green
+} else {
+    Write-Host "[FAIL] Syntax error — rollback needed" -ForegroundColor Red
+    # 롤백
+    Copy-Item "agents\log_agent\skills_llm.py.bak_v3_$ts" agents\log_agent\skills_llm.py -Force
+    Copy-Item "mcp_servers\observability_mcp\app\repository.py.bak_v3_$ts" mcp_servers\observability_mcp\app\repository.py -Force
+    Write-Host "[OK] Rolled back to v3" -ForegroundColor Yellow
+    exit 1
+}
+
+
+[OK] Syntax valid
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$v3backup = "experiments\rcaeval_v3_run_$ts"
+New-Item -ItemType Directory -Path $v3backup -Force | Out-Null
+Get-ChildItem experiments\rcaeval -File | Move-Item -Destination $v3backup
+Write-Host "[OK] v3 Run 결과 → $v3backup" -ForegroundColor Green
+[OK] v3 Run 결과 → experiments\rcaeval_v3_run_20260418_233512
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Smoke test (CPU fault, 5 cases) ===" -ForegroundColor Cyan
+python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --fault-types cpu --first-only
+
+=== Smoke test (CPU fault, 5 cases) ===
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$latest = Get-ChildItem experiments\rcaeval\ours_*.json |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+$data = Get-Content $latest.FullName -Raw | ConvertFrom-Json
+
+Write-Host "`n=== Log Agent 진단 (patch v4) ===" -ForegroundColor Cyan
+$logAgent = $data.result.agent_results | Where-Object { $_.agent -eq 'log_agent' }
+Write-Host "confidence:       $($logAgent.confidence)"
+Write-Host "evidence count:   $($logAgent.evidence.Count)"
+Write-Host "summary:          $($logAgent.summary.Substring(0, [Math]::Min(200, $logAgent.summary.Length)))"
+
+=== Log Agent 진단 (patch v4) ===
+confidence:       0.0
+evidence count:   0
+summary:          Incident at frontend: 'Service recommendationservice experiencing cpu fault'. No error logs found. LLM hypothesis: No observable anomalies in the given time range; cannot establish root cause from thi
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>if ($logAgent.metadata.service_statistics) {
+    Write-Host "`nservice_statistics keys: $($logAgent.metadata.service_statistics.services.PSObject.Properties.Name.Count) services"
+}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`nevidence_summary.log_evidence count: $($data.result.evidence_summary.log_evidence.Count)"
+
+evidence_summary.log_evidence count: 0
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem llm_logs\*log_agent*.json | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content | ConvertFrom-Json | Select-Object user_prompt, raw_response | Format-List
+
+
+
+user_prompt  : ## Incident Context
+               - Symptom service: frontend
+               - Reported symptom: Service recommendationservice experiencing cpu fault
+               - Time range: 2024-01-15T19:09:25.000Z to 2024-01-15T19:09:25.000Z
+
+               ## Topology Constraint (from architecture)
+               - frontend DIRECTLY depends on: ['cartservice', 'productcatalogservice', 'currencyservice',
+               'recommendationservice', 'checkoutservice', 'adservice', 'shippingservice']
+               - suspected_downstream MUST be one of these services or a transitive dependency of them.
+
+               ## Service-level Error Summary
+               - No services show error logs in this time range.
+
+               ## Sample Error/Warning Log Evidence (chronological)
+               - No error-level evidence available.
+
+               ## Known Services in System
+               Services: frontend-web, api-gateway, auth-service, catalog-service, order-service, worker-service,
+               message-queue, user-db, order-db, adservice, cartservice, checkoutservice, currencyservice,
+               emailservice, frontend, paymentservice, recommendationservice, redis, shippingservice
+
+               ## Analysis Task
+               Think step by step:
+               1. FIRST, examine the 'Service-level Log Statistics' table if present. Services with extreme
+               volume_delta (e.g. -0.8 = 80% volume drop, likely service slowdown/crash) or elevated error_ratio are
+               strong candidates, EVEN IF they have no ERROR logs.
+               2. Identify anomalous services combining statistics and error patterns.
+               3. Determine the earliest/most-affected service.
+               4. CRITICAL: Look at 'upstream' fields in error logs. If service A reports errors with upstream=B,
+               then B is likely a deeper root cause. Follow this chain to find the deepest cause.
+               5. If a service is referenced as 'upstream' in errors but has NO logs of its own, it is likely an
+               UNOBSERVED root cause ??still report it as suspected_downstream.
+               6. suspected_downstream should be the DEEPEST root cause you can identify, not just the immediate
+               dependency of the symptom service. It MAY be a service that has no errors but shows abnormal
+               volume_delta (e.g. CPU-bound service that became slow but still logs normally).
+               7. State your hypothesis about what likely happened.
+               8. Assess confidence (0.0 to 1.0) based on evidence quality. A confidence of 0 is ONLY appropriate
+               when truly no service shows any statistical anomaly ??volume_delta in [-0.1, +0.1] for ALL services.
+
+               異쒕젰 ?뺤떇 (JSON留?異쒕젰?섍퀬 ?ㅻⅨ ?띿뒪?몃뒗 ?ы븿?섏? 留덉꽭??:
+               {
+                 "anomalous_services": ["<service_name>", ...],
+                 "earliest_anomalous_service": "<service_name or null>",
+                 "suspected_downstream": "<the DEEPEST root cause service, even if it has no logs. Follow upstream
+               references to find it.>",
+                 "hypothesis": "<1-2 sentence natural language hypothesis about root cause direction>",
+                 "confidence": 0.XX,
+                 "reasoning": "<brief explanation of how you arrived at these conclusions>"
+               }
+raw_response : {
+                 "anomalous_services": [],
+                 "earliest_anomalous_service": null,
+                 "suspected_downstream": null,
+                 "hypothesis": "No observable anomalies in the given time range; cannot establish root cause from
+               this data.",
+                 "confidence": 0.0,
+                 "reasoning": "No error-level logs or clear volume_delta/elevated error_ratio reported for any
+               service within the window. Without statistical anomalies or upstream error references, cannot
+               identify a downstream root cause. The symptom service frontend did not show concrete failures in logs
+               provided."
+               }
+
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:PYTHONUTF8 = "1"
+python -m py_compile agents\log_agent\skills_llm.py
+python -m py_compile mcp_servers\observability_mcp\app\repository.py
+python -m py_compile run_rcaeval.py
+if ($LASTEXITCODE -eq 0) { Write-Host "[OK] All 3 files syntax valid" -ForegroundColor Green }
+
+
+
+[OK] All 3 files syntax valid
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>cls
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$v4a_backup = "experiments\rcaeval_v4a_$ts"
+New-Item -ItemType Directory -Path $v4a_backup -Force | Out-Null
+Get-ChildItem experiments\rcaeval -File | Move-Item -Destination $v4a_backup
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Remove-Item experiments\rcaeval\_work -Recurse -Force -ErrorAction SilentlyContinue
+Write-Host "[OK] Cache cleared" -ForegroundColor Green
+[OK] Cache cleared
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== v4 Smoke test (CPU, 5 cases) ===" -ForegroundColor Cyan
+python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --fault-types cpu --first-only
+
+=== v4 Smoke test (CPU, 5 cases) ===
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$latestLlm = Get-ChildItem llm_logs\*log_agent*.json |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$llmLog = Get-Content $latestLlm.FullName -Raw | ConvertFrom-Json
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Is Log Statistics Table in Prompt? ===" -ForegroundColor Cyan
+if ($llmLog.user_prompt -match "Service-level Log Statistics") {
+    Write-Host "[PASS] 통계 테이블 프롬프트에 포함됨!" -ForegroundColor Green
+    # 테이블 일부 추출
+    $matchResult = [regex]::Match($llmLog.user_prompt,
+        "## Service-level Log Statistics.*?(?=##)",
+        [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    if ($matchResult.Success) {
+        Write-Host $matchResult.Value.Substring(0, [Math]::Min(800, $matchResult.Value.Length))
+    }
+} else {
+    Write-Host "[FAIL] 통계 테이블이 여전히 없음" -ForegroundColor Red
+    Write-Host "  → _work/ 캐시 삭제가 안 됐을 수 있음. Remove-Item 재실행 필요."
+}
+
+=== Is Log Statistics Table in Prompt? ===
+[PASS] 통계 테이블 프롬프트에 포함됨!
+## Service-level Log Statistics (baseline vs incident window)
+- Window split: first 50% = baseline, last 50% = incident period
+- Look for services with ABNORMAL volume_delta (< -0.5 = volume drop, > +0.5 = volume spike) OR elevated error_ratio.
+- Services with 0 logs are still SUSPECT if they are transitive dependencies of frontend (see Topology Constraint above).
+
+| service | total | baseline | incident | volume_delta | error_ratio | top_level |
+|---------|-------|----------|----------|--------------|-------------|-----------|
+| currencyservice | 23031 | 11758 | 11273 | -0.04 | 0.00 | INFO |
+| frontend | 25702 | 13045 | 12657 | -0.03 | 0.00 | DEBUG |
+| checkoutservice | 810 | 411 | 399 | -0.03 | 0.00 | INFO |
+| paymentservice | 540 | 274 | 266 | -0.03 | 0.00 | INFO |
+| emailservice | 270
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Time Range Check ===" -ForegroundColor Cyan
+if ($llmLog.user_prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+    $start = $matches[1].Trim()
+    $end = $matches[2].Trim()
+    Write-Host "Start: $start"
+    Write-Host "End:   $end"
+    if ($start -eq $end) {
+        Write-Host "[FAIL] 여전히 start==end" -ForegroundColor Red
+    } else {
+        Write-Host "[PASS] 윈도우 확장됨" -ForegroundColor Green
+    }
+}
+
+=== Time Range Check ===
+Start: 2024-01-15T17:37:22.000Z
+End:   2024-01-15T17:47:22.000Z
+[PASS] 윈도우 확장됨
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== LLM Response ===" -ForegroundColor Cyan
+$raw = $llmLog.raw_response
+$parsed = $raw | ConvertFrom-Json
+Write-Host "suspected_downstream: $($parsed.suspected_downstream)"
+Write-Host "confidence:           $($parsed.confidence)"
+Write-Host "anomalous_services:   $($parsed.anomalous_services -join ', ')"
+
+=== LLM Response ===
+suspected_downstream:
+confidence:           0.0
+anomalous_services:
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$checkoutLlm = Get-ChildItem llm_logs\*log_agent*.json |
+    Sort-Object LastWriteTime -Descending | ForEach-Object {
+        $data = Get-Content $_.FullName -Raw | ConvertFrom-Json
+        if ($data.user_prompt -match "checkoutservice") {
+            return $_
+        }
+    } | Select-Object -First 1
+
+if ($checkoutLlm) {
+    $d = Get-Content $checkoutLlm.FullName -Raw | ConvertFrom-Json
+    Write-Host "=== Successful case LLM response ==="
+    $d.raw_response
+}
+=== Successful case LLM response ===
+{
+  "anomalous_services": [],
+  "earliest_anomalous_service": null,
+  "suspected_downstream": null,
+  "hypothesis": "No service shows clear statistical anomalies (volume_delta or error_ratio) within the incident window based on the provided metrics, making it difficult to identify a root cause from log evidence alone.",
+  "confidence": 0.0,
+  "reasoning": "All services show small negative volume_delta (~-0.01 to -0.04) and zero error_ratio during the incident window; no service has elevated errors or large volume spikes. Without upstream error signals or a deeper root-cause indicator, the data does not point to a specific downstream/root cause."
+}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:RCAEVAL_COOLDOWN = "5.0"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:RCAEVAL_PORT_RELEASE_TIMEOUT = "60.0"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:RCAEVAL_MAX_RETRIES = "3"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$ts = Get-Date -Format "yyyyMMdd_HHmmss"
+$smokeBackup = "experiments\rcaeval_v4_smoke_$ts"
+New-Item -ItemType Directory -Path $smokeBackup -Force | Out-Null
+Get-ChildItem experiments\rcaeval -File | Move-Item -Destination $smokeBackup
+Write-Host "[OK] Smoke backed up → $smokeBackup" -ForegroundColor Green
+[OK] Smoke backed up → experiments\rcaeval_v4_smoke_20260420_004316
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:RCAEVAL_COOLDOWN = "5.0"
+$env:RCAEVAL_PORT_RELEASE_TIMEOUT = "60.0"
+$env:RCAEVAL_MAX_RETRIES = "3"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== 전체 90 케이스 v4 실행 시작 (약 90분) ===" -ForegroundColor Cyan
+Write-Host "  RCAEVAL_COOLDOWN = $env:RCAEVAL_COOLDOWN"
+Write-Host "  RCAEVAL_PORT_RELEASE_TIMEOUT = $env:RCAEVAL_PORT_RELEASE_TIMEOUT"
+Write-Host "  RCAEVAL_MAX_RETRIES = $env:RCAEVAL_MAX_RETRIES"
+
+=== 전체 90 케이스 v4 실행 시작 (약 90분) ===
+  RCAEVAL_COOLDOWN = 5.0
+  RCAEVAL_PORT_RELEASE_TIMEOUT = 60.0
+  RCAEVAL_MAX_RETRIES = 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Start-Transcript -Path "rcaeval_v4_full_$ts.log"
+
+python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --csv
+
+Stop-Transcript
+Write-Host "`n[DONE] Log: rcaeval_v4_full_$ts.log" -ForegroundColor Green
+Transcript started, output file is rcaeval_v4_full_20260420_004316.log
+
+PS>TerminatingError(): "The pipeline has been stopped."
+>> TerminatingError(): "The pipeline has been stopped."
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$failedCase = "checkoutservice_delay_1"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$resultFile = "experiments\rcaeval\ours_$failedCase.json"
+if (Test-Path $resultFile) {
+    $result = Get-Content $resultFile -Raw | ConvertFrom-Json
+    Write-Host "`n=== Result for $failedCase ===" -ForegroundColor Cyan
+    Write-Host "GT service: $($result.gt_service)"
+    Write-Host "Top-1 cause: $($result.evaluation.predicted_top_cause_service)"
+    Write-Host "Top-1 conf:  $($result.evaluation.top_confidence)"
+    Write-Host "Verdict:     $($result.evaluation.verdict)"
+    Write-Host "`nTop-3 candidates:"
+    $result.result.root_cause_candidates | Select-Object -First 3 |
+        ForEach-Object {
+            Write-Host "  $($_.rank). $($_.cause_service) (conf=$($_.confidence)) — $($_.cause)"
+        }
+}
+
+=== Result for checkoutservice_delay_1 ===
+GT service: checkoutservice
+Top-1 cause: adservice
+Top-1 conf:  0.68
+Verdict:     revised
+
+Top-3 candidates:
+  1. adservice (conf=0.68) — upstream adservice latency/unobserved issue causing delay observed at frontend; adservice shows no logged errors in the incident window, making it a plausible unobserved root cause per UNOBSERVED_ROOT_CAUSE guidance
+  2. frontend (conf=0.28) — frontend interpreted as the root cause due to being the symptom compiler; considered only if upstream factors are ruled out, otherwise treated as downstream impact from adservice/unobserved upstream issues
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== LLM log for $failedCase ===" -ForegroundColor Cyan
+$llmLog = Get-ChildItem llm_logs\*log_agent*.json |
+    Sort-Object LastWriteTime |
+    ForEach-Object {
+        $d = Get-Content $_.FullName -Raw | ConvertFrom-Json
+        if ($d.user_prompt -match "checkoutservice.*delay") {
+            return @{ File = $_.Name; Data = $d }
+        }
+    } | Select-Object -First 1
+
+if ($llmLog) {
+    $prompt = $llmLog.Data.user_prompt
+    $raw = $llmLog.Data.raw_response
+
+    # Time range
+    if ($prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+        Write-Host "Time range: $($matches[1].Trim()) ~ $($matches[2].Trim())"
+    }
+
+    # Statistics table check
+    if ($prompt -match "Service-level Log Statistics") {
+        Write-Host "[OK] Stats table present"
+        # Extract checkoutservice row
+        if ($prompt -match "\| checkoutservice \| (\d+) \| (\d+) \| (\d+) \| ([-+\d.]+) \| ([\d.]+)") {
+            Write-Host "  checkoutservice: total=$($matches[1]) baseline=$($matches[2]) incident=$($matches[3]) volume_delta=$($matches[4]) error_ratio=$($matches[5])"
+        }
+    } else {
+        Write-Host "[FAIL] No stats table" -ForegroundColor Red
+    }
+
+    Write-Host "`nLLM response:"
+    $parsed = $raw | ConvertFrom-Json
+    Write-Host "  suspected_downstream: $($parsed.suspected_downstream)"
+    Write-Host "  confidence: $($parsed.confidence)"
+    Write-Host "  anomalous_services: $($parsed.anomalous_services -join ', ')"
+    Write-Host "  reasoning: $($parsed.reasoning.Substring(0, [Math]::Min(200, $parsed.reasoning.Length)))"
+}
+
+=== LLM log for checkoutservice_delay_1 ===
+Time range: 2024-01-19T12:15:11.000Z ~ 2024-01-19T12:15:11.000Z
+[FAIL] No stats table
+
+LLM response:
+  suspected_downstream:
+  confidence: 0.0
+  anomalous_services:
+  reasoning: The given time range contains no error-level evidence across any services, and the service-level error summary explicitly states no errors. Without upstream error relationships or error events, we can
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$errFile = "experiments\rcaeval\ours_checkoutservice_cpu_2.json"
+if (Test-Path $errFile) {
+    $err = Get-Content $errFile -Raw | ConvertFrom-Json
+    Write-Host "`n=== ERR case: checkoutservice_cpu_2 ===" -ForegroundColor Yellow
+    Write-Host "Error: $($err.error)"
+    Write-Host "Retry count: $($err.retry_count)"
+    Write-Host "Elapsed: $($err.elapsed_seconds)s"
+}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Environment ===" -ForegroundColor Cyan
+Write-Host "COOLDOWN: $env:RCAEVAL_COOLDOWN"
+Write-Host "PORT_RELEASE_TIMEOUT: $env:RCAEVAL_PORT_RELEASE_TIMEOUT"
+Write-Host "MAX_RETRIES: $env:RCAEVAL_MAX_RETRIES"
+
+=== Environment ===
+COOLDOWN: 5.0
+PORT_RELEASE_TIMEOUT: 60.0
+MAX_RETRIES: 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Port Status ===" -ForegroundColor Cyan
+foreach ($p in @(18000, 18001, 18002, 18003, 18004)) {
+    $conn = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($conn) {
+        $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+        Write-Host "Port $p : BUSY (PID=$($conn.OwningProcess), $($proc.ProcessName))"
+    } else {
+        Write-Host "Port $p : free"
+    }
+}
+
+=== Port Status ===
+Port 18000 : BUSY (PID=0, Idle)
+Port 18001 : BUSY (PID=0, Idle)
+Port 18002 : free
+Port 18003 : free
+Port 18004 : free
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Log file sizes (smoke success cases) ===" -ForegroundColor Cyan
+$smokeCases = @("emailservice_cpu_1", "checkoutservice_cpu_1")
+foreach ($c in $smokeCases) {
+    $f = "experiments\rcaeval\_work\$c.jsonl"
+    if (Test-Path $f) {
+        $size = (Get-Item $f).Length / 1MB
+        Write-Host "  $c : $([Math]::Round($size, 1)) MB"
+    }
+}
+
+Write-Host "`n=== Log file sizes (full run failed cases) ===" -ForegroundColor Cyan
+$fullCases = @("checkoutservice_cpu_2", "checkoutservice_delay_1", "checkoutservice_delay_2",
+               "checkoutservice_disk_2", "checkoutservice_loss_1")
+foreach ($c in $fullCases) {
+    $f = "experiments\rcaeval\_work\$c.jsonl"
+    if (Test-Path $f) {
+        $size = (Get-Item $f).Length / 1MB
+        Write-Host "  $c : $([Math]::Round($size, 1)) MB"
+    }
+}
+
+=== Log file sizes (smoke success cases) ===
+  emailservice_cpu_1 : 40 MB
+  checkoutservice_cpu_1 : 40 MB
+
+=== Log file sizes (full run failed cases) ===
+  checkoutservice_cpu_2 : 25.8 MB
+  checkoutservice_delay_1 : 41.6 MB
+  checkoutservice_delay_2 : 41 MB
+  checkoutservice_disk_2 : 41.9 MB
+  checkoutservice_loss_1 : 39.4 MB
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem llm_logs\*log_agent*.json | ForEach-Object {
+    $d = Get-Content $_.FullName -Raw | ConvertFrom-Json
+    if ($d.user_prompt -match "checkoutservice.*delay") {
+        [PSCustomObject]@{
+            File = $_.Name
+            LastWrite = $_.LastWriteTime
+            TimeRange = if ($d.user_prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+                "$($matches[1].Trim()) ~ $($matches[2].Trim())"
+            } else { "N/A" }
+            HasStatsTable = $d.user_prompt -match "Service-level Log Statistics"
+        }
+    }
+} | Sort-Object LastWrite | Format-Table -AutoSize
+
+File                                    LastWrite             TimeRange                                           Has
+                                                                                                                  Sta
+                                                                                                                  tsT
+                                                                                                                  abl
+                                                                                                                    e
+----                                    ---------             ---------                                           ---
+20260418_035054_log_agent_3c62e9af.json 4/18/2026 12:50:57 PM 2024-01-19T12:15:11.000Z ~ 2024-01-19T12:15:11.000Z lse
+20260418_035134_log_agent_4884fb56.json 4/18/2026 12:51:38 PM 2024-01-19T13:35:42.000Z ~ 2024-01-19T13:35:42.000Z lse
+20260418_144231_log_agent_3c62e9af.json 4/18/2026 11:42:35 PM 2024-01-19T12:15:11.000Z ~ 2024-01-19T12:15:11.000Z lse
+20260418_144347_log_agent_6346948e.json 4/18/2026 11:43:50 PM 2024-01-19T12:55:21.000Z ~ 2024-01-19T12:55:21.000Z lse
+20260418_144448_log_agent_4884fb56.json 4/18/2026 11:44:50 PM 2024-01-19T13:35:42.000Z ~ 2024-01-19T13:35:42.000Z lse
+20260419_154955_log_agent_2c68d012.json 4/20/2026 12:50:00 AM 2024-01-19T12:10:11.000Z ~ 2024-01-19T12:20:11.000Z rue
+20260419_155054_log_agent_d259c86c.json 4/20/2026 12:51:00 AM 2024-01-19T12:50:21.000Z ~ 2024-01-19T13:00:21.000Z rue
+20260419_155149_log_agent_2bd17a73.json 4/20/2026 12:51:53 AM 2024-01-19T13:30:42.000Z ~ 2024-01-19T13:40:42.000Z rue
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem llm_logs\*log_agent*.json |
+    Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-30) } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 5 |
+    ForEach-Object {
+        $d = Get-Content $_.FullName -Raw | ConvertFrom-Json
+        $timeRange = if ($d.user_prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+            "$($matches[1].Trim()) ~ $($matches[2].Trim())"
+        } else { "N/A" }
+        $hasStats = $d.user_prompt -match "Service-level Log Statistics"
+        [PSCustomObject]@{
+            Name = $_.Name.Substring(0, [Math]::Min(50, $_.Name.Length))
+            TimeRange = $timeRange
+            HasStats = $hasStats
+        }
+    } | Format-Table -AutoSize
+
+Name                                    TimeRange                                           HasStats
+----                                    ---------                                           --------
+20260419_155519_log_agent_148ac4f9.json 2024-01-19T14:11:02.000Z ~ 2024-01-19T14:21:02.000Z     True
+20260419_155415_log_agent_d552e2df.json 2024-01-16T03:32:46.000Z ~ 2024-01-16T03:42:46.000Z     True
+20260419_155323_log_agent_4bb019ee.json 2024-01-20T15:40:28.000Z ~ 2024-01-20T15:50:28.000Z     True
+20260419_155149_log_agent_2bd17a73.json 2024-01-19T13:30:42.000Z ~ 2024-01-19T13:40:42.000Z     True
+20260419_155054_log_agent_d259c86c.json 2024-01-19T12:50:21.000Z ~ 2024-01-19T13:00:21.000Z     True
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python -c @"
+import sys
+sys.path.insert(0, '.')
+from run_rcaeval import _analysis_window
+
+# 실제 failing case의 inject_time
+inject = '2024-01-19T12:15:11.000Z'
+start, end = _analysis_window(inject, window_seconds=300)
+print(f'inject: {inject}')
+print(f'start:  {start}')
+print(f'end:    {end}')
+print(f'diff:   {(start != end)}')
+"@
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$meta = Get-Content "experiments\rcaeval\_work\checkoutservice_delay_1.meta.json" -Raw | ConvertFrom-Json
+Write-Host "inject_time_iso: $($meta.inject_time_iso)"
+inject_time_iso: 2024-01-19T12:15:11.000Z
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>cls
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "Waiting 60s for TIME_WAIT sockets to clear..." -ForegroundColor Yellow
+Start-Sleep -Seconds 60
+Waiting 60s for TIME_WAIT sockets to clear...
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>foreach ($p in 18000..18004) {
+    $conn = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue
+    if ($conn) {
+        Write-Host "Port $p still busy — may need manual wait" -ForegroundColor Red
+    }
+}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$ts = Get-Date -Format "yyyyMMdd_HHmmss"
+$partialBackup = "experiments\rcaeval_v4_partial_$ts"
+New-Item -ItemType Directory -Path $partialBackup -Force | Out-Null
+Get-ChildItem experiments\rcaeval\*.json, experiments\rcaeval\*.csv -ErrorAction SilentlyContinue |
+    Move-Item -Destination $partialBackup -Force
+Write-Host "[OK] Partial results → $partialBackup" -ForegroundColor Green
+[OK] Partial results → experiments\rcaeval_v4_partial_20260420_010427
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:RCAEVAL_COOLDOWN = "10.0"             # 5s → 10s
+$env:RCAEVAL_PORT_RELEASE_TIMEOUT = "90.0"  # 60s → 90s
+$env:RCAEVAL_MAX_RETRIES = "3"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== v4-final: 전체 90 케이스 (약 100-110분) ===" -ForegroundColor Cyan
+Start-Transcript -Path "rcaeval_v4_full_$ts.log"
+
+python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --csv
+
+Stop-Transcript
+
+=== v4-final: 전체 90 케이스 (약 100-110분) ===
+Transcript started, output file is rcaeval_v4_full_20260420_010427.log
+
+PS>TerminatingError(): "The pipeline has been stopped."
+>> TerminatingError(): "The pipeline has been stopped."
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --csv
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$paperDir = "paper_artifacts_$(Get-Date -Format 'yyyyMMdd')"
+New-Item -ItemType Directory -Path $paperDir -Force | Out-Null
+Copy-Item experiments\rcaeval\rcaeval_summary_*.json $paperDir\ -Force
+Copy-Item experiments\rcaeval\rcaeval_results_*.csv $paperDir\ -Force
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python diagnose_failures.py --results-dir experiments\rcaeval --only ours --csv "$paperDir\diagnosis_v5.csv"
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Copy-Item experiments\summaries\*.csv $paperDir\ -Force
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Table Name, Length
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-ChildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-Ch
+   ildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCo
+   mmand
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Table Name, Length
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-ChildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-Ch
+   ildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCo
+   mmand
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>

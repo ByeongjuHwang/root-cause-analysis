@@ -1,0 +1,339 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260420004337
+Username: AUTH\hwang
+RunAs User: AUTH\hwang
+Configuration Name: 
+Machine: HP-5CG6062Z5K (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noexit -command try { . "c:\Users\hwang\AppData\Local\Programs\Microsoft VS Code\560a9dba96\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1" } catch {}
+Process ID: 9984
+PSVersion: 5.1.26100.7462
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.7462
+BuildVersion: 10.0.26100.7462
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is rcaeval_v4_full_20260420_004316.log
+
+PS>TerminatingError(): "The pipeline has been stopped."
+>> TerminatingError(): "The pipeline has been stopped."
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$failedCase = "checkoutservice_delay_1"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$resultFile = "experiments\rcaeval\ours_$failedCase.json"
+if (Test-Path $resultFile) {
+    $result = Get-Content $resultFile -Raw | ConvertFrom-Json
+    Write-Host "`n=== Result for $failedCase ===" -ForegroundColor Cyan
+    Write-Host "GT service: $($result.gt_service)"
+    Write-Host "Top-1 cause: $($result.evaluation.predicted_top_cause_service)"
+    Write-Host "Top-1 conf:  $($result.evaluation.top_confidence)"
+    Write-Host "Verdict:     $($result.evaluation.verdict)"
+    Write-Host "`nTop-3 candidates:"
+    $result.result.root_cause_candidates | Select-Object -First 3 |
+        ForEach-Object {
+            Write-Host "  $($_.rank). $($_.cause_service) (conf=$($_.confidence)) — $($_.cause)"
+        }
+}
+
+=== Result for checkoutservice_delay_1 ===
+GT service: checkoutservice
+Top-1 cause: adservice
+Top-1 conf:  0.68
+Verdict:     revised
+
+Top-3 candidates:
+  1. adservice (conf=0.68) — upstream adservice latency/unobserved issue causing delay observed at frontend; adservice shows no logged errors in the incident window, making it a plausible unobserved root cause per UNOBSERVED_ROOT_CAUSE guidance
+  2. frontend (conf=0.28) — frontend interpreted as the root cause due to being the symptom compiler; considered only if upstream factors are ruled out, otherwise treated as downstream impact from adservice/unobserved upstream issues
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== LLM log for $failedCase ===" -ForegroundColor Cyan
+$llmLog = Get-ChildItem llm_logs\*log_agent*.json |
+    Sort-Object LastWriteTime |
+    ForEach-Object {
+        $d = Get-Content $_.FullName -Raw | ConvertFrom-Json
+        if ($d.user_prompt -match "checkoutservice.*delay") {
+            return @{ File = $_.Name; Data = $d }
+        }
+    } | Select-Object -First 1
+
+if ($llmLog) {
+    $prompt = $llmLog.Data.user_prompt
+    $raw = $llmLog.Data.raw_response
+
+    # Time range
+    if ($prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+        Write-Host "Time range: $($matches[1].Trim()) ~ $($matches[2].Trim())"
+    }
+
+    # Statistics table check
+    if ($prompt -match "Service-level Log Statistics") {
+        Write-Host "[OK] Stats table present"
+        # Extract checkoutservice row
+        if ($prompt -match "\| checkoutservice \| (\d+) \| (\d+) \| (\d+) \| ([-+\d.]+) \| ([\d.]+)") {
+            Write-Host "  checkoutservice: total=$($matches[1]) baseline=$($matches[2]) incident=$($matches[3]) volume_delta=$($matches[4]) error_ratio=$($matches[5])"
+        }
+    } else {
+        Write-Host "[FAIL] No stats table" -ForegroundColor Red
+    }
+
+    Write-Host "`nLLM response:"
+    $parsed = $raw | ConvertFrom-Json
+    Write-Host "  suspected_downstream: $($parsed.suspected_downstream)"
+    Write-Host "  confidence: $($parsed.confidence)"
+    Write-Host "  anomalous_services: $($parsed.anomalous_services -join ', ')"
+    Write-Host "  reasoning: $($parsed.reasoning.Substring(0, [Math]::Min(200, $parsed.reasoning.Length)))"
+}
+
+=== LLM log for checkoutservice_delay_1 ===
+Time range: 2024-01-19T12:15:11.000Z ~ 2024-01-19T12:15:11.000Z
+[FAIL] No stats table
+
+LLM response:
+  suspected_downstream:
+  confidence: 0.0
+  anomalous_services:
+  reasoning: The given time range contains no error-level evidence across any services, and the service-level error summary explicitly states no errors. Without upstream error relationships or error events, we can
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$errFile = "experiments\rcaeval\ours_checkoutservice_cpu_2.json"
+if (Test-Path $errFile) {
+    $err = Get-Content $errFile -Raw | ConvertFrom-Json
+    Write-Host "`n=== ERR case: checkoutservice_cpu_2 ===" -ForegroundColor Yellow
+    Write-Host "Error: $($err.error)"
+    Write-Host "Retry count: $($err.retry_count)"
+    Write-Host "Elapsed: $($err.elapsed_seconds)s"
+}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Environment ===" -ForegroundColor Cyan
+Write-Host "COOLDOWN: $env:RCAEVAL_COOLDOWN"
+Write-Host "PORT_RELEASE_TIMEOUT: $env:RCAEVAL_PORT_RELEASE_TIMEOUT"
+Write-Host "MAX_RETRIES: $env:RCAEVAL_MAX_RETRIES"
+
+=== Environment ===
+COOLDOWN: 5.0
+PORT_RELEASE_TIMEOUT: 60.0
+MAX_RETRIES: 3
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Port Status ===" -ForegroundColor Cyan
+foreach ($p in @(18000, 18001, 18002, 18003, 18004)) {
+    $conn = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($conn) {
+        $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+        Write-Host "Port $p : BUSY (PID=$($conn.OwningProcess), $($proc.ProcessName))"
+    } else {
+        Write-Host "Port $p : free"
+    }
+}
+
+=== Port Status ===
+Port 18000 : BUSY (PID=0, Idle)
+Port 18001 : BUSY (PID=0, Idle)
+Port 18002 : free
+Port 18003 : free
+Port 18004 : free
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== Log file sizes (smoke success cases) ===" -ForegroundColor Cyan
+$smokeCases = @("emailservice_cpu_1", "checkoutservice_cpu_1")
+foreach ($c in $smokeCases) {
+    $f = "experiments\rcaeval\_work\$c.jsonl"
+    if (Test-Path $f) {
+        $size = (Get-Item $f).Length / 1MB
+        Write-Host "  $c : $([Math]::Round($size, 1)) MB"
+    }
+}
+
+Write-Host "`n=== Log file sizes (full run failed cases) ===" -ForegroundColor Cyan
+$fullCases = @("checkoutservice_cpu_2", "checkoutservice_delay_1", "checkoutservice_delay_2",
+               "checkoutservice_disk_2", "checkoutservice_loss_1")
+foreach ($c in $fullCases) {
+    $f = "experiments\rcaeval\_work\$c.jsonl"
+    if (Test-Path $f) {
+        $size = (Get-Item $f).Length / 1MB
+        Write-Host "  $c : $([Math]::Round($size, 1)) MB"
+    }
+}
+
+=== Log file sizes (smoke success cases) ===
+  emailservice_cpu_1 : 40 MB
+  checkoutservice_cpu_1 : 40 MB
+
+=== Log file sizes (full run failed cases) ===
+  checkoutservice_cpu_2 : 25.8 MB
+  checkoutservice_delay_1 : 41.6 MB
+  checkoutservice_delay_2 : 41 MB
+  checkoutservice_disk_2 : 41.9 MB
+  checkoutservice_loss_1 : 39.4 MB
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem llm_logs\*log_agent*.json | ForEach-Object {
+    $d = Get-Content $_.FullName -Raw | ConvertFrom-Json
+    if ($d.user_prompt -match "checkoutservice.*delay") {
+        [PSCustomObject]@{
+            File = $_.Name
+            LastWrite = $_.LastWriteTime
+            TimeRange = if ($d.user_prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+                "$($matches[1].Trim()) ~ $($matches[2].Trim())"
+            } else { "N/A" }
+            HasStatsTable = $d.user_prompt -match "Service-level Log Statistics"
+        }
+    }
+} | Sort-Object LastWrite | Format-Table -AutoSize
+
+File                                    LastWrite             TimeRange                                           Has
+                                                                                                                  Sta
+                                                                                                                  tsT
+                                                                                                                  abl
+                                                                                                                    e
+----                                    ---------             ---------                                           ---
+20260418_035054_log_agent_3c62e9af.json 4/18/2026 12:50:57 PM 2024-01-19T12:15:11.000Z ~ 2024-01-19T12:15:11.000Z lse
+20260418_035134_log_agent_4884fb56.json 4/18/2026 12:51:38 PM 2024-01-19T13:35:42.000Z ~ 2024-01-19T13:35:42.000Z lse
+20260418_144231_log_agent_3c62e9af.json 4/18/2026 11:42:35 PM 2024-01-19T12:15:11.000Z ~ 2024-01-19T12:15:11.000Z lse
+20260418_144347_log_agent_6346948e.json 4/18/2026 11:43:50 PM 2024-01-19T12:55:21.000Z ~ 2024-01-19T12:55:21.000Z lse
+20260418_144448_log_agent_4884fb56.json 4/18/2026 11:44:50 PM 2024-01-19T13:35:42.000Z ~ 2024-01-19T13:35:42.000Z lse
+20260419_154955_log_agent_2c68d012.json 4/20/2026 12:50:00 AM 2024-01-19T12:10:11.000Z ~ 2024-01-19T12:20:11.000Z rue
+20260419_155054_log_agent_d259c86c.json 4/20/2026 12:51:00 AM 2024-01-19T12:50:21.000Z ~ 2024-01-19T13:00:21.000Z rue
+20260419_155149_log_agent_2bd17a73.json 4/20/2026 12:51:53 AM 2024-01-19T13:30:42.000Z ~ 2024-01-19T13:40:42.000Z rue
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem llm_logs\*log_agent*.json |
+    Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-30) } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 5 |
+    ForEach-Object {
+        $d = Get-Content $_.FullName -Raw | ConvertFrom-Json
+        $timeRange = if ($d.user_prompt -match "Time range: (.+?) to (.+?)[\r\n]") {
+            "$($matches[1].Trim()) ~ $($matches[2].Trim())"
+        } else { "N/A" }
+        $hasStats = $d.user_prompt -match "Service-level Log Statistics"
+        [PSCustomObject]@{
+            Name = $_.Name.Substring(0, [Math]::Min(50, $_.Name.Length))
+            TimeRange = $timeRange
+            HasStats = $hasStats
+        }
+    } | Format-Table -AutoSize
+
+Name                                    TimeRange                                           HasStats
+----                                    ---------                                           --------
+20260419_155519_log_agent_148ac4f9.json 2024-01-19T14:11:02.000Z ~ 2024-01-19T14:21:02.000Z     True
+20260419_155415_log_agent_d552e2df.json 2024-01-16T03:32:46.000Z ~ 2024-01-16T03:42:46.000Z     True
+20260419_155323_log_agent_4bb019ee.json 2024-01-20T15:40:28.000Z ~ 2024-01-20T15:50:28.000Z     True
+20260419_155149_log_agent_2bd17a73.json 2024-01-19T13:30:42.000Z ~ 2024-01-19T13:40:42.000Z     True
+20260419_155054_log_agent_d259c86c.json 2024-01-19T12:50:21.000Z ~ 2024-01-19T13:00:21.000Z     True
+
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python -c @"
+import sys
+sys.path.insert(0, '.')
+from run_rcaeval import _analysis_window
+
+# 실제 failing case의 inject_time
+inject = '2024-01-19T12:15:11.000Z'
+start, end = _analysis_window(inject, window_seconds=300)
+print(f'inject: {inject}')
+print(f'start:  {start}')
+print(f'end:    {end}')
+print(f'diff:   {(start != end)}')
+"@
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$meta = Get-Content "experiments\rcaeval\_work\checkoutservice_delay_1.meta.json" -Raw | ConvertFrom-Json
+Write-Host "inject_time_iso: $($meta.inject_time_iso)"
+inject_time_iso: 2024-01-19T12:15:11.000Z
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>cls
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object { $_.CommandLine -match "agents\." } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "Waiting 60s for TIME_WAIT sockets to clear..." -ForegroundColor Yellow
+Start-Sleep -Seconds 60
+Waiting 60s for TIME_WAIT sockets to clear...
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>foreach ($p in 18000..18004) {
+    $conn = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue
+    if ($conn) {
+        Write-Host "Port $p still busy — may need manual wait" -ForegroundColor Red
+    }
+}
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$ts = Get-Date -Format "yyyyMMdd_HHmmss"
+$partialBackup = "experiments\rcaeval_v4_partial_$ts"
+New-Item -ItemType Directory -Path $partialBackup -Force | Out-Null
+Get-ChildItem experiments\rcaeval\*.json, experiments\rcaeval\*.csv -ErrorAction SilentlyContinue |
+    Move-Item -Destination $partialBackup -Force
+Write-Host "[OK] Partial results → $partialBackup" -ForegroundColor Green
+[OK] Partial results → experiments\rcaeval_v4_partial_20260420_010427
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$env:RCAEVAL_COOLDOWN = "10.0"             # 5s → 10s
+$env:RCAEVAL_PORT_RELEASE_TIMEOUT = "90.0"  # 60s → 90s
+$env:RCAEVAL_MAX_RETRIES = "3"
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Write-Host "`n=== v4-final: 전체 90 케이스 (약 100-110분) ===" -ForegroundColor Cyan
+Start-Transcript -Path "rcaeval_v4_full_$ts.log"
+
+python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --csv
+
+Stop-Transcript
+
+=== v4-final: 전체 90 케이스 (약 100-110분) ===
+Transcript started, output file is rcaeval_v4_full_20260420_010427.log
+
+PS>TerminatingError(): "The pipeline has been stopped."
+>> TerminatingError(): "The pipeline has been stopped."
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python run_rcaeval.py --data-dir $RCAEVAL_DATA --systems ours --csv
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>$paperDir = "paper_artifacts_$(Get-Date -Format 'yyyyMMdd')"
+New-Item -ItemType Directory -Path $paperDir -Force | Out-Null
+Copy-Item experiments\rcaeval\rcaeval_summary_*.json $paperDir\ -Force
+Copy-Item experiments\rcaeval\rcaeval_results_*.csv $paperDir\ -Force
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>python diagnose_failures.py --results-dir experiments\rcaeval --only ours --csv "$paperDir\diagnosis_v5.csv"
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Copy-Item experiments\summaries\*.csv $paperDir\ -Force
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Table Name, Length
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-ChildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-Ch
+   ildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCo
+   mmand
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
+PS>Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Table Name, Length
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-ChildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand
+Get-ChildItem : Cannot find path 'C:\checkoutservice_cpu\1' because it does not exist.
+At line:1 char:1
++ Get-ChildItem "$env:RCAEVAL_DATA\checkoutservice_cpu\1" | Format-Tabl ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\checkoutservice_cpu\1:String) [Get-Ch
+   ildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCo
+   mmand
+
+(rca_work) PS C:\Users\hwang\Documents\GitHub\rca_work>
